@@ -1,8 +1,14 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileText, CheckSquare, LogOut } from 'lucide-react';
+import { useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { LayoutDashboard, FileText, CheckSquare, LogOut, X } from 'lucide-react';
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
+    const { pathname } = useLocation();
+
+    useEffect(() => {
+        onClose();
+    }, [pathname, onClose]);
 
     const handleSignOut = () => {
         localStorage.removeItem('access_token');
@@ -16,12 +22,15 @@ export default function Sidebar() {
             : 'text-white/60 hover:text-white hover:bg-white/5'
         }`;
 
-    return (
-        <div className="w-64 flex-shrink-0 bg-forest h-full flex flex-col">
-            <div className="p-6 border-b border-white/10 flex items-center justify-center">
-                <h1 className="text-xl font-bold text-white tracking-tight">
-                    HMS
-                </h1>
+    const sidebarContent = (showClose) => (
+        <>
+            <div className={`p-6 border-b border-white/10 flex items-center ${showClose ? 'justify-between' : 'justify-center'}`}>
+                <h1 className="text-xl font-bold text-white tracking-tight">HMS</h1>
+                {showClose && (
+                    <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
             </div>
 
             <nav className="flex-1 px-4 py-6 space-y-2">
@@ -50,6 +59,32 @@ export default function Sidebar() {
                     Sign Out
                 </button>
             </div>
-        </div>
+        </>
+    );
+
+    return (
+        <>
+            {/* Desktop — always visible */}
+            <div className="hidden lg:flex w-64 flex-shrink-0 bg-forest h-full flex-col">
+                {sidebarContent(false)}
+            </div>
+
+            {/* Mobile backdrop */}
+            <div
+                className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${
+                    isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                onClick={onClose}
+            />
+
+            {/* Mobile drawer */}
+            <div
+                className={`fixed inset-y-0 left-0 z-50 w-64 bg-forest flex flex-col transition-transform duration-300 ease-out lg:hidden ${
+                    isOpen ? 'translate-x-0' : '-translate-x-full'
+                }`}
+            >
+                {sidebarContent(true)}
+            </div>
+        </>
     );
 }

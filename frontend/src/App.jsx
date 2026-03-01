@@ -1,4 +1,6 @@
+import { useState, useCallback } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AdminSidebar from './components/AdminSidebar';
 import LandingPage from './pages/LandingPage';
@@ -38,15 +40,25 @@ const ProtectedRoute = ({ children, requiredRole }) => {
 const StudentLayout = ({ children }) => {
   const user = getUser();
   const initial = user?.full_name?.charAt(0) || 'S';
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   return (
     <div className="flex h-screen w-screen bg-cream overflow-hidden text-heading">
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
       <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         <header className="bg-cream/80 backdrop-blur-sm border-b border-black/5 p-4 sticky top-0 z-10 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-heading tracking-tight">
-            Student Portal
-          </h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-1 rounded-md text-heading hover:bg-black/5 transition-colors"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <h2 className="text-xl font-bold text-heading tracking-tight">
+              Student Portal
+            </h2>
+          </div>
           <div className="flex items-center space-x-3">
             <span className="text-sm font-medium text-muted hidden sm:block">{user?.full_name}</span>
             <div className="w-8 h-8 rounded-full bg-forest flex items-center justify-center text-lime font-bold">
@@ -66,15 +78,25 @@ const StudentLayout = ({ children }) => {
 const AdminLayout = ({ children }) => {
   const user = getUser();
   const initial = user?.full_name?.charAt(0) || 'A';
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   return (
     <div className="flex h-screen w-screen bg-cream overflow-hidden text-heading">
-      <AdminSidebar />
+      <AdminSidebar isOpen={sidebarOpen} onClose={closeSidebar} />
       <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         <header className="bg-cream/80 backdrop-blur-sm border-b border-black/5 p-4 sticky top-0 z-10 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-heading tracking-tight">
-            Admin Panel
-          </h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-1 rounded-md text-heading hover:bg-black/5 transition-colors"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <h2 className="text-xl font-bold text-heading tracking-tight">
+              Admin Panel
+            </h2>
+          </div>
           <div className="flex items-center space-x-3">
             <span className="text-sm font-medium text-muted hidden sm:block">{user?.full_name}</span>
             <div className="w-8 h-8 rounded-full bg-forest flex items-center justify-center text-lime font-bold">
