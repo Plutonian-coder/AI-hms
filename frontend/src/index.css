@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  --color-cream: #F8F9F5;
+  --color-forest: #092B19;
+  --color-forest-light: #0F3D25;
+  --color-forest-muted: #1A4D33;
+  --color-lime: #7FE132;
+  --color-lime-hover: #6CCB28;
+  --color-lime-soft: #7FE13220;
+  --color-heading: #0A1F14;
+  --color-body: #3D4F47;
+  --color-muted: #8A9690;
+  --color-tag-pink: #F2D1D9;
+  --color-tag-brown: #D4C4A8;
+  --color-tag-sage: #B8D4BA;
+  --color-tag-lavender: #D1C4E9;
+  --color-tag-peach: #F5D5C8;
+}
+
+@layer utilities {
+  .animate-in {
+    animation-duration: 500ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: forwards;
+  }
+
+  .fade-in {
+    animation-name: fadeIn;
+  }
+
+  .zoom-in {
+    animation-name: zoomIn;
+  }
+
+  .slide-in-from-bottom-4 {
+    animation-name: slideInBottom;
+  }
+
+  .zoom-in-95 {
+    animation-name: zoomIn95;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes zoomIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes zoomIn95 {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes slideInBottom {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
