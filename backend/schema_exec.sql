@@ -19,6 +19,10 @@ CREATE TABLE users (
     gender VARCHAR NOT NULL CHECK (gender IN ('male', 'female')),
     role VARCHAR NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
     password_hash VARCHAR NOT NULL,
+    department VARCHAR,
+    level VARCHAR,
+    email VARCHAR,
+    phone VARCHAR,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -67,6 +71,20 @@ CREATE TABLE allocations (
     UNIQUE(bed_id, session_id)
 );
 
+CREATE TABLE allocation_requests (
+    id SERIAL PRIMARY KEY,
+    student_id INT REFERENCES users(id) ON DELETE CASCADE,
+    choice_1_id INT,
+    choice_2_id INT,
+    choice_3_id INT,
+    receipt_path VARCHAR,
+    receipt_hash VARCHAR,
+    extracted_rrr VARCHAR,
+    status VARCHAR CHECK (status IN ('allocated', 'rejected')),
+    rejection_reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE OR REPLACE FUNCTION allocate_bed(p_student_id INT, p_choice_ids INT[], p_session_id INT)
 RETURNS boolean AS $$
 DECLARE
@@ -107,3 +125,4 @@ $$ LANGUAGE plpgsql;
 
 -- INSERT INITIAL ADMIN AND ACADEMIC SESSION
 INSERT INTO academic_sessions (session_name, is_active, allocation_portal_open) VALUES ('2025/2026', TRUE, TRUE);
+

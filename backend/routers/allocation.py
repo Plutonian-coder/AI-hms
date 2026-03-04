@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1/allocation", tags=["allocation"])
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-TOTAL_STEPS = 6
+TOTAL_STEPS = 7
 
 
 # ---- SSE Helpers ----
@@ -364,8 +364,8 @@ async def apply_for_allocation(
 
         yield _sse_step(6, "complete", "Duplicate Check", "Receipt is unique — not previously used")
 
-        # ── Step 6: Atomic Bed Allocation ──
-        yield _sse_step(6, "processing", "Bed Allocation", "Securing your bed space via atomic transaction...")
+        # ── Step 7: Atomic Bed Allocation ──
+        yield _sse_step(7, "processing", "Bed Allocation", "Securing your bed space via atomic transaction...")
 
         try:
             with get_connection() as conn:
@@ -376,7 +376,7 @@ async def apply_for_allocation(
                         (rrr,)
                     )
                     if cur.rowcount == 0:
-                        yield _sse_error(6, "Bed Allocation", "Payment was claimed by another request. Try again.")
+                        yield _sse_error(7, "Bed Allocation", "Payment was claimed by another request. Try again.")
                         return
 
                     cur.execute("SELECT * FROM allocate_bed(%s, %s, %s)", (student_id, choices, session_id))
@@ -385,20 +385,20 @@ async def apply_for_allocation(
         except Exception as e:
             error_msg = str(e)
             if "already has an allocation" in error_msg:
-                yield _sse_error(6, "Bed Allocation", "You already have an allocation for this session")
+                yield _sse_error(7, "Bed Allocation", "You already have an allocation for this session")
             elif "No vacant beds" in error_msg:
                 _log_request(student_id, choices[0], choices[1], choices[2], filepath, receipt_hash, rrr, "rejected",
                              "No beds available")
-                yield _sse_error(6, "Bed Allocation", "No vacant beds available for your chosen hostels")
+                yield _sse_error(7, "Bed Allocation", "No vacant beds available for your chosen hostels")
             else:
                 _log_request(student_id, choices[0], choices[1], choices[2], filepath, receipt_hash, rrr, "rejected",
                              error_msg)
-                yield _sse_error(6, "Bed Allocation", "Transaction failed. Please try again.")
+                yield _sse_error(7, "Bed Allocation", "Transaction failed. Please try again.")
             return
 
         # ── Success ──
         _log_request(student_id, choices[0], choices[1], choices[2], filepath, receipt_hash, rrr, "allocated", None)
-        yield _sse_step(6, "complete", "Bed Allocation", "Bed space secured!")
+        yield _sse_step(7, "complete", "Bed Allocation", "Bed space secured!")
 
         result = _fetch_allocation(student_id)
         if result:

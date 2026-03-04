@@ -20,9 +20,12 @@ JWT_EXPIRY_MINUTES = int(os.getenv("JWT_EXPIRY_MINUTES", "1440"))
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# Supabase API
-SUPABASE_URL = "https://jekpgzxzknojijfbuhbu.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impla3Bnenh6a25vamlqZmJ1aGJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxODczMjEsImV4cCI6MjA4Nzc2MzMyMX0.c7tp6LfDBgi7MHxmrQ5fQfJZbn_jQbwZgTfpwzzfPKU"
+# Supabase API (read from environment — NEVER hardcode)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+
+# CORS — comma-separated allowed origins
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
 
 # Init global client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)

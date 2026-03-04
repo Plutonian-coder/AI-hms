@@ -15,6 +15,8 @@ def _make_email(identifier: str) -> str:
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(data: UserRegister):
     data.identifier = data.identifier.strip().upper()
+    # SECURITY: Always force role to student — admins must be created manually in the database
+    data.role = "student"
     email = _make_email(data.identifier)
     
     # Check if identifier already exists in Postgres

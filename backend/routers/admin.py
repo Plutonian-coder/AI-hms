@@ -98,6 +98,7 @@ def list_hostels(admin=Depends(get_current_admin)):
             LEFT JOIN rooms r ON r.hostel_id = h.id
             LEFT JOIN beds b ON b.room_id = r.id
             LEFT JOIN allocations a ON a.bed_id = b.id
+                AND a.session_id = (SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1)
             GROUP BY h.id
             ORDER BY h.name
         """)
@@ -165,7 +166,11 @@ def get_admin_stats(admin=Depends(get_current_admin)):
         cur.execute("SELECT COUNT(*) FROM beds")
         total_beds = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM beds WHERE status = 'occupied'")
+        cur.execute("""
+            SELECT COUNT(*) FROM allocations a
+            JOIN academic_sessions s ON s.id = a.session_id
+            WHERE s.is_active = TRUE
+        """)
         occupied_beds = cur.fetchone()[0]
 
         cur.execute("""

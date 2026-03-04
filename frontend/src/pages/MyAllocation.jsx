@@ -10,7 +10,7 @@ export default function MyAllocation() {
     useEffect(() => {
         apiClient.get('/allocation/my-allocation')
             .then(res => setAllocation(res.data))
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoading(false));
     }, []);
 
@@ -88,11 +88,14 @@ export default function MyAllocation() {
                         <h3 className="text-sm font-black text-heading uppercase tracking-widest">Quick Actions</h3>
                     </div>
                     <div className="p-6">
-                        <button className="w-full flex items-center justify-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all text-sm">
+                        <button
+                            onClick={() => alert('Allocation letter download will be available soon. Please take a screenshot for now.')}
+                            className="w-full flex items-center justify-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all text-sm"
+                        >
                             <Download className="w-4 h-4" />
                             Download Letter
                         </button>
-                        <p className="text-xs text-muted font-medium text-center mt-3">Get Allocation PDF</p>
+                        <p className="text-xs text-muted font-medium text-center mt-3">Coming soon — PDF allocation letter</p>
                     </div>
                 </div>
 
