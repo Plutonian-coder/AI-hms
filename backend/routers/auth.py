@@ -108,3 +108,63 @@ def login(data: UserLogin):
         gender=gender,
         role=role
     )
+
+
+# ---- Password Reset ----
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str
+
+class ResetPasswordRequest(BaseModel):
+    access_token: str
+    new_password: str
+
+from pydantic import BaseModel as BaseModel  # already imported above, just re-use
+
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPasswordRequest):
+    """Send a password reset email via Supabase Auth."""
+    identifier = data.identifier.strip().upper()
+    email = _make_email(identifier)
+
+    # Verify user exists in our DB
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM users WHERE identifier = %s", (identifier,))
+        if not cur.fetchone():
+            # Don't reveal that the user doesn't exist
+            return {"message": "If this account exists, a password reset link has been sent."}
+
+    try:
+        supabase.auth.reset_password_email(email)
+    except Exception:
+        pass  # Don't reveal errors to prevent account enumeration
+
+    return {"message": "If this account exists, a password reset link has been sent."}
+
+
+@router.post("/reset-password")
+def reset_password(data: ResetPasswordRequest):
+    """Reset password using the access token from the recovery link."""
+    try:
+        supabase.auth.admin.update_user_by_id(
+            # We use the token-based approach instead
+            data.access_token,
+            {"password": data.new_password}
+        )
+    except Exception:
+        # Fallback: try setting session and updating
+        try:
+            user_response = supabase.auth.get_user(data.access_token)
+            if not user_response or not user_response.user:
+                raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+            supabase.auth.admin.update_user_by_id(
+                user_response.user.id,
+                {"password": data.new_password}
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Failed to reset password. The link may have expired.")
+
+    return {"message": "Password has been reset successfully. You can now sign in."}
+

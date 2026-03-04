@@ -77,6 +77,9 @@ export default function Login() {
                     <p className="text-sm font-medium text-white/40 text-center mt-8">
                         Don't have an account? <Link to="/register" className="text-lime hover:text-lime-hover font-bold tracking-tight">Register</Link>
                     </p>
+                    <p className="text-sm font-medium text-white/30 text-center mt-3">
+                        <Link to="/forgot-password" className="text-white/50 hover:text-white/70 font-semibold transition-colors">Forgot Password?</Link>
+                    </p>
                 </div>
             </div>
         </div>

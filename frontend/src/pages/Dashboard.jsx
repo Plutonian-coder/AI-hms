@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import { Link } from 'react-router-dom';
 import { Home, Users, CheckCircle, Clock, Shield, ChevronRight, Pencil, X, Save } from 'lucide-react';
+import { useToast } from '../components/Toast';
 
 export default function Dashboard() {
     const [data, setData] = useState(null);
@@ -9,6 +10,7 @@ export default function Dashboard() {
     const [editing, setEditing] = useState(false);
     const [profileForm, setProfileForm] = useState({ department: '', level: '', email: '', phone: '' });
     const [saving, setSaving] = useState(false);
+    const toast = useToast();
 
     const fetchDashboard = () => {
         apiClient.get('/allocation/dashboard')
@@ -22,7 +24,7 @@ export default function Dashboard() {
                     phone: p.phone || '',
                 });
             })
-            .catch(() => {})
+            .catch(() => { toast.error('Failed to load dashboard data.'); })
             .finally(() => setLoading(false));
     };
 
@@ -39,8 +41,11 @@ export default function Dashboard() {
         try {
             await apiClient.patch('/allocation/profile', form);
             setEditing(false);
+            toast.success('Profile updated successfully');
             fetchDashboard();
-        } catch { }
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to save profile');
+        }
         finally { setSaving(false); }
     };
 

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Building, BedDouble, CalendarDays, Users, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, Building, BedDouble, CalendarDays, Users, ClipboardList, LogOut, X } from 'lucide-react';
 
 export default function AdminSidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
@@ -58,6 +58,11 @@ export default function AdminSidebar({ isOpen, onClose }) {
                     <Users className="w-5 h-5" />
                     Students
                 </NavLink>
+
+                <NavLink to="/admin/allocations" className={({ isActive }) => navItemClass(isActive)}>
+                    <ClipboardList className="w-5 h-5" />
+                    Allocations
+                </NavLink>
             </nav>
 
             <div className="p-4 border-t border-white/10">
@@ -81,17 +86,15 @@ export default function AdminSidebar({ isOpen, onClose }) {
 
             {/* Mobile backdrop */}
             <div
-                className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${
-                    isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
+                className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
                 onClick={onClose}
             />
 
             {/* Mobile drawer */}
             <div
-                className={`fixed inset-y-0 left-0 z-50 w-64 bg-forest flex flex-col transition-transform duration-300 ease-out lg:hidden ${
-                    isOpen ? 'translate-x-0' : '-translate-x-full'
-                }`}
+                className={`fixed inset-y-0 left-0 z-50 w-64 bg-forest flex flex-col transition-transform duration-300 ease-out lg:hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'
+                    }`}
             >
                 {sidebarContent(true)}
             </div>

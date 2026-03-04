@@ -9,11 +9,13 @@ import Apply from './pages/Apply';
 import MyAllocation from './pages/MyAllocation';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminHostels from './pages/admin/AdminHostels';
 import AdminBedSpaces from './pages/admin/AdminBedSpaces';
 import AdminSessions from './pages/admin/AdminSessions';
 import AdminStudents from './pages/admin/AdminStudents';
+import AdminAllocations from './pages/admin/AdminAllocations';
 
 function getUser() {
   try {
@@ -127,6 +129,7 @@ export default function App() {
       {/* Public routes — redirect to dashboard if already logged in */}
       <Route path="/login" element={localStorage.getItem('access_token') ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/register" element={localStorage.getItem('access_token') ? <Navigate to="/" replace /> : <Register />} />
+      <Route path="/forgot-password" element={localStorage.getItem('access_token') ? <Navigate to="/" replace /> : <ForgotPassword />} />
 
       {/* Smart root — landing page if not logged in, dashboard if student */}
       <Route path="/" element={<SmartRoot />} />
@@ -165,6 +168,11 @@ export default function App() {
       <Route path="/admin/students" element={
         <ProtectedRoute requiredRole="admin">
           <AdminLayout><AdminStudents /></AdminLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/allocations" element={
+        <ProtectedRoute requiredRole="admin">
+          <AdminLayout><AdminAllocations /></AdminLayout>
         </ProtectedRoute>
       } />
 

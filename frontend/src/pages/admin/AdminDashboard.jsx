@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { Users, FileText, CheckCircle, BarChart3, Building, DoorOpen, Layers, BedDouble, ShieldCheck } from 'lucide-react';
+import { useToast } from '../../components/Toast';
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
@@ -8,6 +9,7 @@ export default function AdminDashboard() {
     const [hostels, setHostels] = useState([]);
     const [loading, setLoading] = useState(true);
     const [toggling, setToggling] = useState(false);
+    const toast = useToast();
 
     useEffect(() => {
         Promise.all([
@@ -20,7 +22,7 @@ export default function AdminDashboard() {
                 setSession(sessionRes.data);
                 setHostels(hostelsRes.data);
             })
-            .catch(() => {})
+            .catch(() => { toast.error('Failed to load dashboard data.'); })
             .finally(() => setLoading(false));
     }, []);
 
@@ -29,8 +31,9 @@ export default function AdminDashboard() {
         try {
             const res = await apiClient.patch('/admin/session/toggle');
             setSession(prev => ({ ...prev, portal_open: res.data.portal_open }));
+            toast.success(res.data.message);
         } catch (err) {
-            alert(err.response?.data?.detail || 'Failed to toggle portal');
+            toast.error(err.response?.data?.detail || 'Failed to toggle portal');
         } finally {
             setToggling(false);
         }
@@ -58,11 +61,10 @@ export default function AdminDashboard() {
                         <div>
                             <h3 className="text-lg font-bold text-white">Active Session: {session.name}</h3>
                             <div className="mt-2">
-                                <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${
-                                    session.portal_open
+                                <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${session.portal_open
                                         ? 'bg-lime/15 text-lime border border-lime/30'
                                         : 'bg-white/10 text-white/60 border border-white/10'
-                                }`}>
+                                    }`}>
                                     <span className={`w-2 h-2 rounded-full ${session.portal_open ? 'bg-lime animate-pulse' : 'bg-white/40'}`}></span>
                                     Portal {session.portal_open ? 'Open' : 'Closed'}
                                 </span>
@@ -71,11 +73,10 @@ export default function AdminDashboard() {
                         <button
                             onClick={togglePortal}
                             disabled={toggling}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all ${
-                                session.portal_open
+                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all ${session.portal_open
                                     ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/25'
                                     : 'bg-lime text-forest hover:bg-lime-hover shadow-lime/25'
-                            } ${toggling ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
+                                } ${toggling ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
                         >
                             <DoorOpen className="w-5 h-5" />
                             {toggling ? 'Toggling...' : session.portal_open ? 'Close Portal' : 'Open Portal'}

@@ -220,3 +220,91 @@ def list_students(admin=Depends(get_current_admin)):
         }
         for r in rows
     ]
+
+
+# ---- Allocation Management ----
+
+@router.get("/allocations")
+def list_allocations(admin=Depends(get_current_admin)):
+    """List all active allocations for the current session."""
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT a.id, u.identifier, u.surname || ' ' || u.first_name AS full_name,
+                   h.name AS hostel_name, r.room_number, b.bed_number,
+                   a.allocated_at
+            FROM allocations a
+            JOIN users u ON u.id = a.student_id
+            JOIN beds b ON b.id = a.bed_id
+            JOIN rooms r ON r.id = b.room_id
+            JOIN hostels h ON h.id = r.hostel_id
+            JOIN academic_sessions s ON s.id = a.session_id
+            WHERE s.is_active = TRUE
+            ORDER BY a.allocated_at DESC
+        """)
+        rows = cur.fetchall()
+
+    return [
+        {
+            "id": r[0],
+            "identifier": r[1],
+            "full_name": r[2],
+            "hostel_name": r[3],
+            "room_number": r[4],
+            "bed_number": r[5],
+            "allocated_at": r[6].isoformat() if r[6] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.delete("/allocations/{allocation_id}")
+def revoke_allocation(allocation_id: int, admin=Depends(get_current_admin)):
+    """Revoke a student's allocation and free the bed."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Get the bed_id before deleting
+            cur.execute("SELECT bed_id FROM allocations WHERE id = %s", (allocation_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Allocation not found")
+
+            bed_id = row[0]
+
+            # Delete the allocation
+            cur.execute("DELETE FROM allocations WHERE id = %s", (allocation_id,))
+
+            # Free the bed
+            cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
+
+            conn.commit()
+
+    return {"message": "Allocation revoked successfully. Bed has been freed."}
+
+
+@router.get("/allocation-requests")
+def list_allocation_requests(admin=Depends(get_current_admin)):
+    """View the audit log of all allocation attempts."""
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT ar.id, u.identifier, u.surname || ' ' || u.first_name AS full_name,
+                   ar.status, ar.rejection_reason, ar.extracted_rrr, ar.created_at
+            FROM allocation_requests ar
+            JOIN users u ON u.id = ar.student_id
+            ORDER BY ar.created_at DESC
+            LIMIT 200
+        """)
+        rows = cur.fetchall()
+
+    return [
+        {
+            "id": r[0],
+            "identifier": r[1],
+            "full_name": r[2],
+            "status": r[3],
+            "rejection_reason": r[4],
+            "rrr": r[5],
+            "created_at": r[6].isoformat() if r[6] else None,
+        }
+        for r in rows
+    ]
+

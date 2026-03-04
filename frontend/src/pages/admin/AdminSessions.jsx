@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { CalendarDays, Plus, DoorOpen } from 'lucide-react';
+import { useToast } from '../../components/Toast';
 
 export default function AdminSessions() {
     const [sessions, setSessions] = useState([]);
@@ -9,13 +10,12 @@ export default function AdminSessions() {
     const [sessionName, setSessionName] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [toggling, setToggling] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const toast = useToast();
 
     const fetchSessions = () => {
         apiClient.get('/admin/sessions')
             .then(res => setSessions(res.data))
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoading(false));
     };
 
@@ -23,18 +23,16 @@ export default function AdminSessions() {
 
     const handleCreate = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         setSubmitting(true);
 
         try {
             const res = await apiClient.post('/admin/sessions', { session_name: sessionName.trim() });
-            setSuccess(res.data.message);
+            toast.success(res.data.message);
             setSessionName('');
             setShowForm(false);
             fetchSessions();
         } catch (err) {
-            setError(err.response?.data?.detail || 'Failed to create session');
+            toast.error(err.response?.data?.detail || 'Failed to create session');
         } finally {
             setSubmitting(false);
         }
@@ -42,13 +40,12 @@ export default function AdminSessions() {
 
     const handleTogglePortal = async () => {
         setToggling(true);
-        setError('');
         try {
             const res = await apiClient.patch('/admin/session/toggle');
-            setSuccess(res.data.message);
+            toast.success(res.data.message);
             fetchSessions();
         } catch (err) {
-            setError(err.response?.data?.detail || 'Failed to toggle portal');
+            toast.error(err.response?.data?.detail || 'Failed to toggle portal');
         } finally {
             setToggling(false);
         }
@@ -74,12 +71,6 @@ export default function AdminSessions() {
                 </button>
             </div>
 
-            {success && (
-                <div className="p-4 rounded-2xl bg-lime/10 border border-lime/20 text-forest font-bold text-sm">{success}</div>
-            )}
-            {error && (
-                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 font-bold text-sm">{error}</div>
-            )}
 
             {/* Active Session Portal Toggle */}
             {activeSession && (
@@ -88,11 +79,10 @@ export default function AdminSessions() {
                         <div>
                             <h3 className="text-lg font-bold text-white">Active Session: {activeSession.session_name}</h3>
                             <div className="mt-2">
-                                <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${
-                                    activeSession.portal_open
+                                <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${activeSession.portal_open
                                         ? 'bg-lime/15 text-lime border border-lime/30'
                                         : 'bg-white/10 text-white/60 border border-white/10'
-                                }`}>
+                                    }`}>
                                     <span className={`w-2 h-2 rounded-full ${activeSession.portal_open ? 'bg-lime animate-pulse' : 'bg-white/40'}`}></span>
                                     Allocation Portal {activeSession.portal_open ? 'Open' : 'Closed'}
                                 </span>
@@ -101,11 +91,10 @@ export default function AdminSessions() {
                         <button
                             onClick={handleTogglePortal}
                             disabled={toggling}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all ${
-                                activeSession.portal_open
+                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all ${activeSession.portal_open
                                     ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/25'
                                     : 'bg-lime text-forest hover:bg-lime-hover shadow-lime/25'
-                            } ${toggling ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
+                                } ${toggling ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
                         >
                             <DoorOpen className="w-5 h-5" />
                             {toggling ? 'Toggling...' : activeSession.portal_open ? 'Close Portal' : 'Open Portal'}
@@ -164,9 +153,8 @@ export default function AdminSessions() {
                     {sessions.map((session) => (
                         <div key={session.id} className="p-6 flex items-center justify-between hover:bg-cream/50 transition-colors">
                             <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                                    session.is_active ? 'bg-lime/10 text-lime' : 'bg-cream text-muted'
-                                }`}>
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${session.is_active ? 'bg-lime/10 text-lime' : 'bg-cream text-muted'
+                                    }`}>
                                     <CalendarDays className="w-6 h-6" />
                                 </div>
                                 <div>
@@ -182,11 +170,10 @@ export default function AdminSessions() {
                                             </span>
                                         )}
                                         {session.is_active && (
-                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
-                                                session.portal_open
+                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${session.portal_open
                                                     ? 'bg-lime/10 text-lime border-lime/20'
                                                     : 'bg-cream text-muted border-black/10'
-                                            }`}>
+                                                }`}>
                                                 Portal {session.portal_open ? 'OPEN' : 'CLOSED'}
                                             </span>
                                         )}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { Building, Plus, Pencil, Trash2 } from 'lucide-react';
+import { useToast } from '../../components/Toast';
 
 export default function AdminHostels() {
     const [hostels, setHostels] = useState([]);
@@ -9,13 +10,12 @@ export default function AdminHostels() {
     const [name, setName] = useState('');
     const [gender, setGender] = useState('male');
     const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const toast = useToast();
 
     const fetchHostels = () => {
         apiClient.get('/admin/hostels')
             .then(res => setHostels(res.data))
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoading(false));
     };
 
@@ -23,8 +23,6 @@ export default function AdminHostels() {
 
     const handleCreate = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         setSubmitting(true);
 
         try {
@@ -32,13 +30,13 @@ export default function AdminHostels() {
                 name: name.trim(),
                 gender_restriction: gender
             });
-            setSuccess(res.data.message);
+            toast.success(res.data.message);
             setName('');
             setGender('male');
             setShowForm(false);
             fetchHostels();
         } catch (err) {
-            setError(err.response?.data?.detail || 'Failed to create hostel');
+            toast.error(err.response?.data?.detail || 'Failed to create hostel');
         } finally {
             setSubmitting(false);
         }
@@ -62,12 +60,6 @@ export default function AdminHostels() {
                 </button>
             </div>
 
-            {success && (
-                <div className="p-4 rounded-2xl bg-lime/10 border border-lime/20 text-forest font-bold text-sm">{success}</div>
-            )}
-            {error && (
-                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 font-bold text-sm">{error}</div>
-            )}
 
             {/* Create Form */}
             {showForm && (
@@ -126,11 +118,10 @@ export default function AdminHostels() {
                                 {/* Card Header */}
                                 <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                                            hostel.gender === 'male' ? 'bg-forest/5 text-forest' :
-                                            hostel.gender === 'female' ? 'bg-tag-pink/30 text-forest' :
-                                            'bg-tag-lavender/30 text-forest'
-                                        }`}>
+                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${hostel.gender === 'male' ? 'bg-forest/5 text-forest' :
+                                                hostel.gender === 'female' ? 'bg-tag-pink/30 text-forest' :
+                                                    'bg-tag-lavender/30 text-forest'
+                                            }`}>
                                             <Building className="w-4 h-4" />
                                         </div>
                                         <h3 className="font-bold text-heading">{hostel.name}</h3>
@@ -148,11 +139,10 @@ export default function AdminHostels() {
                                 {/* Card Body */}
                                 <div className="p-5 space-y-4">
                                     {/* Gender Badge */}
-                                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
-                                        hostel.gender === 'male' ? 'bg-forest/5 text-forest' :
-                                        hostel.gender === 'female' ? 'bg-tag-pink/30 text-forest' :
-                                        'bg-tag-lavender/30 text-forest'
-                                    }`}>
+                                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${hostel.gender === 'male' ? 'bg-forest/5 text-forest' :
+                                            hostel.gender === 'female' ? 'bg-tag-pink/30 text-forest' :
+                                                'bg-tag-lavender/30 text-forest'
+                                        }`}>
                                         {hostel.gender.toUpperCase()}
                                     </span>
 

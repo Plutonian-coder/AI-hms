@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { BedDouble, Plus } from 'lucide-react';
+import { useToast } from '../../components/Toast';
 
 export default function AdminBedSpaces() {
     const [hostels, setHostels] = useState([]);
@@ -10,13 +11,12 @@ export default function AdminBedSpaces() {
     const [numRooms, setNumRooms] = useState(50);
     const [bedsPerRoom, setBedsPerRoom] = useState(4);
     const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const toast = useToast();
 
     const fetchHostels = () => {
         apiClient.get('/admin/hostels')
             .then(res => setHostels(res.data))
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoading(false));
     };
 
@@ -24,11 +24,9 @@ export default function AdminBedSpaces() {
 
     const handleGenerate = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
 
         if (!selectedHostel) {
-            setError('Please select a hostel.');
+            toast.warning('Please select a hostel.');
             return;
         }
 
@@ -37,11 +35,11 @@ export default function AdminBedSpaces() {
             const res = await apiClient.post(
                 `/admin/hostels/${selectedHostel}/rooms?num_rooms=${numRooms}&beds_per_room=${bedsPerRoom}`
             );
-            setSuccess(res.data.message);
+            toast.success(res.data.message);
             setShowForm(false);
             fetchHostels();
         } catch (err) {
-            setError(err.response?.data?.detail || 'Failed to generate rooms and beds');
+            toast.error(err.response?.data?.detail || 'Failed to generate rooms and beds');
         } finally {
             setSubmitting(false);
         }
@@ -65,12 +63,6 @@ export default function AdminBedSpaces() {
                 </button>
             </div>
 
-            {success && (
-                <div className="p-4 rounded-2xl bg-lime/10 border border-lime/20 text-forest font-bold text-sm">{success}</div>
-            )}
-            {error && (
-                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 font-bold text-sm">{error}</div>
-            )}
 
             {/* Generate Form */}
             {showForm && (
@@ -158,11 +150,10 @@ export default function AdminBedSpaces() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="font-bold text-heading text-lg">{hostel.name}</p>
-                                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full mt-1 inline-block ${
-                                        hostel.gender === 'male' ? 'bg-forest/5 text-forest' :
-                                        hostel.gender === 'female' ? 'bg-tag-pink/30 text-forest' :
-                                        'bg-tag-lavender/30 text-forest'
-                                    }`}>
+                                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full mt-1 inline-block ${hostel.gender === 'male' ? 'bg-forest/5 text-forest' :
+                                            hostel.gender === 'female' ? 'bg-tag-pink/30 text-forest' :
+                                                'bg-tag-lavender/30 text-forest'
+                                        }`}>
                                         {hostel.gender.toUpperCase()}
                                     </span>
                                 </div>
