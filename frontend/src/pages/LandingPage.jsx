@@ -257,7 +257,7 @@ export default function LandingPage() {
                                 Receipt Validation<br />in Seconds
                             </h3>
                             <p className="text-white/50 font-medium mt-4 leading-relaxed max-w-md">
-                                Gemini AI analyzes uploaded payment receipts in real-time — verifying authenticity,
+                               Advanced OCR analyzes uploaded payment receipts in real-time — verifying authenticity,
                                 extracting RRR codes, and checking payment status. No manual verification needed.
                             </p>
                         </div>

@@ -2,6 +2,7 @@
 Auth Router — Registration and Login powered by Supabase Auth for simplicity.
 """
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from models import UserRegister, UserLogin, TokenResponse
 from database import get_cursor
 from config import supabase
@@ -31,7 +32,6 @@ def register(data: UserRegister):
             "email": email,
             "password": data.password,
             "options": {
-                # Store extra metadata in auth.users just in case
                 "data": {
                     "identifier": data.identifier,
                     "role": data.role
@@ -39,7 +39,11 @@ def register(data: UserRegister):
             }
         })
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # If user already exists in Supabase Auth (e.g. after DB wipe), try signing in
+        try:
+            auth_response = supabase.auth.sign_in_with_password({"email": email, "password": data.password})
+        except Exception:
+            raise HTTPException(status_code=400, detail="Registration failed. If you already have an account, try logging in after re-registering.")
         
     session = auth_response.session
     if not session:
@@ -88,17 +92,12 @@ def login(data: UserLogin):
         row = cur.fetchone()
 
     if not row:
-        # Self-Heal: User exists in Auth but not DB (happened before Confirm Email was disabled)
-        with get_cursor() as cur:
-            cur.execute(
-                """INSERT INTO users (identifier, surname, first_name, gender, password_hash, role)
-                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-                (data.identifier, "Unknown", "Student", "male", "supabase_auth", "student"),
-            )
-            user_id = cur.fetchone()[0]
-        surname, first_name, gender, role = "Unknown", "Student", "male", "student"
-    else:
-        user_id, surname, first_name, gender, role = row
+        raise HTTPException(
+            status_code=401,
+            detail="Account not found. Please register first."
+        )
+
+    user_id, surname, first_name, gender, role = row
     
     return TokenResponse(
         access_token=session.access_token,
@@ -119,7 +118,7 @@ class ResetPasswordRequest(BaseModel):
     access_token: str
     new_password: str
 
-from pydantic import BaseModel as BaseModel  # already imported above, just re-use
+
 
 @router.post("/forgot-password")
 def forgot_password(data: ForgotPasswordRequest):
