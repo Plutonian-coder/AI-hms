@@ -37,6 +37,11 @@ app.add_middleware(
 def health():
     return {"status": "ok", "service": "Yabatech Hostel Management System"}
 
+# UptimeRobot ping — zero DB, zero overhead. Called every 5 min on free Render tier.
+@app.get("/health")
+def health_ping():
+    return {"status": "alive"}
+
 
 # Mount routers (before static files)
 app.include_router(auth.router)
