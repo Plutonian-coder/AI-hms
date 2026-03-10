@@ -12,6 +12,8 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminHostels from './pages/admin/AdminHostels';
+import AdminBlocks from './pages/admin/AdminBlocks';
+import AdminRoomStudents from './pages/admin/AdminRoomStudents';
 import AdminBedSpaces from './pages/admin/AdminBedSpaces';
 import AdminSessions from './pages/admin/AdminSessions';
 import AdminStudents from './pages/admin/AdminStudents';
@@ -153,6 +155,16 @@ export default function App() {
       <Route path="/admin/hostels" element={
         <ProtectedRoute requiredRole="admin">
           <AdminLayout><AdminHostels /></AdminLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/hostels/:hostelId/blocks" element={
+        <ProtectedRoute requiredRole="admin">
+          <AdminLayout><AdminBlocks /></AdminLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/rooms/:roomId/students" element={
+        <ProtectedRoute requiredRole="admin">
+          <AdminLayout><AdminRoomStudents /></AdminLayout>
         </ProtectedRoute>
       } />
       <Route path="/admin/bedspaces" element={

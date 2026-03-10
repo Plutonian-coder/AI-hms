@@ -1,18 +1,27 @@
 """
 Yabatech Automated Hostel Management System — FastAPI Entry Point
 """
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from routers import auth, allocation, admin
 from config import CORS_ORIGINS
+from tasks import auto_revoke_expired_allocations
 import os
 
 app = FastAPI(
     title="Yabatech Hostel Management System",
-    description="100% automated hostel allocation — no admin dashboard required.",
-    version="1.0.0",
+    description="Automated hostel allocation with Block hierarchy, 7-day revocation, and room accountability.",
+    version="2.0.0",
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on server startup."""
+    # 7-day payment auto-revocation runs every hour (Yabatech institutional policy)
+    asyncio.create_task(auto_revoke_expired_allocations())
 
 # CORS — allow configured frontend origins only
 app.add_middleware(

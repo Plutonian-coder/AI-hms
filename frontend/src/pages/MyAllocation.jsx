@@ -67,8 +67,11 @@ export default function MyAllocation() {
 
                 {/* Hostel Name */}
                 <div className="p-8 pb-6">
-                    <p className="text-xs font-bold text-lime uppercase tracking-widest">Hostel Block</p>
+                    <p className="text-xs font-bold text-lime uppercase tracking-widest">Your Accommodation</p>
                     <h2 className="text-3xl font-black text-heading tracking-tight mt-1">{allocation.hostel_name}</h2>
+                    {allocation.block_name && (
+                        <p className="text-sm font-semibold text-muted mt-1">{allocation.block_name}</p>
+                    )}
                 </div>
 
                 {/* Metrics Row */}

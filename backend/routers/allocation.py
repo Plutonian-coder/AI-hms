@@ -47,13 +47,14 @@ def check_allocation_public(matric: str):
     with get_cursor() as cur:
         cur.execute("""
             SELECT u.surname, u.first_name,
-                   h.name AS hostel_name, r.room_number, b.bed_number
+                   h.name AS hostel_name, bl.name AS block_name, r.room_number, b.bed_number
             FROM users u
-            JOIN allocations a ON a.student_id = u.id
+            JOIN allocations a   ON a.student_id = u.id
             JOIN academic_sessions sess ON sess.id = a.session_id AND sess.is_active = TRUE
-            JOIN beds b ON b.id = a.bed_id
-            JOIN rooms r ON r.id = b.room_id
-            JOIN hostels h ON h.id = r.hostel_id
+            JOIN beds b          ON b.id  = a.bed_id
+            JOIN rooms r         ON r.id  = b.room_id
+            JOIN blocks bl       ON bl.id = r.block_id
+            JOIN hostels h       ON h.id  = bl.hostel_id
             WHERE LOWER(u.identifier) = LOWER(%s)
         """, (matric.strip(),))
         row = cur.fetchone()
@@ -65,8 +66,8 @@ def check_allocation_public(matric: str):
         SELECT r.id FROM users u
         JOIN allocations a ON a.student_id = u.id
         JOIN academic_sessions sess ON sess.id = a.session_id AND sess.is_active = TRUE
-        JOIN beds b ON b.id = a.bed_id
-        JOIN rooms r ON r.id = b.room_id
+        JOIN beds b  ON b.id  = a.bed_id
+        JOIN rooms r ON r.id  = b.room_id
         WHERE LOWER(u.identifier) = LOWER(%s)
     """
     with get_cursor() as cur:
@@ -101,8 +102,9 @@ def check_allocation_public(matric: str):
         "found": True,
         "student_name": f"{row[0]} {row[1]}",
         "hostel_name": row[2],
-        "room_number": row[3],
-        "bed_number": row[4],
+        "block_name": row[3],
+        "room_number": row[4],
+        "bed_number": row[5],
         "occupants": occupants,
         "capacity": capacity,
         "roommates": roommate_names,
@@ -208,24 +210,27 @@ def update_student_profile(
 
 @router.get("/hostels", response_model=List[HostelInfo])
 def list_available_hostels(student=Depends(get_current_student)):
+    """Return only active hostels matching student's gender (maintenance hostels excluded)."""
     student_gender = student["gender"]
 
     with get_cursor() as cur:
         cur.execute("""
-            SELECT h.id, h.name, h.gender_restriction, h.capacity,
+            SELECT h.id, h.name, h.gender_restriction, h.status, h.capacity,
                    COUNT(a.id) AS occupied
             FROM hostels h
-            LEFT JOIN rooms r ON r.hostel_id = h.id
-            LEFT JOIN beds b ON b.room_id = r.id
+            LEFT JOIN blocks bl ON bl.hostel_id = h.id
+            LEFT JOIN rooms r   ON r.block_id   = bl.id
+            LEFT JOIN beds b    ON b.room_id    = r.id
             LEFT JOIN allocations a ON a.bed_id = b.id
             WHERE h.gender_restriction IN (%s, 'mixed')
+              AND h.status = 'active'
             GROUP BY h.id
             ORDER BY h.name
         """, (student_gender,))
         rows = cur.fetchall()
 
     return [
-        HostelInfo(id=r[0], name=r[1], gender=r[2], capacity=r[3], occupied=r[4], available=r[3] - r[4])
+        HostelInfo(id=r[0], name=r[1], gender=r[2], status=r[3], capacity=r[4], occupied=r[5], available=r[4] - r[5])
         for r in rows
     ]
 
@@ -414,12 +419,13 @@ async def apply_for_allocation(
 def _fetch_allocation(student_id: int) -> AllocationResult | None:
     with get_cursor() as cur:
         cur.execute("""
-            SELECT b.bed_number, r.room_number, h.name, r.id
+            SELECT b.bed_number, r.room_number, h.name, bl.name, r.id
             FROM allocations a
             JOIN academic_sessions sess ON sess.id = a.session_id
-            JOIN beds b ON b.id = a.bed_id
-            JOIN rooms r ON r.id = b.room_id
-            JOIN hostels h ON h.id = r.hostel_id
+            JOIN beds b    ON b.id  = a.bed_id
+            JOIN rooms r   ON r.id  = b.room_id
+            JOIN blocks bl ON bl.id = r.block_id
+            JOIN hostels h ON h.id  = bl.hostel_id
             WHERE a.student_id = %s AND sess.is_active = TRUE
         """, (student_id,))
         row = cur.fetchone()
@@ -427,7 +433,7 @@ def _fetch_allocation(student_id: int) -> AllocationResult | None:
     if not row:
         return None
 
-    bed_num, room_num, hostel_name, room_id = row
+    bed_num, room_num, hostel_name, block_name, room_id = row
 
     with get_cursor() as cur:
         cur.execute("""
@@ -442,6 +448,7 @@ def _fetch_allocation(student_id: int) -> AllocationResult | None:
 
     return AllocationResult(
         hostel_name=hostel_name,
+        block_name=block_name,
         room_number=room_num,
         bed_number=bed_num,
         roommates=[RoommateInfo(identifier=r[0], full_name=r[1]) for r in roommate_rows],
