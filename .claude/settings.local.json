@@ -5,7 +5,8 @@
       "Bash(git commit -m \"$\\(cat <<''EOF''\nMove runtime.txt to repo root + add .python-version for Render\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git push:*)",
       "Bash(git mv:*)",
-      "WebFetch(domain:docs.google.com)"
+      "WebFetch(domain:docs.google.com)",
+      "Bash(curl:*)"
     ]
   }
 }

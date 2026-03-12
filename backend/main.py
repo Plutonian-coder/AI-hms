@@ -6,9 +6,11 @@ Auth: Self-managed JWT (python-jose + passlib/bcrypt).
 """
 import asyncio
 import os
+import traceback
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import CORS_ORIGINS
@@ -37,6 +39,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Global exception handler — ensures CORS headers are always present on errors
+# Without this, unhandled 500s bypass CORSMiddleware and browsers report CORS errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {type(exc).__name__}: {exc}"},
+    )
 
 
 # UptimeRobot ping — pure Python, zero DB, called every 5 min on free Render tier

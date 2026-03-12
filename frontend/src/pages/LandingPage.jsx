@@ -157,6 +157,23 @@ export default function LandingPage() {
                                     <p className="text-white font-bold text-lg mt-0.5">{result.student_name}</p>
                                 </div>
 
+                                {(result.department || result.level) && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {result.department && (
+                                            <div className="bg-white/5 rounded-2xl p-3">
+                                                <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Department</p>
+                                                <p className="text-white font-semibold text-sm mt-1">{result.department}</p>
+                                            </div>
+                                        )}
+                                        {result.level && (
+                                            <div className="bg-white/5 rounded-2xl p-3">
+                                                <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Level</p>
+                                                <p className="text-white font-semibold text-sm mt-1">{result.level}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div>
                                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Hostel</p>
                                     <p className="text-white font-bold text-lg mt-0.5">{result.hostel_name}</p>

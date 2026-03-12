@@ -114,8 +114,16 @@ def login(data: UserLogin):
 
     user_id, surname, first_name, gender, role, pw_hash = row
 
-    if not _verify_password(data.password, pw_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not pw_hash:
+        raise HTTPException(status_code=401, detail="Account requires password reset. Please use 'Forgot Password' or re-register.")
+
+    try:
+        valid = _verify_password(data.password, pw_hash)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Account requires password reset. Please use 'Forgot Password' or re-register.")
+
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid login credentials")
 
     # Role is fetched fresh from DB every login — promoting a user to admin
     # in the database takes effect immediately on next login.

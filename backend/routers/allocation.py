@@ -46,7 +46,7 @@ def check_allocation_public(matric: str):
     """Public endpoint — check allocation status by matric number. Returns limited info."""
     with get_cursor() as cur:
         cur.execute("""
-            SELECT u.surname, u.first_name,
+            SELECT u.surname, u.first_name, u.department, u.level,
                    h.name AS hostel_name, bl.name AS block_name, r.room_number, b.bed_number, r.id
             FROM users u
             JOIN allocations a   ON a.student_id = u.id AND (a.status = 'active' OR a.status IS NULL)
@@ -62,7 +62,7 @@ def check_allocation_public(matric: str):
     if not row:
         return {"found": False}
 
-    room_id = row[6]
+    room_id = row[8]
 
     # Count occupants and capacity
     occupants = 1
@@ -90,10 +90,12 @@ def check_allocation_public(matric: str):
     return {
         "found": True,
         "student_name": f"{row[0]} {row[1]}",
-        "hostel_name": row[2],
-        "block_name": row[3],
-        "room_number": row[4],
-        "bed_number": row[5],
+        "department": row[2],
+        "level": row[3],
+        "hostel_name": row[4],
+        "block_name": row[5],
+        "room_number": row[6],
+        "bed_number": row[7],
         "occupants": occupants,
         "capacity": capacity,
         "roommates": roommate_names,
