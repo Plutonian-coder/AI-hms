@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { Users, FileText, CheckCircle, BarChart3, Building, DoorOpen, Layers, BedDouble, ShieldCheck } from 'lucide-react';
+import { Users, FileText, CheckCircle, BarChart3, Building, DoorOpen, BedDouble, ShieldCheck, LogOut } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 export default function AdminDashboard() {
@@ -97,9 +97,9 @@ export default function AdminDashboard() {
                     <StatCard icon={CheckCircle} label="Allocated" value={stats.active_allocations} color="lime" />
                     <StatCard icon={BarChart3} label="Occupancy Rate" value={`${occupancyRate}%`} color="amber" />
                     <StatCard icon={Building} label="Total Hostels" value={stats.total_hostels} color="forest" />
-                    <StatCard icon={Layers} label="Total Rooms" value="—" color="sage" />
+                    <StatCard icon={ShieldCheck} label="Eligible Students" value={stats.eligible_count ?? 0} color="sage" />
                     <StatCard icon={BedDouble} label="Total Capacity" value={stats.total_beds} color="lime" />
-                    <StatCard icon={ShieldCheck} label="Payments Verified" value={stats.active_allocations} color="forest" />
+                    <StatCard icon={LogOut} label="Checkouts" value={stats.checkout_count ?? 0} color="amber" />
                 </div>
             )}
 

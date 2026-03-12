@@ -12,6 +12,12 @@ class UserRegister(BaseModel):
     gender: str = Field(..., pattern="^(male|female)$")
     role: str = Field(default="student", pattern="^(student|admin)$")
     password: str
+    email: str = ""
+    department: str = ""
+    level: str = ""
+    phone: str = ""
+    next_of_kin_name: str = ""
+    next_of_kin_phone: str = ""
 
 class UserLogin(BaseModel):
     identifier: str

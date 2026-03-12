@@ -1,6 +1,8 @@
 """
-Admin Router — For managing hostels, blocks, rooms, beds, sessions, and allocations.
+Admin Router — For managing hostels, blocks, rooms, beds, sessions, allocations,
+               eligibility, and checkouts.
 """
+import os
 from fastapi import APIRouter, HTTPException, Depends
 from models import (
     HostelCreate, HostelStatusUpdate,
@@ -9,7 +11,8 @@ from models import (
 )
 from database import get_cursor, get_connection
 from dependencies import get_current_admin
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -18,40 +21,65 @@ class SessionCreate(BaseModel):
     session_name: str
 
 
+class AdminCheckoutRequest(BaseModel):
+    checkout_type: str = Field(..., pattern="^(admin_revocation|graduation|withdrawal)$")
+    reason: Optional[str] = None
+
+
 # ════════════════════════════════════════════════════════════
 # SESSIONS
 # ════════════════════════════════════════════════════════════
 
 @router.post("/sessions")
 def create_session(data: SessionCreate, admin=Depends(get_current_admin)):
-    """Create a new academic session. Deactivates any currently active session first."""
+    """Create a new academic session. Expires all allocations from old session first."""
+    expired_count = 0
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE academic_sessions SET is_active = FALSE, allocation_portal_open = FALSE WHERE is_active = TRUE")
+            # Find current active session
+            cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+            old_session = cur.fetchone()
+
+            if old_session:
+                old_session_id = old_session[0]
+                # Expire all active allocations (creates checkout records, frees beds)
+                cur.execute("SELECT expire_session_allocations(%s)", (old_session_id,))
+                expired_count = cur.fetchone()[0]
+
+                # Deactivate old session
+                cur.execute(
+                    "UPDATE academic_sessions SET is_active = FALSE, allocation_portal_open = FALSE, eligibility_portal_open = FALSE WHERE id = %s",
+                    (old_session_id,),
+                )
+
             cur.execute(
-                "INSERT INTO academic_sessions (session_name, is_active, allocation_portal_open) VALUES (%s, TRUE, FALSE) RETURNING id",
-                (data.session_name,)
+                "INSERT INTO academic_sessions (session_name, is_active, allocation_portal_open, eligibility_portal_open) VALUES (%s, TRUE, FALSE, FALSE) RETURNING id",
+                (data.session_name,),
             )
             session_id = cur.fetchone()[0]
             conn.commit()
-    return {"message": f"Session '{data.session_name}' created and set as active", "session_id": session_id}
+
+    msg = f"Session '{data.session_name}' created and set as active."
+    if expired_count > 0:
+        msg += f" {expired_count} allocation(s) from previous session expired."
+    return {"message": msg, "session_id": session_id, "expired_count": expired_count}
 
 
 @router.get("/sessions")
 def list_sessions(admin=Depends(get_current_admin)):
     """List all academic sessions."""
     with get_cursor() as cur:
-        cur.execute("SELECT id, session_name, is_active, allocation_portal_open FROM academic_sessions ORDER BY id DESC")
+        cur.execute("SELECT id, session_name, is_active, allocation_portal_open, eligibility_portal_open FROM academic_sessions ORDER BY id DESC")
         rows = cur.fetchall()
     return [
-        {"id": r[0], "session_name": r[1], "is_active": r[2], "portal_open": r[3]}
+        {"id": r[0], "session_name": r[1], "is_active": r[2], "portal_open": r[3], "eligibility_portal_open": r[4]}
         for r in rows
     ]
 
 
 @router.patch("/session/toggle")
 def toggle_allocation_portal(admin=Depends(get_current_admin)):
-    """Opens or closes the FCFS portal."""
+    """Opens or closes the FCFS allocation portal."""
     with get_cursor() as cur:
         cur.execute("SELECT id, allocation_portal_open FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
         session = cur.fetchone()
@@ -65,10 +93,26 @@ def toggle_allocation_portal(admin=Depends(get_current_admin)):
     return {"message": f"The hostel allocation portal has been {state_str} for the current session", "portal_open": new_state}
 
 
+@router.patch("/session/toggle-eligibility")
+def toggle_eligibility_portal(admin=Depends(get_current_admin)):
+    """Opens or closes the eligibility verification portal."""
+    with get_cursor() as cur:
+        cur.execute("SELECT id, eligibility_portal_open FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        session = cur.fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="No active session found. Create one first.")
+
+        new_state = not session[1]
+        cur.execute("UPDATE academic_sessions SET eligibility_portal_open = %s WHERE id = %s", (new_state, session[0]))
+
+    state_str = "OPENED" if new_state else "CLOSED"
+    return {"message": f"The eligibility verification portal has been {state_str}", "eligibility_portal_open": new_state}
+
+
 @router.get("/session/status")
 def get_session_status(admin=Depends(get_current_admin)):
     with get_cursor() as cur:
-        cur.execute("SELECT id, session_name, is_active, allocation_portal_open FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        cur.execute("SELECT id, session_name, is_active, allocation_portal_open, eligibility_portal_open FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
         session = cur.fetchone()
         if not session:
             return {"status": "none"}
@@ -77,7 +121,8 @@ def get_session_status(admin=Depends(get_current_admin)):
         "status": "active",
         "id": session[0],
         "name": session[1],
-        "portal_open": session[3]
+        "portal_open": session[3],
+        "eligibility_portal_open": session[4],
     }
 
 
@@ -110,6 +155,7 @@ def list_hostels(admin=Depends(get_current_admin)):
             LEFT JOIN beds b    ON b.room_id = r.id
             LEFT JOIN allocations a ON a.bed_id = b.id
                 AND a.session_id = (SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1)
+                AND a.status = 'active'
             GROUP BY h.id
             ORDER BY h.name
         """)
@@ -127,8 +173,7 @@ def list_hostels(admin=Depends(get_current_admin)):
 
 @router.patch("/hostels/{hostel_id}/status")
 def update_hostel_status(hostel_id: int, data: HostelStatusUpdate, admin=Depends(get_current_admin)):
-    """Toggle a hostel's operational status (active / maintenance / decommissioned).
-    Maintenance hostels are excluded from student allocation choices."""
+    """Toggle a hostel's operational status (active / maintenance / decommissioned)."""
     with get_cursor() as cur:
         cur.execute(
             "UPDATE hostels SET status = %s WHERE id = %s RETURNING name",
@@ -165,7 +210,6 @@ def create_block(data: BlockCreate, admin=Depends(get_current_admin)):
 def list_blocks(hostel_id: int, admin=Depends(get_current_admin)):
     """List all blocks for a hostel, with room counts and occupancy."""
     with get_cursor() as cur:
-        # Verify hostel exists
         cur.execute("SELECT name FROM hostels WHERE id = %s", (hostel_id,))
         hostel = cur.fetchone()
         if not hostel:
@@ -200,7 +244,7 @@ def list_blocks(hostel_id: int, admin=Depends(get_current_admin)):
 
 @router.patch("/blocks/{block_id}/status")
 def update_block_status(block_id: int, data: BlockStatusUpdate, admin=Depends(get_current_admin)):
-    """Toggle a block's status (active / maintenance). Maintenance blocks are excluded from allocations."""
+    """Toggle a block's status (active / maintenance)."""
     with get_cursor() as cur:
         cur.execute(
             "UPDATE blocks SET status = %s WHERE id = %s RETURNING name",
@@ -222,10 +266,7 @@ def create_many_rooms_and_beds(
     data: BulkRoomGenerate,
     admin=Depends(get_current_admin)
 ):
-    """Bulk generate rooms and beds within a BLOCK (supervisor requirement).
-    Hard caps: minimum 4 rooms, maximum 50 rooms per call, maximum 8 beds per room.
-    Room numbering continues from the last existing room in the block."""
-    # Enforce caps (Pydantic already validates these via ge/le, but defense-in-depth)
+    """Bulk generate rooms and beds within a BLOCK."""
     num_rooms    = max(4, min(data.num_rooms, 50))
     beds_per_room = max(1, min(data.beds_per_room, 8))
     created_rooms = 0
@@ -233,7 +274,6 @@ def create_many_rooms_and_beds(
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Verify block exists and get parent hostel info
             cur.execute("""
                 SELECT bl.id, bl.name, bl.hostel_id, h.name, h.capacity
                 FROM blocks bl
@@ -246,7 +286,6 @@ def create_many_rooms_and_beds(
 
             _, block_name, hostel_id, hostel_name, current_capacity = block
 
-            # Continue room numbering after existing rooms in this block
             cur.execute("SELECT COUNT(*) FROM rooms WHERE block_id = %s", (block_id,))
             existing_count = cur.fetchone()[0]
 
@@ -266,7 +305,6 @@ def create_many_rooms_and_beds(
                     )
                     created_beds += 1
 
-            # Update hostel's total capacity
             new_capacity = current_capacity + created_beds
             cur.execute("UPDATE hostels SET capacity = %s WHERE id = %s", (new_capacity, hostel_id))
             conn.commit()
@@ -316,15 +354,13 @@ def list_block_rooms(block_id: int, admin=Depends(get_current_admin)):
 
 
 # ════════════════════════════════════════════════════════════
-# ROOM-LEVEL ACCOUNTABILITY (supervisor requirement #3)
+# ROOM-LEVEL ACCOUNTABILITY
 # ════════════════════════════════════════════════════════════
 
 @router.get("/rooms/{room_id}/students")
 def get_room_students(room_id: int, admin=Depends(get_current_admin)):
-    """Get a detailed list of all students allocated to a specific room.
-    Includes names, matric numbers, departments, levels, bed numbers, and payment status."""
+    """Get a detailed list of all students allocated to a specific room."""
     with get_cursor() as cur:
-        # Room metadata
         cur.execute("""
             SELECT r.room_number, r.status, bl.name AS block_name, h.name AS hostel_name, h.id
             FROM rooms r
@@ -338,11 +374,9 @@ def get_room_students(room_id: int, admin=Depends(get_current_admin)):
 
         room_number, room_status, block_name, hostel_name, hostel_id = room_meta
 
-        # Total beds in room
         cur.execute("SELECT COUNT(*) FROM beds WHERE room_id = %s", (room_id,))
         total_beds = cur.fetchone()[0]
 
-        # All students currently allocated to this room in the active session
         cur.execute("""
             SELECT u.id, u.identifier, u.surname || ' ' || u.first_name AS full_name,
                    u.gender, u.department, u.level,
@@ -351,7 +385,7 @@ def get_room_students(room_id: int, admin=Depends(get_current_admin)):
             JOIN users u               ON u.id = a.student_id
             JOIN beds b                ON b.id = a.bed_id
             JOIN academic_sessions s   ON s.id = a.session_id
-            WHERE b.room_id = %s AND s.is_active = TRUE
+            WHERE b.room_id = %s AND s.is_active = TRUE AND a.status = 'active'
             ORDER BY b.bed_number
         """, (room_id,))
         students = cur.fetchall()
@@ -368,7 +402,7 @@ def get_room_students(room_id: int, admin=Depends(get_current_admin)):
         "students": [
             {
                 "student_id": s[0],
-                "identifier": s[1],        # Matric number
+                "identifier": s[1],
                 "full_name": s[2],
                 "gender": s[3],
                 "department": s[4],
@@ -405,16 +439,36 @@ def get_admin_stats(admin=Depends(get_current_admin)):
         cur.execute("""
             SELECT COUNT(*) FROM allocations a
             JOIN academic_sessions s ON s.id = a.session_id
-            WHERE s.is_active = TRUE
+            WHERE s.is_active = TRUE AND a.status = 'active'
         """)
         occupied_beds = cur.fetchone()[0]
 
         cur.execute("""
             SELECT COUNT(*) FROM allocations a
             JOIN academic_sessions s ON s.id = a.session_id
-            WHERE s.is_active = TRUE AND a.payment_status = 'pending'
+            WHERE s.is_active = TRUE AND a.payment_status = 'pending' AND a.status = 'active'
         """)
         pending_payment = cur.fetchone()[0]
+
+        # Eligible students (eligible but not allocated)
+        cur.execute("""
+            SELECT COUNT(*) FROM eligibility_status es
+            JOIN academic_sessions s ON s.id = es.session_id
+            WHERE s.is_active = TRUE AND es.is_eligible = TRUE
+              AND NOT EXISTS (
+                  SELECT 1 FROM allocations a
+                  WHERE a.student_id = es.student_id AND a.session_id = es.session_id AND a.status = 'active'
+              )
+        """)
+        eligible_count = cur.fetchone()[0]
+
+        # Checkout count for current session
+        cur.execute("""
+            SELECT COUNT(*) FROM checkouts c
+            JOIN academic_sessions s ON s.id = c.session_id
+            WHERE s.is_active = TRUE
+        """)
+        checkout_count = cur.fetchone()[0]
 
     return {
         "total_students": total_students,
@@ -424,7 +478,9 @@ def get_admin_stats(admin=Depends(get_current_admin)):
         "occupied_beds": occupied_beds,
         "available_beds": total_beds - occupied_beds,
         "pending_payment_count": pending_payment,
-        "active_allocations": occupied_beds
+        "active_allocations": occupied_beds,
+        "eligible_count": eligible_count,
+        "checkout_count": checkout_count,
     }
 
 
@@ -443,6 +499,7 @@ def list_students(admin=Depends(get_current_admin)):
             FROM users u
             LEFT JOIN allocations a ON a.student_id = u.id
                 AND a.session_id = (SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1)
+                AND a.status = 'active'
             WHERE u.role = 'student'
             ORDER BY u.surname, u.first_name
         """)
@@ -463,6 +520,82 @@ def list_students(admin=Depends(get_current_admin)):
 
 
 # ════════════════════════════════════════════════════════════
+# ELIGIBLE STUDENTS
+# ════════════════════════════════════════════════════════════
+
+@router.get("/eligible-students")
+def list_eligible_students(admin=Depends(get_current_admin)):
+    """List students who are eligible but not yet allocated for the current session."""
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT u.id, u.identifier, u.surname || ' ' || u.first_name AS full_name,
+                   u.gender, u.department, u.level, es.eligible_at
+            FROM eligibility_status es
+            JOIN users u ON u.id = es.student_id
+            JOIN academic_sessions s ON s.id = es.session_id
+            WHERE s.is_active = TRUE AND es.is_eligible = TRUE
+              AND NOT EXISTS (
+                  SELECT 1 FROM allocations a
+                  WHERE a.student_id = es.student_id AND a.session_id = es.session_id AND a.status = 'active'
+              )
+            ORDER BY es.eligible_at DESC
+        """)
+        rows = cur.fetchall()
+
+    return [
+        {
+            "id": r[0],
+            "identifier": r[1],
+            "full_name": r[2],
+            "gender": r[3],
+            "department": r[4],
+            "level": r[5],
+            "eligible_at": r[6].isoformat() if r[6] else None,
+        }
+        for r in rows
+    ]
+
+
+# ════════════════════════════════════════════════════════════
+# STUDENT DOCUMENTS (eligibility audit)
+# ════════════════════════════════════════════════════════════
+
+@router.get("/students/{student_id}/documents")
+def get_student_documents(student_id: int, admin=Depends(get_current_admin)):
+    """Return all eligibility documents uploaded by a student for the active session."""
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT ed.document_type, ed.ai_verdict, ed.rejection_reason,
+                   ed.extracted_identifier, ed.uploaded_at, ed.verified_at, ed.file_path
+            FROM eligibility_documents ed
+            JOIN academic_sessions s ON s.id = ed.session_id AND s.is_active = TRUE
+            WHERE ed.student_id = %s
+            ORDER BY ed.uploaded_at DESC
+        """, (student_id,))
+        rows = cur.fetchall()
+
+    doc_labels = {
+        "acceptance_fee": "Acceptance Fee Receipt",
+        "e_screening":    "E-Screening Receipt",
+        "school_fees":    "School Fees Receipt",
+    }
+
+    return [
+        {
+            "document_type": r[0],
+            "label": doc_labels.get(r[0], r[0]),
+            "ai_verdict": r[1],
+            "rejection_reason": r[2],
+            "extracted_identifier": r[3],
+            "uploaded_at": r[4].isoformat() if r[4] else None,
+            "verified_at": r[5].isoformat() if r[5] else None,
+            "file_name": os.path.basename(r[6]) if r[6] else None,
+        }
+        for r in rows
+    ]
+
+
+# ════════════════════════════════════════════════════════════
 # ALLOCATION MANAGEMENT
 # ════════════════════════════════════════════════════════════
 
@@ -471,7 +604,7 @@ def list_allocations(admin=Depends(get_current_admin)):
     """List all active allocations for the current session."""
     with get_cursor() as cur:
         cur.execute("""
-            SELECT a.id, u.identifier, u.surname || ' ' || u.first_name AS full_name,
+            SELECT a.id, a.student_id, u.identifier, u.surname || ' ' || u.first_name AS full_name,
                    h.name AS hostel_name, bl.name AS block_name, r.room_number, b.bed_number,
                    a.payment_status, a.payment_deadline, a.allocated_at
             FROM allocations a
@@ -481,8 +614,122 @@ def list_allocations(admin=Depends(get_current_admin)):
             JOIN blocks bl           ON bl.id = r.block_id
             JOIN hostels h           ON h.id  = bl.hostel_id
             JOIN academic_sessions s ON s.id  = a.session_id
-            WHERE s.is_active = TRUE
+            WHERE s.is_active = TRUE AND a.status = 'active'
             ORDER BY a.allocated_at DESC
+        """)
+        rows = cur.fetchall()
+
+    return [
+        {
+            "id": r[0],
+            "student_id": r[1],
+            "identifier": r[2],
+            "full_name": r[3],
+            "hostel_name": r[4],
+            "block_name": r[5],
+            "room_number": r[6],
+            "bed_number": r[7],
+            "payment_status": r[8],
+            "payment_deadline": r[9].isoformat() if r[9] else None,
+            "allocated_at": r[10].isoformat() if r[10] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.delete("/allocations/{allocation_id}")
+def revoke_allocation(allocation_id: int, admin=Depends(get_current_admin)):
+    """Manually revoke a student's allocation, free the bed, and record the checkout."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Get full allocation info for checkout record
+            cur.execute("""
+                SELECT a.student_id, a.bed_id, a.session_id,
+                       h.name, bl.name, r.room_number, b.bed_number
+                FROM allocations a
+                JOIN beds b    ON b.id  = a.bed_id
+                JOIN rooms r   ON r.id  = b.room_id
+                JOIN blocks bl ON bl.id = r.block_id
+                JOIN hostels h ON h.id  = bl.hostel_id
+                WHERE a.id = %s
+            """, (allocation_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Allocation not found")
+
+            student_id, bed_id, session_id, hostel_name, block_name, room_number, bed_number = row
+
+            # Record checkout
+            admin_name = admin["identifier"]
+            cur.execute("""
+                INSERT INTO checkouts (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number, checkout_type, reason, recorded_by, recorded_by_name)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'admin_revocation', 'Revoked by admin', %s, %s)
+            """, (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number,
+                  admin["user_id"], admin_name))
+
+            # Mark allocation as checked out (instead of deleting, preserve history)
+            cur.execute("UPDATE allocations SET status = 'checked_out' WHERE id = %s", (allocation_id,))
+            cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
+            conn.commit()
+
+    return {"message": "Allocation revoked successfully. Bed has been freed."}
+
+
+@router.post("/checkout/{student_id}")
+def admin_checkout_student(student_id: int, data: AdminCheckoutRequest, admin=Depends(get_current_admin)):
+    """Admin-initiated checkout (graduation, withdrawal, etc.)."""
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT a.id, a.bed_id, a.session_id,
+                   h.name, bl.name, r.room_number, b.bed_number
+            FROM allocations a
+            JOIN academic_sessions sess ON sess.id = a.session_id AND sess.is_active = TRUE
+            JOIN beds b    ON b.id  = a.bed_id
+            JOIN rooms r   ON r.id  = b.room_id
+            JOIN blocks bl ON bl.id = r.block_id
+            JOIN hostels h ON h.id  = bl.hostel_id
+            WHERE a.student_id = %s AND a.status = 'active'
+        """, (student_id,))
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Student does not have an active allocation.")
+
+    alloc_id, bed_id, session_id, hostel_name, block_name, room_number, bed_number = row
+    reason = data.reason or f"Admin checkout: {data.checkout_type}"
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO checkouts (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number, checkout_type, reason, recorded_by, recorded_by_name)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number,
+                  data.checkout_type, reason, admin["user_id"], admin["identifier"]))
+
+            cur.execute("UPDATE allocations SET status = 'checked_out' WHERE id = %s", (alloc_id,))
+            cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
+            conn.commit()
+
+    return {"message": f"Student checked out ({data.checkout_type}). Bed freed."}
+
+
+# ════════════════════════════════════════════════════════════
+# CHECKOUT HISTORY
+# ════════════════════════════════════════════════════════════
+
+@router.get("/checkouts")
+def list_checkouts(admin=Depends(get_current_admin)):
+    """List checkout history for the current session."""
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT c.id, u.identifier, u.surname || ' ' || u.first_name AS full_name,
+                   c.hostel_name, c.block_name, c.room_number, c.bed_number,
+                   c.checkout_type, c.reason, c.recorded_by_name, c.checked_out_at
+            FROM checkouts c
+            JOIN users u ON u.id = c.student_id
+            JOIN academic_sessions s ON s.id = c.session_id
+            WHERE s.is_active = TRUE
+            ORDER BY c.checked_out_at DESC
         """)
         rows = cur.fetchall()
 
@@ -495,48 +742,42 @@ def list_allocations(admin=Depends(get_current_admin)):
             "block_name": r[4],
             "room_number": r[5],
             "bed_number": r[6],
-            "payment_status": r[7],
-            "payment_deadline": r[8].isoformat() if r[8] else None,
-            "allocated_at": r[9].isoformat() if r[9] else None,
+            "checkout_type": r[7],
+            "reason": r[8],
+            "recorded_by": r[9],
+            "checked_out_at": r[10].isoformat() if r[10] else None,
         }
         for r in rows
     ]
 
 
-@router.delete("/allocations/{allocation_id}")
-def revoke_allocation(allocation_id: int, admin=Depends(get_current_admin)):
-    """Manually revoke a student's allocation and free the bed."""
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT bed_id FROM allocations WHERE id = %s", (allocation_id,))
-            row = cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Allocation not found")
-
-            bed_id = row[0]
-            cur.execute("DELETE FROM allocations WHERE id = %s", (allocation_id,))
-            cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
-            conn.commit()
-
-    return {"message": "Allocation revoked successfully. Bed has been freed."}
-
-
 @router.post("/revoke-expired")
 def revoke_expired_allocations(admin=Depends(get_current_admin)):
-    """Revoke all allocations where the 7-day payment window has expired.
-    Per institutional policy: payments not validated within 7 days are null and void."""
+    """Revoke all allocations where the 7-day payment window has expired."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, bed_id FROM allocations
-                WHERE payment_status = 'pending'
-                  AND payment_deadline IS NOT NULL
-                  AND payment_deadline < CURRENT_TIMESTAMP
+                SELECT a.id, a.bed_id, a.student_id, a.session_id,
+                       h.name, bl.name, r.room_number, b.bed_number
+                FROM allocations a
+                JOIN beds b    ON b.id  = a.bed_id
+                JOIN rooms r   ON r.id  = b.room_id
+                JOIN blocks bl ON bl.id = r.block_id
+                JOIN hostels h ON h.id  = bl.hostel_id
+                WHERE a.payment_status = 'pending'
+                  AND a.payment_deadline IS NOT NULL
+                  AND a.payment_deadline < CURRENT_TIMESTAMP
+                  AND a.status = 'active'
             """)
             expired = cur.fetchall()
 
-            for alloc_id, bed_id in expired:
-                cur.execute("DELETE FROM allocations WHERE id = %s", (alloc_id,))
+            for alloc_id, bed_id, student_id, session_id, hostel_name, block_name, room_number, bed_number in expired:
+                cur.execute("""
+                    INSERT INTO checkouts (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number, checkout_type, reason, recorded_by_name)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'payment_expired', 'Payment deadline expired', 'SYSTEM')
+                """, (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number))
+
+                cur.execute("UPDATE allocations SET status = 'expired' WHERE id = %s", (alloc_id,))
                 cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
 
             conn.commit()

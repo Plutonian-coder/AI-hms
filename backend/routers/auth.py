@@ -66,10 +66,14 @@ def register(data: UserRegister):
         # 2. Hash password and persist user atomically
         pw_hash = _hash_password(data.password)
         cur.execute(
-            """INSERT INTO users (identifier, surname, first_name, gender, role, password_hash)
-               VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+            """INSERT INTO users (identifier, surname, first_name, gender, role, password_hash,
+                                  email, department, level, phone, next_of_kin_name, next_of_kin_phone)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (data.identifier, data.surname.strip(), data.first_name.strip(),
-             data.gender, "student", pw_hash),
+             data.gender, "student", pw_hash,
+             data.email.strip() or None, data.department.strip() or None,
+             data.level.strip() or None, data.phone.strip() or None,
+             data.next_of_kin_name.strip() or None, data.next_of_kin_phone.strip() or None),
         )
         user_id = cur.fetchone()[0]
 

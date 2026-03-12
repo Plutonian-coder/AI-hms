@@ -1,24 +1,49 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { Search, ClipboardList, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Trash2, AlertTriangle, ShieldCheck, LogOut, Users, ChevronDown, ChevronUp, FileText, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
+const TABS = [
+    { key: 'eligible', label: 'Eligible Students', icon: ShieldCheck },
+    { key: 'allocated', label: 'Allocated', icon: Users },
+    { key: 'history', label: 'Checkout History', icon: LogOut },
+];
+
 export default function AdminAllocations() {
+    const [activeTab, setActiveTab] = useState('allocated');
     const [allocations, setAllocations] = useState([]);
+    const [eligible, setEligible] = useState([]);
+    const [checkouts, setCheckouts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [revoking, setRevoking] = useState(null);
     const [confirmRevoke, setConfirmRevoke] = useState(null);
     const toast = useToast();
 
-    const fetchAllocations = () => {
-        apiClient.get('/admin/allocations')
-            .then(res => setAllocations(res.data))
-            .catch(() => { toast.error('Failed to load allocations.'); })
-            .finally(() => setLoading(false));
+    // Expandable document rows
+    const [expandedRow, setExpandedRow] = useState(null);
+    const [docLoading, setDocLoading] = useState(false);
+    const [studentDocs, setStudentDocs] = useState({});
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [allocRes, eligRes, checkRes] = await Promise.all([
+                apiClient.get('/admin/allocations'),
+                apiClient.get('/admin/eligible-students'),
+                apiClient.get('/admin/checkouts'),
+            ]);
+            setAllocations(allocRes.data);
+            setEligible(eligRes.data);
+            setCheckouts(checkRes.data);
+        } catch {
+            toast.error('Failed to load data.');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    useEffect(() => { fetchAllocations(); }, []);
+    useEffect(() => { fetchData(); }, []);
 
     const handleRevoke = async (id) => {
         setRevoking(id);
@@ -26,7 +51,7 @@ export default function AdminAllocations() {
             const res = await apiClient.delete(`/admin/allocations/${id}`);
             toast.success(res.data.message);
             setConfirmRevoke(null);
-            fetchAllocations();
+            fetchData();
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Failed to revoke allocation');
         } finally {
@@ -34,23 +59,45 @@ export default function AdminAllocations() {
         }
     };
 
-    const filtered = allocations.filter(a => {
-        const q = searchQuery.toLowerCase();
-        return (
-            a.full_name.toLowerCase().includes(q) ||
-            a.identifier.toLowerCase().includes(q) ||
-            a.hostel_name.toLowerCase().includes(q) ||
-            a.room_number.toLowerCase().includes(q)
-        );
-    });
+    const toggleExpand = async (studentId) => {
+        if (expandedRow === studentId) {
+            setExpandedRow(null);
+            return;
+        }
+        setExpandedRow(studentId);
 
-    if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Allocations...</div>;
+        if (!studentDocs[studentId]) {
+            setDocLoading(true);
+            try {
+                const res = await apiClient.get(`/admin/students/${studentId}/documents`);
+                setStudentDocs(prev => ({ ...prev, [studentId]: res.data }));
+            } catch {
+                setStudentDocs(prev => ({ ...prev, [studentId]: [] }));
+            } finally {
+                setDocLoading(false);
+            }
+        }
+    };
+
+    const filterList = (list, keys) => {
+        const q = searchQuery.toLowerCase();
+        if (!q) return list;
+        return list.filter(item =>
+            keys.some(k => item[k]?.toString().toLowerCase().includes(q))
+        );
+    };
+
+    const filteredAllocations = filterList(allocations, ['full_name', 'identifier', 'hostel_name', 'room_number']);
+    const filteredEligible = filterList(eligible, ['full_name', 'identifier', 'department', 'level']);
+    const filteredCheckouts = filterList(checkouts, ['full_name', 'identifier', 'hostel_name', 'checkout_type']);
+
+    if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading...</div>;
 
     return (
         <div className="space-y-8 animate-in fade-in zoom-in duration-500">
             <div>
                 <h1 className="text-3xl font-extrabold text-heading tracking-tight">Allocation Management</h1>
-                <p className="text-muted mt-2 font-medium">View and manage active bed allocations.</p>
+                <p className="text-muted mt-2 font-medium">View eligible students, active allocations, and checkout history.</p>
             </div>
 
             {/* Search */}
@@ -67,7 +114,7 @@ export default function AdminAllocations() {
                 </div>
             </div>
 
-            {/* Confirm Revoke Modal */}
+            {/* Revoke Modal */}
             {confirmRevoke && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4 animate-in zoom-in-95 duration-300">
@@ -105,115 +152,399 @@ export default function AdminAllocations() {
                 </div>
             )}
 
-            {/* Data Table */}
+            {/* Tabs + Content */}
             <div className="bg-white rounded-3xl shadow-sm border border-black/5 overflow-hidden">
-                <div className="px-6 py-5 border-b border-black/5">
-                    <h3 className="text-lg font-bold text-heading flex items-center gap-2">
-                        <ClipboardList className="w-5 h-5 text-muted" />
-                        Active Allocations ({filtered.length})
-                    </h3>
+                {/* Tab Bar */}
+                <div className="px-6 pt-5 pb-0 border-b border-black/5">
+                    <div className="flex gap-1 bg-cream rounded-full p-1 inline-flex">
+                        {TABS.map(tab => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tab.key;
+                            const count = tab.key === 'eligible' ? filteredEligible.length
+                                        : tab.key === 'allocated' ? filteredAllocations.length
+                                        : filteredCheckouts.length;
+                            return (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => { setActiveTab(tab.key); setExpandedRow(null); }}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition-all ${
+                                        isActive ? 'bg-forest text-white shadow-sm' : 'text-muted hover:text-heading'
+                                    }`}
+                                >
+                                    <Icon className="w-4 h-4" />
+                                    <span className="hidden sm:inline">{tab.label}</span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20' : 'bg-black/5'}`}>
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-black/5 bg-cream/50">
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Hostel</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Room</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Bed</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Date</th>
-                                <th className="text-right px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map(a => (
-                                <tr key={a.id} className="border-b border-black/5 hover:bg-cream/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-xs shrink-0">
-                                                {a.full_name.charAt(0)}
-                                            </div>
-                                            <span className="font-bold text-sm text-heading">{a.full_name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-mono font-semibold text-sm text-muted">{a.identifier}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-sm font-semibold text-heading">{a.hostel_name}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-mono font-semibold text-sm text-muted">{a.room_number}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-semibold text-sm text-heading">Bed {a.bed_number}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-xs font-medium text-muted">
-                                            {a.allocated_at ? new Date(a.allocated_at).toLocaleDateString() : '—'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button
-                                            onClick={() => setConfirmRevoke(a)}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-full transition-colors"
+                {/* Tab: Eligible Students */}
+                {activeTab === 'eligible' && (
+                    <>
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-black/5 bg-cream/50">
+                                        <th className="w-10"></th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Gender</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Department</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Level</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Eligible Since</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredEligible.map(s => (
+                                        <ExpandableStudentRow
+                                            key={s.id}
+                                            isExpanded={expandedRow === s.id}
+                                            onToggle={() => toggleExpand(s.id)}
+                                            docs={studentDocs[s.id]}
+                                            docLoading={docLoading && expandedRow === s.id}
+                                            colSpan={7}
                                         >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                            Revoke
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-xs shrink-0">
+                                                        {s.full_name.charAt(0)}
+                                                    </div>
+                                                    <span className="font-bold text-sm text-heading">{s.full_name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4"><span className="font-mono font-semibold text-sm text-muted">{s.identifier}</span></td>
+                                            <td className="px-6 py-4"><span className="text-sm font-medium text-body capitalize">{s.gender}</span></td>
+                                            <td className="px-6 py-4"><span className="text-sm font-medium text-body">{s.department || '—'}</span></td>
+                                            <td className="px-6 py-4"><span className="text-sm font-bold text-heading">{s.level || '—'}</span></td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-xs font-medium text-muted">
+                                                    {s.eligible_at ? new Date(s.eligible_at).toLocaleDateString() : '—'}
+                                                </span>
+                                            </td>
+                                        </ExpandableStudentRow>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/* Mobile cards */}
+                        <div className="md:hidden divide-y divide-black/5">
+                            {filteredEligible.map(s => (
+                                <div key={s.id} className="p-5 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-sm">{s.full_name.charAt(0)}</div>
+                                            <div>
+                                                <p className="font-bold text-sm text-heading">{s.full_name}</p>
+                                                <p className="font-mono text-xs text-muted">{s.identifier}</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => toggleExpand(s.id)} className="p-2 text-muted hover:text-heading rounded-xl transition-colors">
+                                            {expandedRow === s.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                         </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Mobile Cards */}
-                <div className="md:hidden divide-y divide-black/5">
-                    {filtered.map(a => (
-                        <div key={a.id} className="p-5 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-sm shrink-0">
-                                        {a.full_name.charAt(0)}
                                     </div>
-                                    <div>
-                                        <p className="font-bold text-sm text-heading">{a.full_name}</p>
-                                        <p className="font-mono text-xs text-muted">{a.identifier}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-lime/10 text-lime">{s.level || '—'}</span>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">{s.department || '—'}</span>
+                                    </div>
+                                    {expandedRow === s.id && (
+                                        <DocumentPanel docs={studentDocs[s.id]} loading={docLoading && expandedRow === s.id} />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        {filteredEligible.length === 0 && (
+                            <div className="p-8 text-center text-muted font-medium">
+                                {searchQuery ? 'No eligible students match your search.' : 'No eligible students (not yet allocated) for this session.'}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Tab: Allocated Students */}
+                {activeTab === 'allocated' && (
+                    <>
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-black/5 bg-cream/50">
+                                        <th className="w-10"></th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Hostel</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Room</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Bed</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Date</th>
+                                        <th className="text-right px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredAllocations.map(a => (
+                                        <ExpandableStudentRow
+                                            key={a.id}
+                                            isExpanded={expandedRow === a.student_id}
+                                            onToggle={() => toggleExpand(a.student_id)}
+                                            docs={studentDocs[a.student_id]}
+                                            docLoading={docLoading && expandedRow === a.student_id}
+                                            colSpan={8}
+                                        >
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-xs shrink-0">{a.full_name.charAt(0)}</div>
+                                                    <span className="font-bold text-sm text-heading">{a.full_name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4"><span className="font-mono font-semibold text-sm text-muted">{a.identifier}</span></td>
+                                            <td className="px-6 py-4"><span className="text-sm font-semibold text-heading">{a.hostel_name}</span></td>
+                                            <td className="px-6 py-4"><span className="font-mono font-semibold text-sm text-muted">{a.room_number}</span></td>
+                                            <td className="px-6 py-4"><span className="font-semibold text-sm text-heading">Bed {a.bed_number}</span></td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-xs font-medium text-muted">
+                                                    {a.allocated_at ? new Date(a.allocated_at).toLocaleDateString() : '—'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setConfirmRevoke(a); }}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-full transition-colors"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" /> Revoke
+                                                </button>
+                                            </td>
+                                        </ExpandableStudentRow>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/* Mobile cards */}
+                        <div className="md:hidden divide-y divide-black/5">
+                            {filteredAllocations.map(a => (
+                                <div key={a.id} className="p-5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-sm">{a.full_name.charAt(0)}</div>
+                                            <div>
+                                                <p className="font-bold text-sm text-heading">{a.full_name}</p>
+                                                <p className="font-mono text-xs text-muted">{a.identifier}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => toggleExpand(a.student_id)} className="p-2 text-muted hover:text-heading rounded-xl transition-colors">
+                                                {expandedRow === a.student_id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                            </button>
+                                            <button onClick={() => setConfirmRevoke(a)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-forest/5 text-forest">{a.hostel_name}</span>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">Room {a.room_number}</span>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-lime/10 text-lime">Bed {a.bed_number}</span>
+                                    </div>
+                                    {expandedRow === a.student_id && (
+                                        <DocumentPanel docs={studentDocs[a.student_id]} loading={docLoading && expandedRow === a.student_id} />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        {filteredAllocations.length === 0 && (
+                            <div className="p-8 text-center text-muted font-medium">
+                                {searchQuery ? 'No allocations match your search.' : 'No active allocations for this session.'}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Tab: Checkout History */}
+                {activeTab === 'history' && (
+                    <>
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-black/5 bg-cream/50">
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Hostel / Room</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Type</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Reason</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Recorded By</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredCheckouts.map(c => (
+                                        <tr key={c.id} className="border-b border-black/5 hover:bg-cream/50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-xs shrink-0">{c.full_name.charAt(0)}</div>
+                                                    <span className="font-bold text-sm text-heading">{c.full_name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4"><span className="font-mono font-semibold text-sm text-muted">{c.identifier}</span></td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-sm font-medium text-heading">{c.hostel_name}</span>
+                                                <span className="text-xs text-muted ml-1">R{c.room_number} B{c.bed_number}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                                                    c.checkout_type === 'voluntary' ? 'bg-blue-50 text-blue-700' :
+                                                    c.checkout_type === 'admin_revocation' ? 'bg-red-50 text-red-700' :
+                                                    c.checkout_type === 'session_expiry' ? 'bg-amber-50 text-amber-700' :
+                                                    c.checkout_type === 'graduation' ? 'bg-lime/10 text-lime' :
+                                                    'bg-cream text-body'
+                                                }`}>
+                                                    {c.checkout_type.replace(/_/g, ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4"><span className="text-xs text-muted">{c.reason || '—'}</span></td>
+                                            <td className="px-6 py-4"><span className="text-xs font-medium text-muted">{c.recorded_by || 'SYSTEM'}</span></td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-xs font-medium text-muted">
+                                                    {c.checked_out_at ? new Date(c.checked_out_at).toLocaleDateString() : '—'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/* Mobile cards */}
+                        <div className="md:hidden divide-y divide-black/5">
+                            {filteredCheckouts.map(c => (
+                                <div key={c.id} className="p-5 space-y-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-sm">{c.full_name.charAt(0)}</div>
+                                        <div>
+                                            <p className="font-bold text-sm text-heading">{c.full_name}</p>
+                                            <p className="font-mono text-xs text-muted">{c.identifier}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                                            c.checkout_type === 'voluntary' ? 'bg-blue-50 text-blue-700' :
+                                            c.checkout_type === 'admin_revocation' ? 'bg-red-50 text-red-700' :
+                                            'bg-amber-50 text-amber-700'
+                                        }`}>
+                                            {c.checkout_type.replace(/_/g, ' ')}
+                                        </span>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">{c.hostel_name}</span>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setConfirmRevoke(a)}
-                                    className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-forest/5 text-forest">
-                                    {a.hostel_name}
-                                </span>
-                                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">
-                                    Room {a.room_number}
-                                </span>
-                                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-lime/10 text-lime">
-                                    Bed {a.bed_number}
-                                </span>
-                            </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-
-                {/* Empty State */}
-                {filtered.length === 0 && (
-                    <div className="p-8 text-center text-muted font-medium">
-                        {searchQuery ? 'No allocations match your search.' : 'No active allocations for this session.'}
-                    </div>
+                        {filteredCheckouts.length === 0 && (
+                            <div className="p-8 text-center text-muted font-medium">
+                                {searchQuery ? 'No checkouts match your search.' : 'No checkout records for this session.'}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
+        </div>
+    );
+}
+
+
+/* ── Sub-components ── */
+
+function ExpandableStudentRow({ isExpanded, onToggle, docs, docLoading, colSpan, children }) {
+    return (
+        <>
+            <tr
+                className="border-b border-black/5 hover:bg-cream/50 transition-colors cursor-pointer"
+                onClick={onToggle}
+            >
+                <td className="pl-4 py-4">
+                    <button className="p-1 text-muted hover:text-heading transition-colors">
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                </td>
+                {children}
+            </tr>
+            {isExpanded && (
+                <tr className="border-b border-black/5">
+                    <td colSpan={colSpan} className="px-6 py-4 bg-cream/30">
+                        <DocumentPanel docs={docs} loading={docLoading} />
+                    </td>
+                </tr>
+            )}
+        </>
+    );
+}
+
+function DocumentPanel({ docs, loading }) {
+    if (loading) {
+        return (
+            <div className="flex items-center gap-3 py-4">
+                <Loader2 className="w-5 h-5 text-forest animate-spin" />
+                <span className="text-sm font-medium text-muted">Loading documents...</span>
+            </div>
+        );
+    }
+
+    if (!docs || docs.length === 0) {
+        return (
+            <div className="flex items-center gap-3 py-4">
+                <FileText className="w-5 h-5 text-muted" />
+                <span className="text-sm font-medium text-muted">No eligibility documents uploaded yet.</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+                <FileText className="w-4 h-4 text-forest" />
+                <span className="text-xs font-bold text-heading uppercase tracking-widest">Uploaded Documents & AI Verdicts</span>
+            </div>
+            {docs.map((doc, i) => (
+                <div key={i} className={`flex items-start gap-4 p-4 rounded-2xl border ${
+                    doc.ai_verdict === 'verified' ? 'bg-lime/5 border-lime/20' :
+                    doc.ai_verdict === 'rejected' ? 'bg-red-50 border-red-100' :
+                    'bg-white border-black/5'
+                }`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        doc.ai_verdict === 'verified' ? 'bg-lime/20' :
+                        doc.ai_verdict === 'rejected' ? 'bg-red-100' :
+                        'bg-amber-100'
+                    }`}>
+                        {doc.ai_verdict === 'verified' && <CheckCircle className="w-5 h-5 text-lime" />}
+                        {doc.ai_verdict === 'rejected' && <XCircle className="w-5 h-5 text-red-600" />}
+                        {doc.ai_verdict !== 'verified' && doc.ai_verdict !== 'rejected' && <Loader2 className="w-5 h-5 text-amber-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-sm text-heading">{doc.label}</h4>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                                doc.ai_verdict === 'verified' ? 'bg-lime/15 text-lime' :
+                                doc.ai_verdict === 'rejected' ? 'bg-red-100 text-red-700' :
+                                'bg-amber-100 text-amber-700'
+                            }`}>
+                                {doc.ai_verdict}
+                            </span>
+                        </div>
+                        {doc.extracted_identifier && (
+                            <p className="text-xs text-muted mt-1">
+                                <span className="font-semibold">Extracted ID:</span> <span className="font-mono">{doc.extracted_identifier}</span>
+                            </p>
+                        )}
+                        {doc.rejection_reason && (
+                            <p className="text-xs text-red-600 mt-1 font-medium">{doc.rejection_reason}</p>
+                        )}
+                        <div className="flex items-center gap-4 mt-2 text-[11px] text-muted">
+                            {doc.uploaded_at && <span>Uploaded: {new Date(doc.uploaded_at).toLocaleString()}</span>}
+                            {doc.verified_at && <span>Verified: {new Date(doc.verified_at).toLocaleString()}</span>}
+                        </div>
+                        {doc.file_name && (
+                            <p className="text-[11px] text-muted/70 font-mono mt-1">{doc.file_name}</p>
+                        )}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }

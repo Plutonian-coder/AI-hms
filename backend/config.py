@@ -20,6 +20,12 @@ JWT_EXPIRY_MINUTES  = int(os.getenv("JWT_EXPIRY_MINUTES", "1440"))  # 24 hours
 UPLOAD_DIR     = os.getenv("UPLOAD_DIR", "./uploads")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# ── Paystack (test mode) ──────────────────────────────────────────────────
+PAYSTACK_SECRET_KEY   = os.getenv("PAYSTACK_SECRET_KEY", "")
+PAYSTACK_PUBLIC_KEY   = os.getenv("PAYSTACK_PUBLIC_KEY", "")
+HOSTEL_FEE_AMOUNT     = int(os.getenv("HOSTEL_FEE_AMOUNT", "15000"))   # Naira
+PAYSTACK_CALLBACK_URL = os.getenv("PAYSTACK_CALLBACK_URL", "http://localhost:5173/payment/callback")
+
 # ── CORS — comma-separated allowed origins ───────────────────────────────────
 CORS_ORIGINS = [
     o.strip()

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { CalendarDays, Plus, DoorOpen } from 'lucide-react';
+import { CalendarDays, Plus, DoorOpen, ShieldCheck } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 export default function AdminSessions() {
@@ -10,6 +10,7 @@ export default function AdminSessions() {
     const [sessionName, setSessionName] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [toggling, setToggling] = useState(false);
+    const [togglingElig, setTogglingElig] = useState(false);
     const toast = useToast();
 
     const fetchSessions = () => {
@@ -51,6 +52,19 @@ export default function AdminSessions() {
         }
     };
 
+    const handleToggleEligibility = async () => {
+        setTogglingElig(true);
+        try {
+            const res = await apiClient.patch('/admin/session/toggle-eligibility');
+            toast.success(res.data.message);
+            fetchSessions();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to toggle eligibility portal');
+        } finally {
+            setTogglingElig(false);
+        }
+    };
+
     const activeSession = sessions.find(s => s.is_active);
 
     if (loading) return <div className="text-muted animate-pulse font-medium">Loading Sessions...</div>;
@@ -74,30 +88,54 @@ export default function AdminSessions() {
 
             {/* Active Session Portal Toggle */}
             {activeSession && (
-                <div className="bg-forest p-6 rounded-3xl shadow-sm">
-                    <div className="flex items-center justify-between">
+                <div className="bg-forest p-6 rounded-3xl shadow-sm space-y-4">
+                    <h3 className="text-lg font-bold text-white">Active Session: {activeSession.session_name}</h3>
+
+                    {/* Eligibility Portal */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white/5 rounded-2xl p-4">
                         <div>
-                            <h3 className="text-lg font-bold text-white">Active Session: {activeSession.session_name}</h3>
-                            <div className="mt-2">
-                                <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${activeSession.portal_open
-                                        ? 'bg-lime/15 text-lime border border-lime/30'
-                                        : 'bg-white/10 text-white/60 border border-white/10'
-                                    }`}>
-                                    <span className={`w-2 h-2 rounded-full ${activeSession.portal_open ? 'bg-lime animate-pulse' : 'bg-white/40'}`}></span>
-                                    Allocation Portal {activeSession.portal_open ? 'Open' : 'Closed'}
-                                </span>
-                            </div>
+                            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${activeSession.eligibility_portal_open
+                                    ? 'bg-lime/15 text-lime border border-lime/30'
+                                    : 'bg-white/10 text-white/60 border border-white/10'
+                                }`}>
+                                <span className={`w-2 h-2 rounded-full ${activeSession.eligibility_portal_open ? 'bg-lime animate-pulse' : 'bg-white/40'}`}></span>
+                                Eligibility Portal {activeSession.eligibility_portal_open ? 'Open' : 'Closed'}
+                            </span>
+                        </div>
+                        <button
+                            onClick={handleToggleEligibility}
+                            disabled={togglingElig}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold shadow-lg transition-all text-sm ${activeSession.eligibility_portal_open
+                                    ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/25'
+                                    : 'bg-lime text-forest hover:bg-lime-hover shadow-lime/25'
+                                } ${togglingElig ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
+                        >
+                            <ShieldCheck className="w-4 h-4" />
+                            {togglingElig ? 'Toggling...' : activeSession.eligibility_portal_open ? 'Close Eligibility' : 'Open Eligibility'}
+                        </button>
+                    </div>
+
+                    {/* Allocation Portal */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white/5 rounded-2xl p-4">
+                        <div>
+                            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${activeSession.portal_open
+                                    ? 'bg-lime/15 text-lime border border-lime/30'
+                                    : 'bg-white/10 text-white/60 border border-white/10'
+                                }`}>
+                                <span className={`w-2 h-2 rounded-full ${activeSession.portal_open ? 'bg-lime animate-pulse' : 'bg-white/40'}`}></span>
+                                Allocation Portal {activeSession.portal_open ? 'Open' : 'Closed'}
+                            </span>
                         </div>
                         <button
                             onClick={handleTogglePortal}
                             disabled={toggling}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all ${activeSession.portal_open
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold shadow-lg transition-all text-sm ${activeSession.portal_open
                                     ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/25'
                                     : 'bg-lime text-forest hover:bg-lime-hover shadow-lime/25'
                                 } ${toggling ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
                         >
-                            <DoorOpen className="w-5 h-5" />
-                            {toggling ? 'Toggling...' : activeSession.portal_open ? 'Close Portal' : 'Open Portal'}
+                            <DoorOpen className="w-4 h-4" />
+                            {toggling ? 'Toggling...' : activeSession.portal_open ? 'Close Allocation' : 'Open Allocation'}
                         </button>
                     </div>
                 </div>
@@ -108,7 +146,7 @@ export default function AdminSessions() {
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-black/5 animate-in slide-in-from-bottom-4 duration-300">
                     <h3 className="text-lg font-bold text-heading mb-4">Create New Academic Session</h3>
                     <p className="text-sm text-amber-600 font-medium mb-4">
-                        Creating a new session will deactivate the current active session.
+                        Creating a new session will deactivate the current active session and expire all active allocations. Students will need to re-verify eligibility and re-pay for the new session.
                     </p>
                     <form onSubmit={handleCreate} className="space-y-4">
                         <div>
@@ -170,11 +208,19 @@ export default function AdminSessions() {
                                             </span>
                                         )}
                                         {session.is_active && (
+                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${session.eligibility_portal_open
+                                                    ? 'bg-lime/10 text-lime border-lime/20'
+                                                    : 'bg-cream text-muted border-black/10'
+                                                }`}>
+                                                Eligibility {session.eligibility_portal_open ? 'OPEN' : 'CLOSED'}
+                                            </span>
+                                        )}
+                                        {session.is_active && (
                                             <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${session.portal_open
                                                     ? 'bg-lime/10 text-lime border-lime/20'
                                                     : 'bg-cream text-muted border-black/10'
                                                 }`}>
-                                                Portal {session.portal_open ? 'OPEN' : 'CLOSED'}
+                                                Allocation {session.portal_open ? 'OPEN' : 'CLOSED'}
                                             </span>
                                         )}
                                     </div>

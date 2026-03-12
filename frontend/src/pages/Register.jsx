@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import apiClient from '../api/client';
 import { useNavigate, Link } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function Register() {
     const [formData, setFormData] = useState({
@@ -9,10 +10,17 @@ export default function Register() {
         first_name: '',
         gender: 'male',
         password: '',
+        email: '',
+        department: '',
+        level: '',
+        phone: '',
+        next_of_kin_name: '',
+        next_of_kin_phone: '',
         role: 'student'
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const navigate = useNavigate();
 
     const handleRegister = async (e) => {
@@ -40,7 +48,7 @@ export default function Register() {
 
     return (
         <div className="flex bg-cream min-h-screen items-center justify-center p-6 py-12">
-            <div className="max-w-md w-full animate-in zoom-in-95 duration-300">
+            <div className="max-w-lg w-full animate-in zoom-in-95 duration-300">
                 <div className="bg-forest rounded-3xl shadow-2xl p-8 sm:p-10">
                     <div className="text-center mb-8">
                         <h2 className="text-3xl font-black text-white tracking-tight">Student Signup</h2>
@@ -71,16 +79,75 @@ export default function Register() {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Gender</label>
-                            <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                            </select>
+                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Email Address</label>
+                            <input name="email" type="email" className={inputClass} value={formData.email} onChange={handleChange} placeholder="student@email.com" />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Gender</label>
+                                <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Level</label>
+                                <select name="level" value={formData.level} onChange={handleChange} className={inputClass}>
+                                    <option value="">Select Level</option>
+                                    <option value="ND1">ND1</option>
+                                    <option value="ND2">ND2</option>
+                                    <option value="HND1">HND1</option>
+                                    <option value="HND2">HND2</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Department</label>
+                                <input name="department" className={inputClass} value={formData.department} onChange={handleChange} placeholder="e.g. Computer Science" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Phone Number</label>
+                                <input name="phone" type="tel" className={inputClass} value={formData.phone} onChange={handleChange} placeholder="08012345678" />
+                            </div>
                         </div>
 
                         <div>
                             <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Secure Password</label>
-                            <input name="password" type="password" required className={inputClass} value={formData.password} onChange={handleChange} />
+                            <div className="relative">
+                                <input
+                                    name="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    required
+                                    className={inputClass + ' pr-12'}
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    placeholder="Min 8 characters"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+                                >
+                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-white/10 pt-5 mt-2">
+                            <p className="text-xs font-bold text-white/30 uppercase tracking-widest mb-4">Next of Kin</p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Full Name</label>
+                                    <input name="next_of_kin_name" className={inputClass} value={formData.next_of_kin_name} onChange={handleChange} placeholder="Parent/Guardian name" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Phone</label>
+                                    <input name="next_of_kin_phone" type="tel" className={inputClass} value={formData.next_of_kin_phone} onChange={handleChange} placeholder="08012345678" />
+                                </div>
+                            </div>
                         </div>
 
                         <button

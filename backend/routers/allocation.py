@@ -47,9 +47,9 @@ def check_allocation_public(matric: str):
     with get_cursor() as cur:
         cur.execute("""
             SELECT u.surname, u.first_name,
-                   h.name AS hostel_name, bl.name AS block_name, r.room_number, b.bed_number
+                   h.name AS hostel_name, bl.name AS block_name, r.room_number, b.bed_number, r.id
             FROM users u
-            JOIN allocations a   ON a.student_id = u.id
+            JOIN allocations a   ON a.student_id = u.id AND (a.status = 'active' OR a.status IS NULL)
             JOIN academic_sessions sess ON sess.id = a.session_id AND sess.is_active = TRUE
             JOIN beds b          ON b.id  = a.bed_id
             JOIN rooms r         ON r.id  = b.room_id
@@ -62,41 +62,30 @@ def check_allocation_public(matric: str):
     if not row:
         return {"found": False}
 
-    room_id_query = """
-        SELECT r.id FROM users u
-        JOIN allocations a ON a.student_id = u.id
-        JOIN academic_sessions sess ON sess.id = a.session_id AND sess.is_active = TRUE
-        JOIN beds b  ON b.id  = a.bed_id
-        JOIN rooms r ON r.id  = b.room_id
-        WHERE LOWER(u.identifier) = LOWER(%s)
-    """
-    with get_cursor() as cur:
-        cur.execute(room_id_query, (matric.strip(),))
-        room_row = cur.fetchone()
-        room_id = room_row[0] if room_row else None
+    room_id = row[6]
 
     # Count occupants and capacity
     occupants = 1
     capacity = 4
     roommate_names = []
-    if room_id:
-        with get_cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM beds WHERE room_id = %s", (room_id,))
-            cap_row = cur.fetchone()
-            if cap_row:
-                capacity = cap_row[0]
+    with get_cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM beds WHERE room_id = %s", (room_id,))
+        cap_row = cur.fetchone()
+        if cap_row:
+            capacity = cap_row[0]
 
-            cur.execute("""
-                SELECT u.surname || ' ' || u.first_name AS full_name, u.identifier
-                FROM allocations a2
-                JOIN beds b2 ON b2.id = a2.bed_id
-                JOIN users u ON u.id = a2.student_id
-                JOIN academic_sessions sess2 ON sess2.id = a2.session_id AND sess2.is_active = TRUE
-                WHERE b2.room_id = %s AND LOWER(u.identifier) != LOWER(%s)
-            """, (room_id, matric.strip()))
-            roommate_rows = cur.fetchall()
-            occupants = len(roommate_rows) + 1
-            roommate_names = [{"full_name": r[0], "identifier": r[1]} for r in roommate_rows]
+        cur.execute("""
+            SELECT u.surname || ' ' || u.first_name AS full_name, u.identifier
+            FROM allocations a2
+            JOIN beds b2 ON b2.id = a2.bed_id
+            JOIN users u ON u.id = a2.student_id
+            JOIN academic_sessions sess2 ON sess2.id = a2.session_id AND sess2.is_active = TRUE
+            WHERE b2.room_id = %s AND LOWER(u.identifier) != LOWER(%s)
+              AND (a2.status = 'active' OR a2.status IS NULL)
+        """, (room_id, matric.strip()))
+        roommate_rows = cur.fetchall()
+        occupants = len(roommate_rows) + 1
+        roommate_names = [{"full_name": r[0], "identifier": r[1]} for r in roommate_rows]
 
     return {
         "found": True,
@@ -119,7 +108,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
     # 1. Full profile
     with get_cursor() as cur:
         cur.execute(
-            "SELECT identifier, surname, first_name, gender, department, level, email, phone FROM users WHERE id = %s",
+            "SELECT identifier, surname, first_name, gender, department, level, email, phone, next_of_kin_name, next_of_kin_phone FROM users WHERE id = %s",
             (student_id,)
         )
         profile_row = cur.fetchone()
@@ -134,6 +123,8 @@ def get_student_dashboard(student=Depends(get_current_student)):
         "level": profile_row[5],
         "email": profile_row[6],
         "phone": profile_row[7],
+        "next_of_kin_name": profile_row[8],
+        "next_of_kin_phone": profile_row[9],
     } if profile_row else {}
 
     # 2. Current session
@@ -146,7 +137,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
     # 3. Allocation
     allocation = _fetch_allocation(student_id)
 
-    # 4. Payment status — check if student has a used RRR in this session
+    # 4. Payment status
     payment_status = "NOT VERIFIED"
     if allocation:
         payment_status = "VERIFIED"
@@ -163,12 +154,37 @@ def get_student_dashboard(student=Depends(get_current_student)):
         except Exception:
             pass
 
+    # 5. Eligibility status
+    eligibility = {"is_eligible": False, "documents": []}
+    if session:
+        try:
+            with get_cursor() as cur:
+                cur.execute(
+                    "SELECT is_eligible, eligible_at FROM eligibility_status WHERE student_id = %s AND session_id = %s",
+                    (student_id, session["id"]),
+                )
+                elig_row = cur.fetchone()
+                if elig_row:
+                    eligibility["is_eligible"] = elig_row[0]
+                    eligibility["eligible_at"] = elig_row[1].isoformat() if elig_row[1] else None
+
+                cur.execute(
+                    "SELECT document_type, ai_verdict FROM eligibility_documents WHERE student_id = %s AND session_id = %s",
+                    (student_id, session["id"]),
+                )
+                eligibility["documents"] = [
+                    {"document_type": r[0], "ai_verdict": r[1]} for r in cur.fetchall()
+                ]
+        except Exception:
+            pass
+
     return {
         "profile": profile,
         "session": session,
         "allocation": allocation.model_dump() if allocation else None,
         "payment_status": payment_status,
         "application_status": "ALLOCATED" if allocation else "NOT APPLIED",
+        "eligibility": eligibility,
     }
 
 
@@ -179,8 +195,10 @@ def update_student_profile(
     level: str = Form(None),
     email: str = Form(None),
     phone: str = Form(None),
+    next_of_kin_name: str = Form(None),
+    next_of_kin_phone: str = Form(None),
 ):
-    """Update optional profile fields (department, level, email, phone)."""
+    """Update optional profile fields."""
     student_id = student["user_id"]
     updates = []
     values = []
@@ -197,6 +215,12 @@ def update_student_profile(
     if phone is not None:
         updates.append("phone = %s")
         values.append(phone.strip())
+    if next_of_kin_name is not None:
+        updates.append("next_of_kin_name = %s")
+        values.append(next_of_kin_name.strip())
+    if next_of_kin_phone is not None:
+        updates.append("next_of_kin_phone = %s")
+        values.append(next_of_kin_phone.strip())
 
     if not updates:
         return {"message": "No fields to update"}
@@ -426,7 +450,7 @@ def _fetch_allocation(student_id: int) -> AllocationResult | None:
             JOIN rooms r   ON r.id  = b.room_id
             JOIN blocks bl ON bl.id = r.block_id
             JOIN hostels h ON h.id  = bl.hostel_id
-            WHERE a.student_id = %s AND sess.is_active = TRUE
+            WHERE a.student_id = %s AND sess.is_active = TRUE AND (a.status = 'active' OR a.status IS NULL)
         """, (student_id,))
         row = cur.fetchone()
 
@@ -442,7 +466,7 @@ def _fetch_allocation(student_id: int) -> AllocationResult | None:
             JOIN beds b2 ON b2.id = a2.bed_id
             JOIN users u ON u.id = a2.student_id
             JOIN academic_sessions sess2 ON sess2.id = a2.session_id
-            WHERE b2.room_id = %s AND a2.student_id != %s AND sess2.is_active = TRUE
+            WHERE b2.room_id = %s AND a2.student_id != %s AND sess2.is_active = TRUE AND (a2.status = 'active' OR a2.status IS NULL)
         """, (room_id, student_id))
         roommate_rows = cur.fetchall()
 

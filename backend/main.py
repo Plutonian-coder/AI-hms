@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import CORS_ORIGINS
-from routers import auth, allocation, admin
+from routers import auth, allocation, admin, eligibility, payment, checkout
 from tasks import auto_revoke_expired_allocations
 
 app = FastAPI(
@@ -55,6 +55,9 @@ def health():
 app.include_router(auth.router)
 app.include_router(allocation.router)
 app.include_router(admin.router)
+app.include_router(eligibility.router)
+app.include_router(payment.router)
+app.include_router(checkout.router)
 
 # Serve frontend static files LAST (catch-all at "/")
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")

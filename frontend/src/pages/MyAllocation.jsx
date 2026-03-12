@@ -1,18 +1,38 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
-import { Users, Search, BedDouble, Layers, UserCheck, CalendarDays, Download } from 'lucide-react';
+import { Users, Search, BedDouble, Layers, UserCheck, CalendarDays, Download, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useToast } from '../components/Toast';
 
 export default function MyAllocation() {
     const [allocation, setAllocation] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
+    const [checkingOut, setCheckingOut] = useState(false);
+    const toast = useToast();
 
-    useEffect(() => {
+    const fetchAllocation = () => {
         apiClient.get('/allocation/my-allocation')
             .then(res => setAllocation(res.data))
             .catch(() => { })
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(() => { fetchAllocation(); }, []);
+
+    const handleCheckout = async () => {
+        setCheckingOut(true);
+        try {
+            const res = await apiClient.post('/checkout/voluntary');
+            toast.success(res.data.message || 'Checkout successful');
+            setShowCheckoutConfirm(false);
+            fetchAllocation();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Checkout failed');
+        } finally {
+            setCheckingOut(false);
+        }
+    };
 
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Checking Allocation Records...</div>;
 
@@ -34,10 +54,10 @@ export default function MyAllocation() {
                         </p>
                     </div>
                     <Link
-                        to="/apply"
+                        to="/eligibility"
                         className="bg-lime text-forest font-bold py-3 px-8 rounded-full shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all text-sm uppercase tracking-widest"
                     >
-                        Begin FCFS Application
+                        Verify Eligibility
                     </Link>
                 </div>
             </div>
@@ -90,7 +110,7 @@ export default function MyAllocation() {
                     <div className="px-6 py-5 border-b border-black/5">
                         <h3 className="text-sm font-black text-heading uppercase tracking-widest">Quick Actions</h3>
                     </div>
-                    <div className="p-6">
+                    <div className="p-6 space-y-4">
                         <button
                             onClick={() => alert('Allocation letter download will be available soon. Please take a screenshot for now.')}
                             className="w-full flex items-center justify-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all text-sm"
@@ -98,7 +118,37 @@ export default function MyAllocation() {
                             <Download className="w-4 h-4" />
                             Download Letter
                         </button>
-                        <p className="text-xs text-muted font-medium text-center mt-3">Coming soon — PDF allocation letter</p>
+                        <p className="text-xs text-muted font-medium text-center">Coming soon — PDF allocation letter</p>
+
+                        {!showCheckoutConfirm ? (
+                            <button
+                                onClick={() => setShowCheckoutConfirm(true)}
+                                className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 px-5 py-3 rounded-full font-bold border border-red-200 hover:bg-red-100 transition-all text-sm"
+                            >
+                                <LogOut className="w-4 h-4" />
+                                Request Checkout
+                            </button>
+                        ) : (
+                            <div className="bg-red-50 rounded-2xl p-4 border border-red-200 space-y-3">
+                                <p className="text-sm font-bold text-red-700">Are you sure you want to check out?</p>
+                                <p className="text-xs text-red-600">This will release your bed and cannot be undone. You will need to re-apply and re-pay for a new allocation.</p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleCheckout}
+                                        disabled={checkingOut}
+                                        className={`flex-1 bg-red-600 text-white px-4 py-2.5 rounded-full font-bold text-sm transition-all ${checkingOut ? 'opacity-70 scale-95' : 'hover:bg-red-700 hover:scale-[1.02]'}`}
+                                    >
+                                        {checkingOut ? 'Processing...' : 'Confirm Checkout'}
+                                    </button>
+                                    <button
+                                        onClick={() => setShowCheckoutConfirm(false)}
+                                        className="flex-1 bg-white text-heading px-4 py-2.5 rounded-full font-bold text-sm border border-black/10 hover:bg-cream transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

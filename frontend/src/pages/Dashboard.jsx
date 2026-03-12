@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import { Link } from 'react-router-dom';
-import { Home, Users, CheckCircle, Clock, Shield, ChevronRight, Pencil, X, Save } from 'lucide-react';
+import { Home, CheckCircle, ShieldCheck, Shield, ChevronRight, Pencil, X, Save } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
 export default function Dashboard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
-    const [profileForm, setProfileForm] = useState({ department: '', level: '', email: '', phone: '' });
+    const [profileForm, setProfileForm] = useState({ department: '', level: '', email: '', phone: '', next_of_kin_name: '', next_of_kin_phone: '' });
     const [saving, setSaving] = useState(false);
     const toast = useToast();
 
@@ -22,6 +22,8 @@ export default function Dashboard() {
                     level: p.level || '',
                     email: p.email || '',
                     phone: p.phone || '',
+                    next_of_kin_name: p.next_of_kin_name || '',
+                    next_of_kin_phone: p.next_of_kin_phone || '',
                 });
             })
             .catch(() => { toast.error('Failed to load dashboard data.'); })
@@ -37,6 +39,8 @@ export default function Dashboard() {
         if (profileForm.level) form.append('level', profileForm.level);
         if (profileForm.email) form.append('email', profileForm.email);
         if (profileForm.phone) form.append('phone', profileForm.phone);
+        if (profileForm.next_of_kin_name) form.append('next_of_kin_name', profileForm.next_of_kin_name);
+        if (profileForm.next_of_kin_phone) form.append('next_of_kin_phone', profileForm.next_of_kin_phone);
 
         try {
             await apiClient.patch('/allocation/profile', form);
@@ -52,8 +56,9 @@ export default function Dashboard() {
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Dashboard...</div>;
     if (!data) return <div className="text-red-500 font-medium p-8">Failed to load dashboard data.</div>;
 
-    const { profile, session, allocation, payment_status, application_status } = data;
+    const { profile, session, allocation, payment_status, application_status, eligibility } = data;
     const firstName = profile.first_name || 'Student';
+    const isEligible = eligibility?.is_eligible;
 
     return (
         <div className="space-y-8 animate-in fade-in zoom-in duration-500">
@@ -75,7 +80,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <StatusCard icon={CheckCircle} label="Application Status" value={application_status} color={allocation ? 'lime' : 'muted'} />
                 <StatusCard icon={Shield} label="Payment Verification" value={payment_status} color={payment_status === 'VERIFIED' ? 'lime' : payment_status === 'PENDING' ? 'amber' : 'muted'} />
-                <StatusCard icon={Clock} label="Priority Score" value="N/A" color="muted" />
+                <StatusCard icon={ShieldCheck} label="Eligibility" value={isEligible ? 'ELIGIBLE' : 'NOT ELIGIBLE'} color={isEligible ? 'lime' : 'muted'} />
             </div>
 
             {/* Bottom Grid */}
@@ -131,9 +136,15 @@ export default function Dashboard() {
                                 <Home className="w-8 h-8 text-muted" />
                             </div>
                             <p className="text-muted font-medium text-sm">No allocation yet for this session.</p>
-                            <Link to="/apply" className="inline-block mt-4 text-sm font-bold text-lime hover:text-lime-hover transition-colors">
-                                Apply Now &rarr;
-                            </Link>
+                            {isEligible ? (
+                                <Link to="/payment" className="inline-block mt-4 text-sm font-bold text-lime hover:text-lime-hover transition-colors">
+                                    Proceed to Payment &rarr;
+                                </Link>
+                            ) : (
+                                <Link to="/eligibility" className="inline-block mt-4 text-sm font-bold text-lime hover:text-lime-hover transition-colors">
+                                    Verify Eligibility &rarr;
+                                </Link>
+                            )}
                         </div>
                     )}
                 </div>
@@ -163,6 +174,8 @@ export default function Dashboard() {
                                 <ProfileRow label="Level" value={profile.level} placeholder="Not set" />
                                 <ProfileRow label="Email" value={profile.email} placeholder="Not set" />
                                 <ProfileRow label="Phone" value={profile.phone} placeholder="Not set" />
+                                <ProfileRow label="Next of Kin" value={profile.next_of_kin_name} placeholder="Not set" />
+                                <ProfileRow label="Kin Phone" value={profile.next_of_kin_phone} placeholder="Not set" />
                             </div>
                         ) : (
                             <div className="space-y-4">
@@ -173,6 +186,8 @@ export default function Dashboard() {
                                 <ProfileField label="Level" value={profileForm.level} onChange={v => setProfileForm(f => ({ ...f, level: v }))} placeholder="e.g. ND2, HND1" />
                                 <ProfileField label="Email" value={profileForm.email} onChange={v => setProfileForm(f => ({ ...f, email: v }))} placeholder="student@email.com" />
                                 <ProfileField label="Phone" value={profileForm.phone} onChange={v => setProfileForm(f => ({ ...f, phone: v }))} placeholder="08012345678" />
+                                <ProfileField label="Next of Kin" value={profileForm.next_of_kin_name} onChange={v => setProfileForm(f => ({ ...f, next_of_kin_name: v }))} placeholder="Parent/Guardian name" />
+                                <ProfileField label="Kin Phone" value={profileForm.next_of_kin_phone} onChange={v => setProfileForm(f => ({ ...f, next_of_kin_phone: v }))} placeholder="08012345678" />
 
                                 <button
                                     onClick={handleProfileSave}

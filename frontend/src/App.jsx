@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AdminSidebar from './components/AdminSidebar';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
-import Apply from './pages/Apply';
+import Eligibility from './pages/Eligibility';
+import Payment from './pages/Payment';
+import PaymentCallback from './pages/PaymentCallback';
 import MyAllocation from './pages/MyAllocation';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -28,7 +30,7 @@ function getUser() {
   }
 }
 
-// Auth guard — redirects to /login if no token
+// Auth guard — redirects to / if no token
 const ProtectedRoute = ({ children, requiredRole }) => {
   const token = localStorage.getItem('access_token');
   if (!token) return <Navigate to="/" replace />;
@@ -37,6 +39,13 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   if (requiredRole && user?.role !== requiredRole) {
     return <Navigate to={user?.role === 'admin' ? '/admin' : '/'} replace />;
   }
+  return children;
+};
+
+// Public guard — redirects to dashboard if already logged in
+const PublicRoute = ({ children }) => {
+  const token = localStorage.getItem('access_token');
+  if (token) return <Navigate to="/" replace />;
   return children;
 };
 
@@ -126,20 +135,45 @@ const SmartRoot = () => {
 };
 
 export default function App() {
+  const navigate = useNavigate();
+
+  // Global 401 handler — when the API rejects an expired/invalid token,
+  // client.js fires this event. Clear session and send to login.
+  useEffect(() => {
+    const handle401 = () => {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      navigate('/login', { replace: true });
+    };
+    window.addEventListener('auth-unauthorized', handle401);
+    return () => window.removeEventListener('auth-unauthorized', handle401);
+  }, [navigate]);
+
   return (
     <Routes>
       {/* Public routes — redirect to dashboard if already logged in */}
-      <Route path="/login" element={localStorage.getItem('access_token') ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/register" element={localStorage.getItem('access_token') ? <Navigate to="/" replace /> : <Register />} />
-      <Route path="/forgot-password" element={localStorage.getItem('access_token') ? <Navigate to="/" replace /> : <ForgotPassword />} />
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
 
       {/* Smart root — landing page if not logged in, dashboard if student */}
       <Route path="/" element={<SmartRoot />} />
-      <Route path="/apply" element={
+      <Route path="/eligibility" element={
         <ProtectedRoute requiredRole="student">
-          <StudentLayout><Apply /></StudentLayout>
+          <StudentLayout><Eligibility /></StudentLayout>
         </ProtectedRoute>
       } />
+      <Route path="/payment" element={
+        <ProtectedRoute requiredRole="student">
+          <StudentLayout><Payment /></StudentLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/payment/callback" element={
+        <ProtectedRoute requiredRole="student">
+          <StudentLayout><PaymentCallback /></StudentLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/apply" element={<Navigate to="/eligibility" replace />} />
       <Route path="/my-allocation" element={
         <ProtectedRoute requiredRole="student">
           <StudentLayout><MyAllocation /></StudentLayout>

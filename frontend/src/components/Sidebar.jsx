@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, CheckSquare, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, ShieldCheck, CreditCard, CheckSquare, LogOut, X } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
@@ -39,9 +39,14 @@ export default function Sidebar({ isOpen, onClose }) {
                     Dashboard
                 </NavLink>
 
-                <NavLink to="/apply" className={({ isActive }) => navItemClass(isActive)}>
-                    <FileText className="w-5 h-5" />
-                    Apply
+                <NavLink to="/eligibility" className={({ isActive }) => navItemClass(isActive)}>
+                    <ShieldCheck className="w-5 h-5" />
+                    Eligibility
+                </NavLink>
+
+                <NavLink to="/payment" className={({ isActive }) => navItemClass(isActive)}>
+                    <CreditCard className="w-5 h-5" />
+                    Payment
                 </NavLink>
 
                 <NavLink to="/my-allocation" className={({ isActive }) => navItemClass(isActive)}>
