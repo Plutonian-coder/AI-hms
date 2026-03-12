@@ -31,14 +31,16 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
 
-# ── Internal helpers ─────────────────────────────────────────────────────────
+import hashlib
 
 def _hash_password(plain: str) -> str:
-    return _pwd_ctx.hash(plain)
-
+    # Hash with SHA256 first to avoid bcrypt's 72-byte limit
+    pre_hashed = hashlib.sha256(plain.encode('utf-8')).hexdigest()
+    return _pwd_ctx.hash(pre_hashed)
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_ctx.verify(plain, hashed)
+    pre_hashed = hashlib.sha256(plain.encode('utf-8')).hexdigest()
+    return _pwd_ctx.verify(pre_hashed, hashed)
 
 
 def _create_token(payload: dict) -> str:
