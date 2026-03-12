@@ -31,3 +31,6 @@ backend/uploads/
 # OS
 Thumbs.db
 nul
+err.txt
+err2.txt
+test_cors_out_now.txt
