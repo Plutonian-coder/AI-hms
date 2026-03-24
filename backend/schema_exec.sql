@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS mock_remita_payments CASCADE;
 DROP TABLE IF EXISTS beds CASCADE;
 DROP TABLE IF EXISTS rooms CASCADE;
 DROP TABLE IF EXISTS blocks CASCADE;
+DROP TABLE IF EXISTS hostel_prices CASCADE;
 DROP TABLE IF EXISTS hostels CASCADE;
 DROP TABLE IF EXISTS academic_sessions CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -37,7 +38,8 @@ CREATE TABLE users (
     phone VARCHAR,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     next_of_kin_name VARCHAR,
-    next_of_kin_phone VARCHAR
+    next_of_kin_phone VARCHAR,
+    study_mode VARCHAR DEFAULT 'full_time' CHECK (study_mode IN ('full_time', 'part_time'))
 );
 
 -- ── Academic Sessions ───────────────────────────────────────────────────────
@@ -56,6 +58,15 @@ CREATE TABLE hostels (
     gender_restriction VARCHAR NOT NULL CHECK (gender_restriction IN ('male', 'female', 'mixed')),
     capacity INT DEFAULT 0,
     status VARCHAR DEFAULT 'active' CHECK (status IN ('active', 'maintenance', 'decommissioned'))
+);
+
+-- ── Hostel Prices (per-hostel per-program pricing) ────────────────────────
+CREATE TABLE hostel_prices (
+    id SERIAL PRIMARY KEY,
+    hostel_id INT NOT NULL REFERENCES hostels(id) ON DELETE CASCADE,
+    program_type VARCHAR NOT NULL CHECK (program_type IN ('ND_FT', 'ND_PT', 'HND_FT', 'HND_PT')),
+    amount INT NOT NULL,
+    UNIQUE(hostel_id, program_type)
 );
 
 -- ── Blocks (hostel sub-divisions) ───────────────────────────────────────────
@@ -142,6 +153,8 @@ CREATE TABLE eligibility_documents (
     file_path VARCHAR NOT NULL,
     file_hash VARCHAR NOT NULL,
     extracted_identifier VARCHAR,
+    extracted_rrr VARCHAR,
+    extracted_name VARCHAR,
     ai_verdict VARCHAR DEFAULT 'pending',
     rejection_reason TEXT,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

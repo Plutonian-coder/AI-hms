@@ -110,7 +110,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
     # 1. Full profile
     with get_cursor() as cur:
         cur.execute(
-            "SELECT identifier, surname, first_name, gender, department, level, email, phone, next_of_kin_name, next_of_kin_phone FROM users WHERE id = %s",
+            "SELECT identifier, surname, first_name, gender, department, level, email, phone, next_of_kin_name, next_of_kin_phone, study_mode FROM users WHERE id = %s",
             (student_id,)
         )
         profile_row = cur.fetchone()
@@ -127,6 +127,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
         "phone": profile_row[7],
         "next_of_kin_name": profile_row[8],
         "next_of_kin_phone": profile_row[9],
+        "study_mode": profile_row[10] or "full_time",
     } if profile_row else {}
 
     # 2. Current session
@@ -139,20 +140,35 @@ def get_student_dashboard(student=Depends(get_current_student)):
     # 3. Allocation
     allocation = _fetch_allocation(student_id)
 
-    # 4. Payment status
+    # 4. Payment status (check both allocation_requests and pending_payments)
     payment_status = "NOT VERIFIED"
     if allocation:
         payment_status = "VERIFIED"
     else:
         try:
-            with get_cursor() as cur:
-                cur.execute(
-                    "SELECT status FROM allocation_requests WHERE student_id = %s ORDER BY created_at DESC LIMIT 1",
-                    (student_id,)
-                )
-                req_row = cur.fetchone()
-                if req_row:
-                    payment_status = "PENDING" if req_row[0] == "rejected" else "VERIFIED"
+            # Check Paystack pending payments first
+            if session:
+                with get_cursor() as cur:
+                    cur.execute(
+                        "SELECT status FROM pending_payments WHERE student_id = %s AND session_id = %s ORDER BY created_at DESC LIMIT 1",
+                        (student_id, session["id"]),
+                    )
+                    pp_row = cur.fetchone()
+                    if pp_row:
+                        if pp_row[0] == "pending":
+                            payment_status = "PENDING"
+                        elif pp_row[0] == "completed":
+                            payment_status = "VERIFIED"
+            # Also check legacy allocation_requests
+            if payment_status == "NOT VERIFIED":
+                with get_cursor() as cur:
+                    cur.execute(
+                        "SELECT status FROM allocation_requests WHERE student_id = %s ORDER BY created_at DESC LIMIT 1",
+                        (student_id,)
+                    )
+                    req_row = cur.fetchone()
+                    if req_row:
+                        payment_status = "PENDING" if req_row[0] == "rejected" else "VERIFIED"
         except Exception:
             pass
 
@@ -195,6 +211,7 @@ def update_student_profile(
     student=Depends(get_current_student),
     department: str = Form(None),
     level: str = Form(None),
+    study_mode: str = Form(None),
     email: str = Form(None),
     phone: str = Form(None),
     next_of_kin_name: str = Form(None),
@@ -211,6 +228,9 @@ def update_student_profile(
     if level is not None:
         updates.append("level = %s")
         values.append(level.strip())
+    if study_mode is not None and study_mode.strip() in ("full_time", "part_time"):
+        updates.append("study_mode = %s")
+        values.append(study_mode.strip())
     if email is not None:
         updates.append("email = %s")
         values.append(email.strip())

@@ -8,7 +8,7 @@ export default function Dashboard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
-    const [profileForm, setProfileForm] = useState({ department: '', level: '', email: '', phone: '', next_of_kin_name: '', next_of_kin_phone: '' });
+    const [profileForm, setProfileForm] = useState({ department: '', level: '', study_mode: 'full_time', email: '', phone: '', next_of_kin_name: '', next_of_kin_phone: '' });
     const [saving, setSaving] = useState(false);
     const toast = useToast();
 
@@ -20,6 +20,7 @@ export default function Dashboard() {
                 setProfileForm({
                     department: p.department || '',
                     level: p.level || '',
+                    study_mode: p.study_mode || 'full_time',
                     email: p.email || '',
                     phone: p.phone || '',
                     next_of_kin_name: p.next_of_kin_name || '',
@@ -37,6 +38,7 @@ export default function Dashboard() {
         const form = new FormData();
         if (profileForm.department) form.append('department', profileForm.department);
         if (profileForm.level) form.append('level', profileForm.level);
+        if (profileForm.study_mode) form.append('study_mode', profileForm.study_mode);
         if (profileForm.email) form.append('email', profileForm.email);
         if (profileForm.phone) form.append('phone', profileForm.phone);
         if (profileForm.next_of_kin_name) form.append('next_of_kin_name', profileForm.next_of_kin_name);
@@ -136,7 +138,11 @@ export default function Dashboard() {
                                 <Home className="w-8 h-8 text-muted" />
                             </div>
                             <p className="text-muted font-medium text-sm">No allocation yet for this session.</p>
-                            {isEligible ? (
+                            {payment_status === 'PENDING' ? (
+                                <Link to="/payment" className="inline-block mt-4 text-sm font-bold text-amber-500 hover:text-amber-600 transition-colors">
+                                    You have a pending payment — Continue &rarr;
+                                </Link>
+                            ) : isEligible ? (
                                 <Link to="/payment" className="inline-block mt-4 text-sm font-bold text-lime hover:text-lime-hover transition-colors">
                                     Proceed to Payment &rarr;
                                 </Link>
@@ -172,6 +178,7 @@ export default function Dashboard() {
                                 <ProfileRow label="Gender" value={profile.gender?.charAt(0).toUpperCase() + profile.gender?.slice(1)} />
                                 <ProfileRow label="Department" value={profile.department} placeholder="Not set" />
                                 <ProfileRow label="Level" value={profile.level} placeholder="Not set" />
+                                <ProfileRow label="Study Mode" value={profile.study_mode === 'part_time' ? 'Part Time' : 'Full Time'} />
                                 <ProfileRow label="Email" value={profile.email} placeholder="Not set" />
                                 <ProfileRow label="Phone" value={profile.phone} placeholder="Not set" />
                                 <ProfileRow label="Next of Kin" value={profile.next_of_kin_name} placeholder="Not set" />
@@ -184,6 +191,17 @@ export default function Dashboard() {
                                 <ProfileRow label="Gender" value={profile.gender?.charAt(0).toUpperCase() + profile.gender?.slice(1)} />
                                 <ProfileField label="Department" value={profileForm.department} onChange={v => setProfileForm(f => ({ ...f, department: v }))} placeholder="e.g. Computer Science" />
                                 <ProfileField label="Level" value={profileForm.level} onChange={v => setProfileForm(f => ({ ...f, level: v }))} placeholder="e.g. ND2, HND1" />
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-muted uppercase tracking-widest">Study Mode</label>
+                                    <select
+                                        value={profileForm.study_mode}
+                                        onChange={e => setProfileForm(f => ({ ...f, study_mode: e.target.value }))}
+                                        className="w-full bg-cream border border-black/10 text-heading rounded-lg focus:ring-lime focus:border-lime p-2.5 text-sm font-medium transition-colors"
+                                    >
+                                        <option value="full_time">Full Time</option>
+                                        <option value="part_time">Part Time</option>
+                                    </select>
+                                </div>
                                 <ProfileField label="Email" value={profileForm.email} onChange={v => setProfileForm(f => ({ ...f, email: v }))} placeholder="student@email.com" />
                                 <ProfileField label="Phone" value={profileForm.phone} onChange={v => setProfileForm(f => ({ ...f, phone: v }))} placeholder="08012345678" />
                                 <ProfileField label="Next of Kin" value={profileForm.next_of_kin_name} onChange={v => setProfileForm(f => ({ ...f, next_of_kin_name: v }))} placeholder="Parent/Guardian name" />

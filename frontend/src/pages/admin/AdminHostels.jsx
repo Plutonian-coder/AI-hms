@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
-import { Building, Plus, Layers, AlertTriangle, CheckCircle, WrenchIcon } from 'lucide-react';
+import { Building, Plus, Layers, AlertTriangle, CheckCircle, WrenchIcon, DollarSign, X, Save, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 const STATUS_CONFIG = {
@@ -9,6 +9,13 @@ const STATUS_CONFIG = {
     maintenance:    { label: 'Maintenance',    icon: WrenchIcon,    color: 'bg-amber-50 text-amber-700 border border-amber-200' },
     decommissioned: { label: 'Decommissioned', icon: AlertTriangle, color: 'bg-red-50 text-red-600 border border-red-200' },
 };
+
+const PROGRAM_TYPES = [
+    { key: 'ND_FT', label: 'ND Full Time' },
+    { key: 'ND_PT', label: 'ND Part Time' },
+    { key: 'HND_FT', label: 'HND Full Time' },
+    { key: 'HND_PT', label: 'HND Part Time' },
+];
 
 export default function AdminHostels() {
     const [hostels, setHostels] = useState([]);
@@ -19,6 +26,10 @@ export default function AdminHostels() {
     const [status, setStatus] = useState('active');
     const [submitting, setSubmitting] = useState(false);
     const [togglingId, setTogglingId] = useState(null);
+    const [pricingHostel, setPricingHostel] = useState(null);
+    const [prices, setPrices] = useState({});
+    const [priceSaving, setPriceSaving] = useState(false);
+    const [priceLoading, setPriceLoading] = useState(false);
     const toast = useToast();
     const navigate = useNavigate();
 
@@ -64,6 +75,40 @@ export default function AdminHostels() {
         }
     };
 
+    const openPricing = async (hostel) => {
+        setPricingHostel(hostel);
+        setPriceLoading(true);
+        try {
+            const res = await apiClient.get(`/admin/hostels/${hostel.id}/prices`);
+            const priceMap = {};
+            for (const p of res.data) {
+                priceMap[p.program_type] = p.amount;
+            }
+            setPrices(priceMap);
+        } catch {
+            setPrices({});
+        } finally {
+            setPriceLoading(false);
+        }
+    };
+
+    const handleSavePrices = async () => {
+        setPriceSaving(true);
+        try {
+            const priceList = PROGRAM_TYPES
+                .filter(pt => prices[pt.key] !== undefined && prices[pt.key] !== '')
+                .map(pt => ({ program_type: pt.key, amount: parseInt(prices[pt.key]) || 0 }));
+
+            await apiClient.put(`/admin/hostels/${pricingHostel.id}/prices`, { prices: priceList });
+            toast.success(`Prices updated for ${pricingHostel.name}`);
+            setPricingHostel(null);
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to save prices');
+        } finally {
+            setPriceSaving(false);
+        }
+    };
+
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Hostels...</div>;
 
     return (
@@ -71,7 +116,7 @@ export default function AdminHostels() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-extrabold text-heading tracking-tight">Hostel Management</h1>
-                    <p className="text-muted mt-2 font-medium">Manage hostel buildings, statuses, and block hierarchy.</p>
+                    <p className="text-muted mt-2 font-medium">Manage hostel buildings, statuses, pricing, and block hierarchy.</p>
                 </div>
                 <button
                     onClick={() => setShowForm(!showForm)}
@@ -81,6 +126,66 @@ export default function AdminHostels() {
                     Add Hostel
                 </button>
             </div>
+
+            {/* Pricing Modal */}
+            {pricingHostel && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setPricingHostel(null)}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 border-b border-black/5 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-bold text-heading">Set Prices</h3>
+                                <p className="text-sm text-muted font-medium">{pricingHostel.name}</p>
+                            </div>
+                            <button onClick={() => setPricingHostel(null)} className="p-2 hover:bg-cream rounded-xl transition-colors">
+                                <X className="w-5 h-5 text-muted" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {priceLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-6 h-6 text-forest animate-spin" />
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-xs text-muted font-medium">Set the hostel fee (in Naira) for each program type. Leave blank to use the default global fee.</p>
+                                    {PROGRAM_TYPES.map(pt => (
+                                        <div key={pt.key} className="flex items-center gap-3">
+                                            <label className="text-sm font-bold text-heading w-32 shrink-0">{pt.label}</label>
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted font-bold text-sm">{'\u20A6'}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={prices[pt.key] ?? ''}
+                                                    onChange={e => setPrices(prev => ({ ...prev, [pt.key]: e.target.value }))}
+                                                    placeholder="0"
+                                                    className="w-full pl-8 bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3 text-sm font-medium transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+
+                        <div className="px-6 pb-6 flex gap-3">
+                            <button
+                                onClick={handleSavePrices}
+                                disabled={priceSaving || priceLoading}
+                                className={`flex-1 flex items-center justify-center gap-2 bg-lime text-forest py-3 rounded-full font-bold shadow-lg shadow-lime/25 transition-all ${priceSaving ? 'opacity-70 scale-95' : 'hover:bg-lime-hover hover:scale-[1.02]'}`}
+                            >
+                                <Save className="w-4 h-4" />
+                                {priceSaving ? 'Saving...' : 'Save Prices'}
+                            </button>
+                            <button
+                                onClick={() => setPricingHostel(null)}
+                                className="bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                            >Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Create Form */}
             {showForm && (
@@ -180,16 +285,23 @@ export default function AdminHostels() {
                                         className="flex-1 flex items-center justify-center gap-1.5 bg-forest text-lime py-2 rounded-xl font-bold text-sm hover:bg-forest/90 transition-colors"
                                     >
                                         <Layers className="w-3.5 h-3.5" />
-                                        Manage Blocks
+                                        Blocks
+                                    </button>
+                                    <button
+                                        onClick={() => openPricing(hostel)}
+                                        className="flex items-center justify-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-2 rounded-xl font-bold text-sm hover:bg-indigo-100 transition-colors border border-indigo-200"
+                                        title="Set prices per program type"
+                                    >
+                                        <DollarSign className="w-3.5 h-3.5" />
+                                        Prices
                                     </button>
                                     <button
                                         onClick={() => cycleStatus(hostel)}
                                         disabled={togglingId === hostel.id}
-                                        className="flex items-center justify-center gap-1.5 bg-cream text-heading px-4 py-2 rounded-xl font-bold text-sm hover:bg-black/5 transition-colors disabled:opacity-50"
+                                        className="flex items-center justify-center gap-1.5 bg-cream text-heading px-3 py-2 rounded-xl font-bold text-sm hover:bg-black/5 transition-colors disabled:opacity-50"
                                         title={`Toggle status (currently: ${hostel.status})`}
                                     >
                                         <WrenchIcon className="w-3.5 h-3.5" />
-                                        {hostel.status === 'active' ? 'Maintenance' : 'Reactivate'}
                                     </button>
                                 </div>
                             </div>

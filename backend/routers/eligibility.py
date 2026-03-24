@@ -4,8 +4,9 @@ Eligibility Router — Document-based eligibility verification with AI (Gemini) 
 Freshmen (ND1/HND1): Must upload Acceptance Fee receipt.
 Returning (ND2/HND2): Must upload School Fees receipt.
 
-Each document is verified via Gemini Vision, which checks authenticity and
-extracts the student's identifier for identity matching.
+Each document is verified via Gemini Vision, which checks authenticity,
+extracts the student's identifier and RRR for identity matching and
+payment validation against the Remita database.
 """
 import os
 import uuid
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/api/v1/eligibility", tags=["eligibility"])
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-TOTAL_STEPS = 5
+TOTAL_STEPS = 6
 
 # Which documents each level requires (1 per level)
 LEVEL_REQUIREMENTS = {
@@ -160,6 +161,7 @@ async def upload_eligibility_document(
 ):
     """
     Upload and verify a single eligibility document via AI (SSE-streamed).
+    6-step pipeline: Pre-flight → Upload → AI Verify → Identity Match → RRR Validation → Update Eligibility
     """
     file_content = await document.read()
     file_ext = os.path.splitext(document.filename or "doc.png")[1]
@@ -192,10 +194,12 @@ async def upload_eligibility_document(
 
         # Check student level
         with get_cursor() as cur:
-            cur.execute("SELECT level FROM users WHERE id = %s", (student_id,))
+            cur.execute("SELECT level, surname, first_name FROM users WHERE id = %s", (student_id,))
             level_row = cur.fetchone()
 
         level = level_row[0] if level_row and level_row[0] else None
+        student_full_name = f"{level_row[1]} {level_row[2]}" if level_row else ""
+
         if not level or level not in LEVEL_REQUIREMENTS:
             yield _sse_error(1, "Pre-flight Checks", "Please set your level (ND1/ND2/HND1/HND2) in your profile first.")
             return
@@ -239,10 +243,12 @@ async def upload_eligibility_document(
 
         if not ocr_result["is_authentic"]:
             reason = ocr_result["rejection_reason"] or "Document does not appear to be authentic"
-            # Save as rejected
-            _upsert_document(student_id, session_id, document_type, filepath, file_hash, None, "rejected", reason)
+            _upsert_document(student_id, session_id, document_type, filepath, file_hash, None, None, None, "rejected", reason)
             yield _sse_error(3, "AI Document Verification", reason)
             return
+
+        extracted_rrr = ocr_result.get("extracted_rrr")
+        extracted_name = ocr_result.get("extracted_name")
 
         yield _sse_step(3, "complete", "AI Document Verification", "Document verified as authentic")
 
@@ -259,7 +265,7 @@ async def upload_eligibility_document(
             if normalized_extracted != normalized_student:
                 _upsert_document(
                     student_id, session_id, document_type, filepath, file_hash,
-                    extracted_id, "rejected",
+                    extracted_id, extracted_rrr, extracted_name, "rejected",
                     f"Document identifier ({extracted_id}) does not match your matric number ({identifier})"
                 )
                 yield _sse_error(4, "Identity Verification",
@@ -270,20 +276,57 @@ async def upload_eligibility_document(
             # No identifier extracted — accept but log
             yield _sse_step(4, "complete", "Identity Verification", "Document accepted (identifier not extractable — manual review may apply)")
 
-        # ── Step 5: Update Eligibility ──
-        yield _sse_step(5, "processing", "Updating Eligibility", "Recording verification result...")
+        # ── Step 5: RRR Validation ──
+        yield _sse_step(5, "processing", "RRR Validation", "Checking Remita payment reference...")
 
-        _upsert_document(student_id, session_id, document_type, filepath, file_hash, extracted_id, "verified", None)
+        if extracted_rrr:
+            with get_cursor() as cur:
+                cur.execute(
+                    "SELECT status, amount FROM mock_remita_payments WHERE rrr = %s",
+                    (extracted_rrr,),
+                )
+                remita_row = cur.fetchone()
+
+            if not remita_row:
+                _upsert_document(
+                    student_id, session_id, document_type, filepath, file_hash,
+                    extracted_id, extracted_rrr, extracted_name, "rejected",
+                    f"RRR {extracted_rrr} not found in the Remita payment database"
+                )
+                yield _sse_error(5, "RRR Validation",
+                                 f"RRR {extracted_rrr} was not found in the payment database. Please upload a valid receipt.")
+                return
+
+            remita_status = remita_row[0]
+            if remita_status not in ("paid", "used"):
+                _upsert_document(
+                    student_id, session_id, document_type, filepath, file_hash,
+                    extracted_id, extracted_rrr, extracted_name, "rejected",
+                    f"RRR {extracted_rrr} has status '{remita_status}' — payment not confirmed"
+                )
+                yield _sse_error(5, "RRR Validation",
+                                 f"RRR {extracted_rrr} payment status is '{remita_status}'. Only paid receipts are accepted.")
+                return
+
+            yield _sse_step(5, "complete", "RRR Validation", f"RRR {extracted_rrr} confirmed — payment valid")
+        else:
+            # No RRR extracted — accept with warning
+            yield _sse_step(5, "complete", "RRR Validation", "RRR not found on document — accepted (manual review may apply)")
+
+        # ── Step 6: Update Eligibility ──
+        yield _sse_step(6, "processing", "Updating Eligibility", "Recording verification result...")
+
+        _upsert_document(student_id, session_id, document_type, filepath, file_hash, extracted_id, extracted_rrr, extracted_name, "verified", None)
 
         # Check if all required docs are now verified
         is_now_eligible = _update_eligibility_status(student_id, session_id, level)
 
         if is_now_eligible:
-            yield _sse_step(5, "complete", "Updating Eligibility", "All documents verified — you are now ELIGIBLE!")
+            yield _sse_step(6, "complete", "Updating Eligibility", "All documents verified — you are now ELIGIBLE!")
         else:
             remaining = _get_remaining_docs(student_id, session_id, level)
             remaining_labels = [DOC_LABELS.get(d, d) for d in remaining]
-            yield _sse_step(5, "complete", "Updating Eligibility",
+            yield _sse_step(6, "complete", "Updating Eligibility",
                             f"Document verified. Still needed: {', '.join(remaining_labels)}")
 
         yield _sse_result({"is_eligible": is_now_eligible, "document_type": document_type, "verdict": "verified"})
@@ -293,22 +336,24 @@ async def upload_eligibility_document(
 
 # ---- Helpers ----
 
-def _upsert_document(student_id, session_id, document_type, file_path, file_hash, extracted_id, verdict, reason):
+def _upsert_document(student_id, session_id, document_type, file_path, file_hash, extracted_id, extracted_rrr, extracted_name, verdict, reason):
     """Insert or update an eligibility document record."""
     with get_cursor() as cur:
         cur.execute("""
-            INSERT INTO eligibility_documents (student_id, session_id, document_type, file_path, file_hash, extracted_identifier, ai_verdict, rejection_reason, verified_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CASE WHEN %s = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END)
+            INSERT INTO eligibility_documents (student_id, session_id, document_type, file_path, file_hash, extracted_identifier, extracted_rrr, extracted_name, ai_verdict, rejection_reason, verified_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CASE WHEN %s = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END)
             ON CONFLICT (student_id, session_id, document_type)
             DO UPDATE SET
                 file_path = EXCLUDED.file_path,
                 file_hash = EXCLUDED.file_hash,
                 extracted_identifier = EXCLUDED.extracted_identifier,
+                extracted_rrr = EXCLUDED.extracted_rrr,
+                extracted_name = EXCLUDED.extracted_name,
                 ai_verdict = EXCLUDED.ai_verdict,
                 rejection_reason = EXCLUDED.rejection_reason,
                 verified_at = CASE WHEN EXCLUDED.ai_verdict = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END,
                 uploaded_at = CURRENT_TIMESTAMP
-        """, (student_id, session_id, document_type, file_path, file_hash, extracted_id, verdict, reason, verdict))
+        """, (student_id, session_id, document_type, file_path, file_hash, extracted_id, extracted_rrr, extracted_name, verdict, reason, verdict))
 
 
 def _update_eligibility_status(student_id, session_id, level):

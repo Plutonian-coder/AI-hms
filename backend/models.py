@@ -15,6 +15,7 @@ class UserRegister(BaseModel):
     email: str = ""
     department: str = ""
     level: str = ""
+    study_mode: str = Field(default="full_time", pattern="^(full_time|part_time)$")
     phone: str = ""
     next_of_kin_name: str = ""
     next_of_kin_phone: str = ""
@@ -74,6 +75,9 @@ class RoomStudentInfo(BaseModel):
     level: Optional[str]
     bed_number: int
     payment_status: str
+
+class HostelPriceUpdate(BaseModel):
+    prices: List[dict]  # [{program_type: str, amount: int}]
 
 class HostelInfo(BaseModel):
     id: int

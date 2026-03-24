@@ -13,6 +13,7 @@ export default function Register() {
         email: '',
         department: '',
         level: '',
+        study_mode: 'full_time',
         phone: '',
         next_of_kin_name: '',
         next_of_kin_phone: '',
@@ -105,13 +106,21 @@ export default function Register() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
+                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Study Mode</label>
+                                <select name="study_mode" value={formData.study_mode} onChange={handleChange} className={inputClass}>
+                                    <option value="full_time">Full Time</option>
+                                    <option value="part_time">Part Time</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Department</label>
                                 <input name="department" className={inputClass} value={formData.department} onChange={handleChange} placeholder="e.g. Computer Science" />
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Phone Number</label>
-                                <input name="phone" type="tel" className={inputClass} value={formData.phone} onChange={handleChange} placeholder="08012345678" />
-                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Phone Number</label>
+                            <input name="phone" type="tel" className={inputClass} value={formData.phone} onChange={handleChange} placeholder="08012345678" />
                         </div>
 
                         <div>

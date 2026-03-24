@@ -4,12 +4,15 @@ Payment Router — Paystack integration for hostel allocation payments.
 Flow: Student selects hostel preferences → Paystack transaction initialized →
       Student pays on Paystack checkout → Callback/webhook verifies →
       FCFS bed allocation executed atomically.
+
+Pricing: Per-hostel per-program pricing from hostel_prices table,
+         with fallback to HOSTEL_FEE_AMOUNT env var.
 """
 import json
 import hmac
 import hashlib
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from database import get_cursor, get_connection
@@ -26,6 +29,39 @@ router = APIRouter(prefix="/api/v1/payment", tags=["payment"])
 
 PAYSTACK_BASE = "https://api.paystack.co"
 TOTAL_STEPS = 4
+
+VALID_PROGRAM_TYPES = {"ND_FT", "ND_PT", "HND_FT", "HND_PT"}
+
+
+# ---- Helpers ----
+
+def _derive_program_type(level: str | None, study_mode: str | None) -> str | None:
+    """Derive program_type from level and study_mode. Returns e.g. 'ND_FT', 'HND_PT'."""
+    if not level or not study_mode:
+        return None
+    level_upper = level.strip().upper()
+    if level_upper in ("ND1", "ND2"):
+        prefix = "ND"
+    elif level_upper in ("HND1", "HND2"):
+        prefix = "HND"
+    else:
+        return None
+    suffix = "FT" if study_mode == "full_time" else "PT"
+    return f"{prefix}_{suffix}"
+
+
+def _get_hostel_price(hostel_id: int, program_type: str | None) -> int:
+    """Look up price from hostel_prices table. Falls back to HOSTEL_FEE_AMOUNT."""
+    if program_type:
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT amount FROM hostel_prices WHERE hostel_id = %s AND program_type = %s",
+                (hostel_id, program_type),
+            )
+            row = cur.fetchone()
+            if row:
+                return row[0]
+    return HOSTEL_FEE_AMOUNT
 
 
 # ---- SSE Helpers ----
@@ -45,6 +81,51 @@ def _sse_result(data: dict) -> str:
 
 
 # ---- Endpoints ----
+
+@router.get("/price")
+def get_hostel_price(
+    hostel_id: int = Query(...),
+    student=Depends(get_current_student),
+):
+    """Get the hostel fee for a specific hostel based on the student's program type."""
+    student_id = student["user_id"]
+
+    # Get student's level and study_mode
+    with get_cursor() as cur:
+        cur.execute("SELECT level, study_mode FROM users WHERE id = %s", (student_id,))
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    level, study_mode = row
+    program_type = _derive_program_type(level, study_mode)
+
+    # Get hostel name
+    with get_cursor() as cur:
+        cur.execute("SELECT name FROM hostels WHERE id = %s", (hostel_id,))
+        hostel_row = cur.fetchone()
+
+    if not hostel_row:
+        raise HTTPException(status_code=404, detail="Hostel not found")
+
+    amount = _get_hostel_price(hostel_id, program_type)
+
+    # Format program type for display
+    display_map = {
+        "ND_FT": "ND Full Time",
+        "ND_PT": "ND Part Time",
+        "HND_FT": "HND Full Time",
+        "HND_PT": "HND Part Time",
+    }
+
+    return {
+        "amount": amount,
+        "program_type": program_type,
+        "program_label": display_map.get(program_type, "Standard"),
+        "hostel_name": hostel_row[0],
+    }
+
 
 @router.post("/initialize")
 def initialize_payment(
@@ -101,18 +182,20 @@ def initialize_payment(
         if cur.fetchone():
             raise HTTPException(status_code=400, detail="You already have a pending payment. Complete or cancel it first.")
 
-    # Get student email (required by Paystack)
+    # Get student email, level, study_mode (required for pricing)
     with get_cursor() as cur:
-        cur.execute("SELECT email, surname, first_name FROM users WHERE id = %s", (student_id,))
+        cur.execute("SELECT email, surname, first_name, level, study_mode FROM users WHERE id = %s", (student_id,))
         user_row = cur.fetchone()
 
     if not user_row or not user_row[0]:
         raise HTTPException(status_code=400, detail="Please set your email address in your profile before making a payment.")
 
-    email, surname, first_name = user_row
+    email, surname, first_name, level, study_mode = user_row
 
-    # Initialize Paystack transaction
-    amount_kobo = HOSTEL_FEE_AMOUNT * 100
+    # Determine price from first-choice hostel + student's program type
+    program_type = _derive_program_type(level, study_mode)
+    amount_naira = _get_hostel_price(choice_1_id, program_type)
+    amount_kobo = amount_naira * 100
 
     with httpx.Client() as client:
         resp = client.post(
@@ -128,6 +211,7 @@ def initialize_payment(
                     "choice_2_id": choice_2_id,
                     "choice_3_id": choice_3_id,
                     "student_name": f"{surname} {first_name}",
+                    "program_type": program_type,
                 },
             },
             headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
@@ -154,8 +238,33 @@ def initialize_payment(
     return {
         "authorization_url": authorization_url,
         "reference": reference,
-        "amount": HOSTEL_FEE_AMOUNT,
+        "amount": amount_naira,
     }
+
+
+@router.delete("/cancel")
+def cancel_pending_payment(student=Depends(get_current_student)):
+    """Cancel a pending (unpaid) Paystack payment so the student can start fresh."""
+    student_id = student["user_id"]
+
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        sess = cur.fetchone()
+
+    if not sess:
+        raise HTTPException(status_code=400, detail="No active academic session.")
+
+    session_id = sess[0]
+
+    with get_cursor() as cur:
+        cur.execute(
+            "DELETE FROM pending_payments WHERE student_id = %s AND session_id = %s AND status = 'pending'",
+            (student_id, session_id),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="No pending payment found to cancel.")
+
+    return {"message": "Pending payment cancelled. You can now start a new payment."}
 
 
 @router.get("/verify/{reference}")
@@ -377,7 +486,7 @@ def get_payment_status(student=Depends(get_current_student)):
 
     with get_cursor() as cur:
         cur.execute(
-            "SELECT status, paystack_reference FROM pending_payments WHERE student_id = %s AND session_id = %s ORDER BY created_at DESC LIMIT 1",
+            "SELECT status, paystack_reference, amount_kobo, created_at FROM pending_payments WHERE student_id = %s AND session_id = %s ORDER BY created_at DESC LIMIT 1",
             (student_id, session_id),
         )
         row = cur.fetchone()
@@ -390,6 +499,8 @@ def get_payment_status(student=Depends(get_current_student)):
         "has_completed": row[0] == "completed",
         "reference": row[1],
         "status": row[0],
+        "amount": row[2] // 100 if row[2] else None,
+        "created_at": row[3].isoformat() if row[3] else None,
     }
 
 

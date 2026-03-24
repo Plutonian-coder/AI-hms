@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Building, BedDouble, CalendarDays, Users, ClipboardList, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, Building, BedDouble, CalendarDays, Users, ClipboardList, Receipt, LogOut, X } from 'lucide-react';
 
 export default function AdminSidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
@@ -62,6 +62,11 @@ export default function AdminSidebar({ isOpen, onClose }) {
                 <NavLink to="/admin/allocations" className={({ isActive }) => navItemClass(isActive)}>
                     <ClipboardList className="w-5 h-5" />
                     Allocations
+                </NavLink>
+
+                <NavLink to="/admin/transactions" className={({ isActive }) => navItemClass(isActive)}>
+                    <Receipt className="w-5 h-5" />
+                    Transactions
                 </NavLink>
             </nav>
 

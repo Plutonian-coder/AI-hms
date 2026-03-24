@@ -20,6 +20,7 @@ import AdminBedSpaces from './pages/admin/AdminBedSpaces';
 import AdminSessions from './pages/admin/AdminSessions';
 import AdminStudents from './pages/admin/AdminStudents';
 import AdminAllocations from './pages/admin/AdminAllocations';
+import AdminTransactions from './pages/admin/AdminTransactions';
 
 function getUser() {
   try {
@@ -219,6 +220,11 @@ export default function App() {
       <Route path="/admin/allocations" element={
         <ProtectedRoute requiredRole="admin">
           <AdminLayout><AdminAllocations /></AdminLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/transactions" element={
+        <ProtectedRoute requiredRole="admin">
+          <AdminLayout><AdminTransactions /></AdminLayout>
         </ProtectedRoute>
       } />
 

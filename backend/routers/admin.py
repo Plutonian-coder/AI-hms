@@ -814,3 +814,118 @@ def list_allocation_requests(admin=Depends(get_current_admin)):
         }
         for r in rows
     ]
+
+
+# ════════════════════════════════════════════════════════════
+# HOSTEL PRICES
+# ════════════════════════════════════════════════════════════
+
+VALID_PROGRAM_TYPES = {"ND_FT", "ND_PT", "HND_FT", "HND_PT"}
+
+
+@router.get("/hostels/{hostel_id}/prices")
+def get_hostel_prices(hostel_id: int, admin=Depends(get_current_admin)):
+    """Get all program-type prices for a hostel."""
+    with get_cursor() as cur:
+        cur.execute("SELECT name FROM hostels WHERE id = %s", (hostel_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Hostel not found")
+
+        cur.execute(
+            "SELECT program_type, amount FROM hostel_prices WHERE hostel_id = %s ORDER BY program_type",
+            (hostel_id,),
+        )
+        rows = cur.fetchall()
+
+    return [{"program_type": r[0], "amount": r[1]} for r in rows]
+
+
+@router.put("/hostels/{hostel_id}/prices")
+def update_hostel_prices(hostel_id: int, body: dict, admin=Depends(get_current_admin)):
+    """
+    Set prices for a hostel. Expects {"prices": [{"program_type": "ND_FT", "amount": 15000}, ...]}.
+    Uses UPSERT — existing prices are updated, new ones inserted.
+    """
+    prices = body.get("prices", [])
+    if not prices:
+        raise HTTPException(status_code=400, detail="No prices provided")
+
+    with get_cursor() as cur:
+        cur.execute("SELECT name FROM hostels WHERE id = %s", (hostel_id,))
+        hostel = cur.fetchone()
+        if not hostel:
+            raise HTTPException(status_code=404, detail="Hostel not found")
+
+    updated = 0
+    with get_cursor() as cur:
+        for p in prices:
+            pt = p.get("program_type", "").strip().upper()
+            amount = p.get("amount")
+
+            if pt not in VALID_PROGRAM_TYPES:
+                continue
+            if not isinstance(amount, (int, float)) or amount < 0:
+                continue
+
+            cur.execute("""
+                INSERT INTO hostel_prices (hostel_id, program_type, amount)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (hostel_id, program_type)
+                DO UPDATE SET amount = EXCLUDED.amount
+            """, (hostel_id, pt, int(amount)))
+            updated += 1
+
+    return {"message": f"Updated {updated} price(s) for '{hostel[0]}'"}
+
+
+# ════════════════════════════════════════════════════════════
+# TRANSACTIONS
+# ════════════════════════════════════════════════════════════
+
+@router.get("/transactions")
+def list_transactions(status: Optional[str] = None, admin=Depends(get_current_admin)):
+    """List all payment transactions with student info and hostel choices."""
+    query = """
+        SELECT pp.id, pp.student_id, u.identifier,
+               u.surname || ' ' || u.first_name AS full_name,
+               pp.paystack_reference, pp.amount_kobo, pp.status,
+               h1.name AS choice_1, h2.name AS choice_2, h3.name AS choice_3,
+               pp.created_at, pp.completed_at, pp.session_id,
+               s.session_name
+        FROM pending_payments pp
+        JOIN users u ON u.id = pp.student_id
+        LEFT JOIN hostels h1 ON h1.id = pp.choice_1_id
+        LEFT JOIN hostels h2 ON h2.id = pp.choice_2_id
+        LEFT JOIN hostels h3 ON h3.id = pp.choice_3_id
+        LEFT JOIN academic_sessions s ON s.id = pp.session_id
+    """
+    params = []
+
+    if status and status in ("pending", "completed", "failed"):
+        query += " WHERE pp.status = %s"
+        params.append(status)
+
+    query += " ORDER BY pp.created_at DESC LIMIT 500"
+
+    with get_cursor() as cur:
+        cur.execute(query, params)
+        rows = cur.fetchall()
+
+    return [
+        {
+            "id": r[0],
+            "student_id": r[1],
+            "identifier": r[2],
+            "full_name": r[3],
+            "reference": r[4],
+            "amount": r[5] // 100 if r[5] else 0,
+            "status": r[6],
+            "choice_1": r[7],
+            "choice_2": r[8],
+            "choice_3": r[9],
+            "created_at": r[10].isoformat() if r[10] else None,
+            "completed_at": r[11].isoformat() if r[11] else None,
+            "session_name": r[13],
+        }
+        for r in rows
+    ]
