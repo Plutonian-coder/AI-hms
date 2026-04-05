@@ -1,153 +1,218 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { Search, Users } from 'lucide-react';
+import { Search, Users, CreditCard, CheckCircle2, Loader2 } from 'lucide-react';
+import { useToast } from '../../components/Toast';
 
 export default function AdminStudents() {
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [classFilter, setClassFilter] = useState('');
+    const toast = useToast();
 
-    useEffect(() => {
+    const fetchStudents = () => {
+        setLoading(true);
         apiClient.get('/admin/students')
             .then(res => setStudents(res.data))
             .catch(() => {})
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(() => { fetchStudents(); }, []);
+
+    const markAsPaid = async (studentId, matricNo) => {
+        if (!window.confirm(`Mark ${matricNo} as PAID for the current session?`)) return;
+        try {
+            const res = await apiClient.post(`/admin/students/${studentId}/manual-pay`);
+            toast.success(res.data.message);
+            fetchStudents();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to mark as paid');
+        }
+    };
+
+    const levels = [...new Set(students.map(s => s.level).filter(Boolean))].sort();
 
     const filtered = students.filter(s => {
         const q = searchQuery.toLowerCase();
-        return (
-            s.full_name.toLowerCase().includes(q) ||
-            s.identifier.toLowerCase().includes(q)
-        );
+        const matchSearch = s.full_name.toLowerCase().includes(q) || s.identifier.toLowerCase().includes(q);
+        const matchClass = !classFilter || s.level === classFilter;
+        return matchSearch && matchClass;
     });
 
-    if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Students...</div>;
-
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
-            <div>
-                <h1 className="text-3xl font-extrabold text-heading tracking-tight">Students</h1>
-                <p className="text-muted mt-2 font-medium">View all registered students.</p>
+        <div className="space-y-5 animate-in fade-in duration-350">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <p className="text-xs font-bold text-forest-muted uppercase tracking-[0.18em]">Records</p>
+                    <h1 className="text-2xl font-extrabold text-heading tracking-tight mt-0.5">Student Records</h1>
+                    <p className="text-sm text-muted font-medium mt-1">Manage student registration and information.</p>
+                </div>
             </div>
 
-            {/* Search */}
-            <div className="bg-white rounded-3xl shadow-sm border border-black/5 p-4">
-                <div className="flex items-center gap-3">
-                    <Search className="w-5 h-5 text-muted shrink-0" />
+            {/* Total badge */}
+            <div className="glass rounded-xl px-5 py-4 inline-flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-forest/8 flex items-center justify-center">
+                    <Users className="w-4.5 h-4.5 text-forest" />
+                </div>
+                <div>
+                    <p className="text-2xl font-black text-heading leading-none">{students.length}</p>
+                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">Total Students</p>
+                </div>
+            </div>
+
+            {/* Search + filter bar */}
+            <div className="glass rounded-xl p-3 flex flex-col sm:flex-row gap-3">
+                <div className="flex items-center gap-2.5 flex-1 glass-input rounded-xl px-3.5 py-2.5">
+                    <Search className="w-4 h-4 text-muted shrink-0" />
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search by name or matric number..."
-                        className="w-full bg-transparent border-0 border-b border-black/10 p-2.5 font-medium text-sm text-heading placeholder:text-muted/50 focus:outline-none focus:ring-0 focus:border-lime transition-colors"
+                        placeholder="Search by name or reg number…"
+                        className="flex-1 bg-transparent text-sm font-medium text-heading placeholder:text-muted-light outline-none"
                     />
                 </div>
+                <select
+                    value={classFilter}
+                    onChange={e => setClassFilter(e.target.value)}
+                    className="glass-input rounded-xl px-3.5 py-2.5 text-sm font-semibold text-heading min-w-[140px] outline-none cursor-pointer"
+                >
+                    <option value="">All Classes</option>
+                    {levels.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
             </div>
 
-            {/* Data Table */}
-            <div className="bg-white rounded-3xl shadow-sm border border-black/5 overflow-hidden">
-                <div className="px-6 py-5 border-b border-black/5">
-                    <h3 className="text-lg font-bold text-heading flex items-center gap-2">
-                        <Users className="w-5 h-5 text-muted" />
-                        All Students ({filtered.length})
-                    </h3>
-                </div>
-
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-black/5 bg-cream/50">
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Gender</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Level</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Department</th>
-                                <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map((s) => (
-                                <tr key={s.id} className="border-b border-black/5 hover:bg-cream/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-xs shrink-0">
-                                                {s.full_name.charAt(0)}
-                                            </div>
-                                            <span className="font-bold text-sm text-heading">{s.full_name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-mono font-semibold text-sm text-muted">{s.identifier}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                                            s.gender === 'male' ? 'bg-forest/5 text-forest' : 'bg-tag-pink/30 text-forest'
-                                        }`}>
-                                            {s.gender?.toUpperCase() || '—'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-semibold text-sm text-heading">{s.level || '—'}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-medium text-sm text-muted">{s.department || '—'}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
-                                            s.is_allocated
-                                                ? 'bg-lime/10 text-lime border-lime/20'
-                                                : 'bg-cream text-muted border-black/10'
-                                        }`}>
-                                            {s.is_allocated ? 'ALLOCATED' : 'ELIGIBLE'}
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Mobile Cards */}
-                <div className="md:hidden divide-y divide-black/5">
-                    {filtered.map(s => (
-                        <div key={s.id} className="p-5 space-y-3">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-sm shrink-0">
-                                    {s.full_name.charAt(0)}
-                                </div>
-                                <div>
-                                    <p className="font-bold text-sm text-heading">{s.full_name}</p>
-                                    <p className="font-mono text-xs text-muted">{s.identifier}</p>
-                                </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
-                                    s.gender === 'male' ? 'bg-forest/5 text-forest' : 'bg-tag-pink/30 text-forest'
-                                }`}>
-                                    {s.gender?.toUpperCase() || '—'}
-                                </span>
-                                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">
-                                    {s.level || '—'}
-                                </span>
-                                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                                    s.is_allocated ? 'bg-lime/10 text-lime' : 'bg-cream text-muted'
-                                }`}>
-                                    {s.is_allocated ? 'ALLOCATED' : 'ELIGIBLE'}
-                                </span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Empty State */}
-                {filtered.length === 0 && (
-                    <div className="p-8 text-center text-muted font-medium">
-                        {searchQuery ? 'No students match your search.' : 'No students registered yet.'}
+            {/* Table */}
+            <div className="glass rounded-2xl overflow-hidden">
+                {loading ? (
+                    <div className="flex items-center justify-center py-16">
+                        <Loader2 className="w-6 h-6 text-forest animate-spin" />
                     </div>
+                ) : filtered.length === 0 ? (
+                    <div className="py-14 text-center">
+                        <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
+                            <Users className="w-6 h-6 text-muted" />
+                        </div>
+                        <p className="text-muted font-medium text-sm">No students found.</p>
+                    </div>
+                ) : (
+                    <>
+                        {/* Desktop table */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="bg-surface border-b border-sidebar-border">
+                                        <Th>Reg. Number</Th>
+                                        <Th>Student Name</Th>
+                                        <Th>Class</Th>
+                                        <Th>Gender</Th>
+                                        <Th>Parent Phone</Th>
+                                        <Th>Actions</Th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filtered.map(s => (
+                                        <tr key={s.id} className="border-b border-sidebar-border hover:bg-surface/60 transition-colors">
+                                            <td className="px-5 py-3.5">
+                                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-forest text-white text-[11px] font-bold font-mono tracking-wide">
+                                                    {s.identifier}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-xs shrink-0 border border-forest/10">
+                                                        {s.full_name.charAt(0)}
+                                                    </div>
+                                                    <span className="font-semibold text-sm text-heading">{s.full_name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-lime-soft border border-lime-border text-xs font-bold text-forest">
+                                                    {s.level || '—'}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+                                                    s.gender === 'male'
+                                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                        : 'bg-pink-50 text-pink-700 border-pink-200'
+                                                }`}>
+                                                    {s.gender?.charAt(0).toUpperCase() + s.gender?.slice(1) || '—'}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3.5 text-sm text-muted font-medium">
+                                                {s.phone || '—'}
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                {s.is_allocated ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-lime-soft border border-lime-border text-forest">
+                                                        <CheckCircle2 className="w-3 h-3" /> Allocated
+                                                    </span>
+                                                ) : s.has_paid ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700">
+                                                        <CheckCircle2 className="w-3 h-3" /> Paid
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => markAsPaid(s.id, s.identifier)}
+                                                        className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-surface border border-sidebar-border text-muted hover:bg-forest hover:text-white hover:border-forest transition-all"
+                                                    >
+                                                        <CreditCard className="w-3 h-3" /> Mark Paid
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Mobile cards */}
+                        <div className="md:hidden divide-y divide-sidebar-border">
+                            {filtered.map(s => (
+                                <div key={s.id} className="p-4 space-y-2.5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-sm shrink-0">
+                                            {s.full_name.charAt(0)}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-bold text-sm text-heading truncate">{s.full_name}</p>
+                                            <span className="inline-flex items-center mt-0.5 px-2 py-0.5 rounded-md bg-forest text-white text-[10px] font-bold font-mono">
+                                                {s.identifier}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        <span className="px-2 py-0.5 rounded-lg bg-lime-soft border border-lime-border text-[10px] font-bold text-forest">{s.level || '—'}</span>
+                                        <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${s.gender === 'male' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-pink-50 text-pink-700 border-pink-200'}`}>
+                                            {s.gender?.charAt(0).toUpperCase() + s.gender?.slice(1) || '—'}
+                                        </span>
+                                        {s.is_allocated ? (
+                                            <span className="px-2 py-0.5 rounded-lg bg-lime-soft border border-lime-border text-[10px] font-bold text-forest">Allocated</span>
+                                        ) : s.has_paid ? (
+                                            <span className="px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700">Paid</span>
+                                        ) : (
+                                            <button onClick={() => markAsPaid(s.id, s.identifier)} className="px-2 py-0.5 rounded-lg bg-surface border border-sidebar-border text-[10px] font-bold text-muted hover:bg-forest hover:text-white transition-all">
+                                                Mark Paid
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </>
                 )}
             </div>
         </div>
+    );
+}
+
+function Th({ children }) {
+    return (
+        <th className="px-5 py-3 text-left text-[10px] font-bold text-muted uppercase tracking-[0.15em]">
+            {children}
+        </th>
     );
 }

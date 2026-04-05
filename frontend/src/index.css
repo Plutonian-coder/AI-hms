@@ -1,91 +1,312 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 
-  --color-cream: #F8F9F5;
-  --color-forest: #092B19;
-  --color-forest-light: #0F3D25;
-  --color-forest-muted: #1A4D33;
-  --color-lime: #7FE132;
-  --color-lime-hover: #6CCB28;
-  --color-lime-soft: #7FE13220;
-  --color-heading: #0A1F14;
-  --color-body: #3D4F47;
-  --color-muted: #8A9690;
-  --color-tag-pink: #F2D1D9;
-  --color-tag-brown: #D4C4A8;
-  --color-tag-sage: #B8D4BA;
-  --color-tag-lavender: #D1C4E9;
-  --color-tag-peach: #F5D5C8;
+  /* ── Core palette ─────────────────────────────────────────────────────── */
+  --color-surface:       #F2F6F3;   /* main page background (light mint-gray) */
+  --color-surface-2:     #E8F0EA;   /* slightly deeper tint, used for inner wells */
+  --color-cream:         #F2F6F3;   /* alias kept for legacy page refs */
+
+  /* ── Primary — deep forest green ──────────────────────────────────────── */
+  --color-forest:        #1B4332;
+  --color-forest-light:  #2D6A4F;
+  --color-forest-muted:  #40916C;
+  --color-forest-hover:  #145224;
+
+  /* ── Accent — fresh lime/emerald ──────────────────────────────────────── */
+  --color-lime:          #52B788;   /* softer, more refined than #7FE132 */
+  --color-lime-hover:    #40916C;
+  --color-lime-soft:     #D8F3DC;   /* very light mint for active states */
+  --color-lime-border:   #B7E4C7;   /* border for soft-lime areas */
+
+  /* ── Sidebar (white) ───────────────────────────────────────────────────── */
+  --color-sidebar:       #FFFFFF;
+  --color-sidebar-border: #E8EEEB;
+
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --color-heading:       #0D1F14;
+  --color-body:          #2D3E35;
+  --color-muted:         #6B7C72;
+  --color-muted-light:   #9BADA3;
+
+  /* ── Status colours ────────────────────────────────────────────────────── */
+  --color-success:       #166534;
+  --color-success-bg:    #DCFCE7;
+  --color-warning:       #92400E;
+  --color-warning-bg:    #FEF3C7;
+  --color-danger:        #991B1B;
+  --color-danger-bg:     #FEE2E2;
+  --color-info:          #1E3A8A;
+  --color-info-bg:       #DBEAFE;
+
+  /* ── Tag palette ───────────────────────────────────────────────────────── */
+  --color-tag-pink:      #FDE8EE;
+  --color-tag-brown:     #F5ECD7;
+  --color-tag-sage:      #D8F3DC;
+  --color-tag-lavender:  #EDE9FE;
+  --color-tag-peach:     #FDE8D8;
+  --color-tag-sky:       #DBEAFE;
 }
 
+/* ── Google Fonts fallback (loaded via @import above) ─────────────────────── */
+html { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; }
+
+/* ── Page background gradient ──────────────────────────────────────────────── */
+body {
+  background: linear-gradient(135deg, #E8F5EE 0%, #F2F6F3 50%, #EBF5F0 100%);
+  min-height: 100vh;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GLASSMORPHISM UTILITIES
+   ══════════════════════════════════════════════════════════════════════════ */
 @layer utilities {
-  .animate-in {
-    animation-duration: 500ms;
+
+  /* ── Glass card — main content card ─────────────────────────────────────── */
+  .glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 4px 24px rgba(27, 67, 50, 0.07), 0 1px 4px rgba(0,0,0,0.04);
+  }
+
+  /* ── Glass card — elevated/hero variant ─────────────────────────────────── */
+  .glass-elevated {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 8px 40px rgba(27, 67, 50, 0.10), 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  /* ── Glass panel — dark forest for hero sections ─────────────────────────── */
+  .glass-dark {
+    background: rgba(27, 67, 50, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+
+  /* ── Sidebar (white, full-height) ────────────────────────────────────────── */
+  .glass-sidebar {
+    background: #FFFFFF;
+    border-right: 1px solid #E8EEEB;
+    box-shadow: 2px 0 16px rgba(27, 67, 50, 0.05);
+  }
+
+  /* ── Header ──────────────────────────────────────────────────────────────── */
+  .glass-header {
+    background: rgba(255, 255, 255, 0.80);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(232, 238, 235, 0.8);
+    box-shadow: 0 1px 8px rgba(27, 67, 50, 0.05);
+  }
+
+  /* ── Input ───────────────────────────────────────────────────────────────── */
+  .glass-input {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(232, 238, 235, 1);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .glass-input:focus {
+    outline: none;
+    border-color: #52B788;
+    box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.18);
+    background: rgba(255,255,255,0.95);
+  }
+
+  /* ── Status badge utilities ──────────────────────────────────────────────── */
+  .badge-success { background:#DCFCE7; color:#166534; border:1px solid #BBF7D0; }
+  .badge-warning { background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; }
+  .badge-danger  { background:#FEE2E2; color:#991B1B; border:1px solid #FECACA; }
+  .badge-info    { background:#DBEAFE; color:#1E3A8A; border:1px solid #BFDBFE; }
+  .badge-muted   { background:#F3F4F6; color:#4B5563; border:1px solid #E5E7EB; }
+  .badge-primary { background:#1B4332; color:#FFFFFF; border:1px solid #1B4332; }
+
+  /* ── Animations ──────────────────────────────────────────────────────────── */
+  .animate-in   { animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); animation-fill-mode: forwards; }
+  .fade-in      { animation-name: fadeIn; animation-duration: 350ms; }
+  .zoom-in      { animation-name: zoomIn; animation-duration: 350ms; }
+  .zoom-in-95   { animation-name: zoomIn95; animation-duration: 250ms; }
+  .slide-in-from-top-2 { animation-name: slideInTop; animation-duration: 200ms; }
+  .slide-in-from-bottom-4 { animation-name: slideInBottom; animation-duration: 350ms; }
+  .duration-200 { animation-duration: 200ms; }
+  .duration-300 { animation-duration: 300ms; }
+  .duration-500 { animation-duration: 500ms; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes zoomIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes zoomIn95 {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slideInTop {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideInBottom {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Thin scrollbar ──────────────────────────────────────────────────────── */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(27, 67, 50, 0.12) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(27, 67, 50, 0.15);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(27, 67, 50, 0.30);
+  }
+
+  /* ── Pulse dot ───────────────────────────────────────────────────────────── */
+  .pulse-dot {
+    animation: pulseDot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes pulseDot {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  /* ── Slide-in from right (settings panel) ───────────────────────────────── */
+  .slide-in-from-right {
+    animation-name: slideInRight;
+    animation-duration: 280ms;
     animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     animation-fill-mode: forwards;
   }
-
-  .fade-in {
-    animation-name: fadeIn;
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(24px); }
+    to   { opacity: 1; transform: translateX(0); }
   }
+}
 
-  .zoom-in {
-    animation-name: zoomIn;
-  }
+/* ═══════════════════════════════════════════════════════════════════════════
+   FONT CLASSES  (applied to <html> by SettingsContext)
+   ══════════════════════════════════════════════════════════════════════════ */
 
-  .slide-in-from-bottom-4 {
-    animation-name: slideInBottom;
-  }
+/* Inter — default, already loaded via Google Fonts */
+html.font-inter,
+html.font-inter body {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
 
-  .zoom-in-95 {
-    animation-name: zoomIn95;
-  }
+/* System UI — OS-native feel, "Claude-like" */
+html.font-system,
+html.font-system body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+               Arial, sans-serif;
+}
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
+/* Serif — Georgia / Times New Roman fallback */
+html.font-serif-custom,
+html.font-serif-custom body {
+  font-family: "Georgia", "Times New Roman", Times, serif;
+}
 
-    to {
-      opacity: 1;
-    }
-  }
+/* Mono — JetBrains Mono, loaded above */
+html.font-mono-custom,
+html.font-mono-custom body {
+  font-family: "JetBrains Mono", "Courier New", Courier, monospace;
+}
 
-  @keyframes zoomIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE  (applied as .dark on <html> by SettingsContext)
+   ══════════════════════════════════════════════════════════════════════════ */
 
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
+html.dark {
+  color-scheme: dark;
+}
 
-  @keyframes zoomIn95 {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
+html.dark body {
+  background: linear-gradient(135deg, #0D1F14 0%, #111816 50%, #0F1A12 100%);
+}
 
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
+/* Dark surface overrides */
+html.dark .glass {
+  background: rgba(18, 32, 22, 0.80);
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.30);
+}
 
-  @keyframes slideInBottom {
-    from {
-      opacity: 0;
-      transform: translateY(1rem);
-    }
+html.dark .glass-elevated {
+  background: rgba(22, 38, 28, 0.92);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.40);
+}
 
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+html.dark .glass-sidebar {
+  background: #0F1A12;
+  border-right-color: rgba(255, 255, 255, 0.06);
+}
+
+html.dark .glass-header {
+  background: rgba(13, 25, 17, 0.85);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+html.dark .glass-input {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: #E2F0E8;
+}
+
+html.dark .glass-input:focus {
+  border-color: #52B788;
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.22);
+}
+
+/* Dark text overrides via CSS custom properties */
+html.dark {
+  --color-heading:    #E2F0E8;
+  --color-body:       #B0C4B8;
+  --color-muted:      #6B8A76;
+  --color-muted-light:#4A6355;
+  --color-surface:    #111A14;
+  --color-surface-2:  #182318;
+  --color-sidebar-border: rgba(255,255,255,0.07);
+  --color-lime-soft:  rgba(82, 183, 136, 0.12);
+  --color-lime-border:rgba(82, 183, 136, 0.22);
+}
+
+html.dark .text-heading { color: #E2F0E8; }
+html.dark .text-body    { color: #B0C4B8; }
+html.dark .text-muted   { color: #6B8A76; }
+
+html.dark .bg-surface   { background-color: #111A14; }
+html.dark .bg-surface-2 { background-color: #182318; }
+html.dark .bg-white     { background-color: #1A2920; }
+
+html.dark .border-sidebar-border { border-color: rgba(255,255,255,0.07); }
+
+/* Dark sidebar nav active state */
+html.dark .bg-lime-soft  { background-color: rgba(82,183,136,0.12); }
+html.dark .border-lime-border { border-color: rgba(82,183,136,0.22); }
+
+/* Dark scrollbar */
+html.dark .scrollbar-thin {
+  scrollbar-color: rgba(82, 183, 136, 0.15) transparent;
+}
+html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(82, 183, 136, 0.15);
+}
+html.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(82, 183, 136, 0.30);
 }

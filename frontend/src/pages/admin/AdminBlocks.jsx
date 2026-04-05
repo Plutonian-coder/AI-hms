@@ -81,16 +81,16 @@ export default function AdminBlocks() {
     const { hostel_name, blocks } = data || {};
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-350">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <button onClick={() => navigate('/admin/hostels')}
-                        className="p-2 rounded-xl bg-white border border-black/5 hover:bg-cream transition-colors"
+                        className="p-2 rounded-xl bg-white border border-black/5 hover:bg-surface transition-colors"
                     ><ArrowLeft className="w-5 h-5 text-muted" /></button>
                     <div>
                         <p className="text-xs font-bold text-muted uppercase tracking-widest">Hostel</p>
-                        <h1 className="text-3xl font-extrabold text-heading tracking-tight">{hostel_name}</h1>
+                        <h1 className="text-2xl font-extrabold text-heading tracking-tight">{hostel_name}</h1>
                     </div>
                 </div>
                 <button onClick={() => setShowBlockForm(!showBlockForm)}
@@ -109,14 +109,14 @@ export default function AdminBlocks() {
                             <label className="block text-xs font-bold text-muted uppercase tracking-widest mb-2">Block Name</label>
                             <input required value={blockName} onChange={e => setBlockName(e.target.value)}
                                 placeholder="e.g. Block A, Wing 1"
-                                className="w-full bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
+                                className="w-full glass-input text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
                             />
                         </div>
                         <button type="submit" disabled={submitting}
                             className={`bg-lime text-forest px-6 py-3.5 rounded-full font-bold shadow-lg shadow-lime/25 transition-all whitespace-nowrap ${submitting ? 'opacity-70' : 'hover:bg-lime-hover hover:scale-[1.02]'}`}
                         >{submitting ? 'Creating...' : 'Create Block'}</button>
                         <button type="button" onClick={() => setShowBlockForm(false)}
-                            className="bg-cream text-heading px-6 py-3.5 rounded-full font-bold hover:bg-black/5 transition-colors"
+                            className="bg-surface text-heading px-6 py-3.5 rounded-full font-bold hover:bg-black/5 transition-colors"
                         >Cancel</button>
                     </form>
                 </div>
@@ -136,14 +136,14 @@ export default function AdminBlocks() {
                                 <label className="block text-xs font-bold text-muted uppercase tracking-widest mb-2">Number of Rooms</label>
                                 <input type="number" min="4" max="50" required value={numRooms}
                                     onChange={e => setNumRooms(Math.max(4, Math.min(50, parseInt(e.target.value) || 4)))}
-                                    className="w-full bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium"
+                                    className="w-full glass-input text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium"
                                 />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-muted uppercase tracking-widest mb-2">Beds per Room</label>
                                 <input type="number" min="1" max="8" required value={bedsPerRoom}
                                     onChange={e => setBedsPerRoom(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
-                                    className="w-full bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium"
+                                    className="w-full glass-input text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium"
                                 />
                             </div>
                         </div>
@@ -158,7 +158,7 @@ export default function AdminBlocks() {
                                 className={`bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 transition-all ${submitting ? 'opacity-70' : 'hover:bg-lime-hover hover:scale-[1.02]'}`}
                             >{submitting ? 'Generating...' : 'Generate Bed Spaces'}</button>
                             <button type="button" onClick={() => setShowGenForm(null)}
-                                className="bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                                className="bg-surface text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
                             >Cancel</button>
                         </div>
                     </form>
@@ -188,7 +188,7 @@ export default function AdminBlocks() {
                                         {block.status === 'active' ? 'Active' : 'Maintenance'}
                                     </span>
                                     <button onClick={() => toggleBlockStatus(block)}
-                                        className="text-xs font-bold text-muted px-3 py-1.5 rounded-xl bg-cream hover:bg-black/5 transition-colors"
+                                        className="text-xs font-bold text-muted px-3 py-1.5 rounded-xl bg-surface hover:bg-black/5 transition-colors"
                                     >{block.status === 'active' ? 'Set Maintenance' : 'Reactivate'}</button>
                                     <button onClick={() => setShowGenForm(block.id)}
                                         className="flex items-center gap-1.5 text-xs font-bold text-forest bg-lime/20 hover:bg-lime/40 px-3 py-1.5 rounded-xl transition-colors"
@@ -201,7 +201,7 @@ export default function AdminBlocks() {
 
                             {/* Capacity bar */}
                             <div className="px-6 pb-4">
-                                <div className="w-full h-2 bg-cream rounded-full overflow-hidden">
+                                <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
                                     <div className={`h-full rounded-full transition-all duration-500 ${block.total_beds > 0 && (block.occupied_beds / block.total_beds) > 0.8 ? 'bg-red-400' : 'bg-lime'}`}
                                         style={{ width: block.total_beds > 0 ? `${Math.round((block.occupied_beds / block.total_beds) * 100)}%` : '0%' }}
                                     />
@@ -210,7 +210,7 @@ export default function AdminBlocks() {
 
                             {/* Expanded rooms list */}
                             {expandedBlock === block.id && rooms && (
-                                <div className="border-t border-black/5 bg-cream/40 divide-y divide-black/5">
+                                <div className="border-t border-black/5 bg-surface/40 divide-y divide-black/5">
                                     {rooms.rooms?.length === 0 && (
                                         <p className="text-center text-muted text-sm font-medium py-6">No rooms yet. Click "Generate Rooms" to create some.</p>
                                     )}
@@ -237,8 +237,8 @@ export default function AdminBlocks() {
                     ))}
                 </div>
             ) : (
-                <div className="bg-white rounded-3xl shadow-sm border border-black/5 p-12 text-center">
-                    <div className="bg-cream rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <div className="glass rounded-2xl p-12 text-center">
+                    <div className="bg-surface rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                         <Layers className="w-8 h-8 text-muted" />
                     </div>
                     <p className="text-muted font-medium">No blocks yet. Click "+ Add Block" to create the first block for {hostel_name}.</p>

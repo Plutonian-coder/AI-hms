@@ -94,14 +94,14 @@ export default function AdminAllocations() {
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading...</div>;
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-350">
             <div>
-                <h1 className="text-3xl font-extrabold text-heading tracking-tight">Allocation Management</h1>
+                <h1 className="text-2xl font-extrabold text-heading tracking-tight">Allocation Management</h1>
                 <p className="text-muted mt-2 font-medium">View eligible students, active allocations, and checkout history.</p>
             </div>
 
             {/* Search */}
-            <div className="bg-white rounded-3xl shadow-sm border border-black/5 p-4">
+            <div className="glass rounded-2xl p-4">
                 <div className="flex items-center gap-3">
                     <Search className="w-5 h-5 text-muted shrink-0" />
                     <input
@@ -143,7 +143,7 @@ export default function AdminAllocations() {
                             </button>
                             <button
                                 onClick={() => setConfirmRevoke(null)}
-                                className="flex-1 bg-cream text-heading px-5 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                                className="flex-1 bg-surface text-heading px-5 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
                             >
                                 Cancel
                             </button>
@@ -153,10 +153,10 @@ export default function AdminAllocations() {
             )}
 
             {/* Tabs + Content */}
-            <div className="bg-white rounded-3xl shadow-sm border border-black/5 overflow-hidden">
+            <div className="glass rounded-2xl overflow-hidden">
                 {/* Tab Bar */}
                 <div className="px-6 pt-5 pb-0 border-b border-black/5">
-                    <div className="flex gap-1 bg-cream rounded-full p-1 inline-flex">
+                    <div className="flex gap-1 bg-surface rounded-full p-1 inline-flex">
                         {TABS.map(tab => {
                             const Icon = tab.icon;
                             const isActive = activeTab === tab.key;
@@ -188,7 +188,7 @@ export default function AdminAllocations() {
                         <div className="hidden md:block overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b border-black/5 bg-cream/50">
+                                    <tr className="border-b border-black/5 bg-surface/50">
                                         <th className="w-10"></th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
@@ -248,7 +248,7 @@ export default function AdminAllocations() {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-lime/10 text-lime">{s.level || '—'}</span>
-                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">{s.department || '—'}</span>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-surface text-body">{s.department || '—'}</span>
                                     </div>
                                     {expandedRow === s.id && (
                                         <DocumentPanel docs={studentDocs[s.id]} loading={docLoading && expandedRow === s.id} />
@@ -270,7 +270,7 @@ export default function AdminAllocations() {
                         <div className="hidden md:block overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b border-black/5 bg-cream/50">
+                                    <tr className="border-b border-black/5 bg-surface/50">
                                         <th className="w-10"></th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
@@ -342,7 +342,7 @@ export default function AdminAllocations() {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-forest/5 text-forest">{a.hostel_name}</span>
-                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">Room {a.room_number}</span>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-surface text-body">Room {a.room_number}</span>
                                         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-lime/10 text-lime">Bed {a.bed_number}</span>
                                     </div>
                                     {expandedRow === a.student_id && (
@@ -365,7 +365,7 @@ export default function AdminAllocations() {
                         <div className="hidden md:block overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b border-black/5 bg-cream/50">
+                                    <tr className="border-b border-black/5 bg-surface/50">
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Hostel / Room</th>
@@ -377,7 +377,7 @@ export default function AdminAllocations() {
                                 </thead>
                                 <tbody>
                                     {filteredCheckouts.map(c => (
-                                        <tr key={c.id} className="border-b border-black/5 hover:bg-cream/50 transition-colors">
+                                        <tr key={c.id} className="border-b border-black/5 hover:bg-surface/50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-9 h-9 rounded-full bg-forest text-lime font-bold flex items-center justify-center text-xs shrink-0">{c.full_name.charAt(0)}</div>
@@ -395,7 +395,7 @@ export default function AdminAllocations() {
                                                     c.checkout_type === 'admin_revocation' ? 'bg-red-50 text-red-700' :
                                                     c.checkout_type === 'session_expiry' ? 'bg-amber-50 text-amber-700' :
                                                     c.checkout_type === 'graduation' ? 'bg-lime/10 text-lime' :
-                                                    'bg-cream text-body'
+                                                    'bg-surface text-body'
                                                 }`}>
                                                     {c.checkout_type.replace(/_/g, ' ')}
                                                 </span>
@@ -431,7 +431,7 @@ export default function AdminAllocations() {
                                         }`}>
                                             {c.checkout_type.replace(/_/g, ' ')}
                                         </span>
-                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cream text-body">{c.hostel_name}</span>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-surface text-body">{c.hostel_name}</span>
                                     </div>
                                 </div>
                             ))}
@@ -455,7 +455,7 @@ function ExpandableStudentRow({ isExpanded, onToggle, docs, docLoading, colSpan,
     return (
         <>
             <tr
-                className="border-b border-black/5 hover:bg-cream/50 transition-colors cursor-pointer"
+                className="border-b border-black/5 hover:bg-surface/50 transition-colors cursor-pointer"
                 onClick={onToggle}
             >
                 <td className="pl-4 py-4">
@@ -467,7 +467,7 @@ function ExpandableStudentRow({ isExpanded, onToggle, docs, docLoading, colSpan,
             </tr>
             {isExpanded && (
                 <tr className="border-b border-black/5">
-                    <td colSpan={colSpan} className="px-6 py-4 bg-cream/30">
+                    <td colSpan={colSpan} className="px-6 py-4 bg-surface/30">
                         <DocumentPanel docs={docs} loading={docLoading} />
                     </td>
                 </tr>

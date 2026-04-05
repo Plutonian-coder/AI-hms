@@ -1,39 +1,54 @@
 import { useState } from 'react';
 import apiClient from '../api/client';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Search, CheckCircle, Loader2, Building2, ArrowRight } from 'lucide-react';
 
 export default function Register() {
+    const [step, setStep] = useState('verify'); // 'verify' | 'form'
+    const [matric, setMatric] = useState('');
+    const [verifying, setVerifying] = useState(false);
+    const [verifyError, setVerifyError] = useState('');
+    const [studentInfo, setStudentInfo] = useState(null);
+
     const [formData, setFormData] = useState({
-        identifier: '',
-        surname: '',
-        first_name: '',
-        gender: 'male',
-        password: '',
-        email: '',
-        department: '',
-        level: '',
-        study_mode: 'full_time',
-        phone: '',
-        next_of_kin_name: '',
-        next_of_kin_phone: '',
-        role: 'student'
+        password: '', email: '', phone: '', next_of_kin_name: '', next_of_kin_phone: '',
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const navigate = useNavigate();
 
+    const handleVerifyMatric = async (e) => {
+        e.preventDefault();
+        setVerifyError('');
+        setVerifying(true);
+        try {
+            const res = await apiClient.get(`/auth/verify-matric?matric=${encodeURIComponent(matric.trim())}`);
+            setStudentInfo(res.data);
+            setStep('form');
+        } catch (err) {
+            setVerifyError(err.response?.data?.detail || 'Matric number not found in session register. Contact Student Affairs.');
+        } finally {
+            setVerifying(false);
+        }
+    };
+
     const handleRegister = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-
         try {
-            const res = await apiClient.post('/auth/register', formData);
+            const res = await apiClient.post('/auth/register', {
+                identifier: matric.trim(),
+                password: formData.password,
+                email: formData.email || undefined,
+                phone: formData.phone || undefined,
+                next_of_kin_name: formData.next_of_kin_name || undefined,
+                next_of_kin_phone: formData.next_of_kin_phone || undefined,
+            });
             localStorage.setItem('access_token', res.data.access_token);
             localStorage.setItem('user', JSON.stringify(res.data));
-            navigate(res.data.role === 'admin' ? '/admin' : '/');
+            navigate('/');
         } catch (err) {
             setError(err.response?.data?.detail || 'An error occurred during registration');
         } finally {
@@ -41,138 +56,176 @@ export default function Register() {
         }
     };
 
-    const handleChange = (e) => {
-        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    };
-
-    const inputClass = "w-full bg-white/10 border border-white/10 text-white rounded-xl focus:ring-lime focus:border-lime block p-3.5 font-medium transition-colors placeholder:text-white/30";
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
     return (
-        <div className="flex bg-cream min-h-screen items-center justify-center p-6 py-12">
-            <div className="max-w-lg w-full animate-in zoom-in-95 duration-300">
-                <div className="bg-forest rounded-3xl shadow-2xl p-8 sm:p-10">
-                    <div className="text-center mb-8">
-                        <h2 className="text-3xl font-black text-white tracking-tight">Student Signup</h2>
-                        <p className="text-white/50 font-medium text-sm mt-2">Create an account to participate in hostel allocation</p>
+        <div
+            className="min-h-screen flex items-center justify-center p-5 py-10"
+            style={{ background: 'linear-gradient(135deg, #D8F3DC 0%, #E8F5EE 30%, #B7E4C7 60%, #D8F3DC 100%)' }}
+        >
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-40 -right-40 w-96 h-96 bg-forest/8 rounded-full blur-3xl" />
+                <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-lime/10 rounded-full blur-3xl" />
+            </div>
+
+            <div className="relative w-full max-w-lg animate-in zoom-in duration-300">
+                <div className="glass-elevated rounded-3xl p-8 sm:p-10">
+                    {/* Logo */}
+                    <div className="flex flex-col items-center mb-7">
+                        <div className="w-13 h-13 rounded-2xl bg-forest flex items-center justify-center shadow-lg mb-3">
+                            <Building2 className="w-6 h-6 text-lime" />
+                        </div>
+                        <h1 className="text-2xl font-black text-heading tracking-tight">Student Registration</h1>
+                        <p className="text-sm text-muted font-medium mt-1">
+                            {step === 'verify' ? 'Verify your matric number to begin' : 'Complete your account setup'}
+                        </p>
                     </div>
 
-                    {error && (
-                        <div className="mb-6 p-4 rounded-xl bg-red-500/15 border border-red-500/20 text-red-300 text-sm font-bold text-center">
-                            {error}
-                        </div>
+                    {/* Step 1: Matric verification */}
+                    {step === 'verify' && (
+                        <>
+                            {verifyError && (
+                                <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold text-center">
+                                    {verifyError}
+                                </div>
+                            )}
+                            <form onSubmit={handleVerifyMatric} className="space-y-5">
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-muted uppercase tracking-widest">Matric Number</label>
+                                    <input
+                                        required
+                                        className="glass-input w-full rounded-xl px-4 py-3 text-sm font-medium text-heading placeholder:text-muted-light"
+                                        value={matric}
+                                        onChange={e => setMatric(e.target.value)}
+                                        placeholder="e.g. FPT/CSC/25/0130902"
+                                    />
+                                    <p className="text-xs text-muted font-medium">Must be on the current session register.</p>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={verifying || !matric.trim()}
+                                    className={`w-full flex items-center justify-center gap-2 bg-forest text-white rounded-xl px-5 py-3.5 text-sm font-bold shadow-lg shadow-forest/20 transition-all ${
+                                        verifying ? 'opacity-70' : 'hover:bg-forest-hover hover:scale-[1.01]'
+                                    }`}
+                                >
+                                    {verifying
+                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
+                                        : <><Search className="w-4 h-4" /> Verify Matric Number</>
+                                    }
+                                </button>
+                            </form>
+                        </>
                     )}
 
-                    <form onSubmit={handleRegister} className="space-y-5">
-                        <div>
-                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Matric No.</label>
-                            <input name="identifier" required className={inputClass} value={formData.identifier} onChange={handleChange} placeholder="F/ND/..." />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Surname</label>
-                                <input name="surname" required className={inputClass} value={formData.surname} onChange={handleChange} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">First Name</label>
-                                <input name="first_name" required className={inputClass} value={formData.first_name} onChange={handleChange} />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Email Address</label>
-                            <input name="email" type="email" className={inputClass} value={formData.email} onChange={handleChange} placeholder="student@email.com" />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Gender</label>
-                                <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Level</label>
-                                <select name="level" value={formData.level} onChange={handleChange} className={inputClass}>
-                                    <option value="">Select Level</option>
-                                    <option value="ND1">ND1</option>
-                                    <option value="ND2">ND2</option>
-                                    <option value="HND1">HND1</option>
-                                    <option value="HND2">HND2</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Study Mode</label>
-                                <select name="study_mode" value={formData.study_mode} onChange={handleChange} className={inputClass}>
-                                    <option value="full_time">Full Time</option>
-                                    <option value="part_time">Part Time</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Department</label>
-                                <input name="department" className={inputClass} value={formData.department} onChange={handleChange} placeholder="e.g. Computer Science" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Phone Number</label>
-                            <input name="phone" type="tel" className={inputClass} value={formData.phone} onChange={handleChange} placeholder="08012345678" />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Secure Password</label>
-                            <div className="relative">
-                                <input
-                                    name="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    required
-                                    className={inputClass + ' pr-12'}
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    placeholder="Min 8 characters"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
-                                >
-                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {/* Step 2: Registration form */}
+                    {step === 'form' && studentInfo && (
+                        <>
+                            {/* Verified badge */}
+                            <div className="mb-5 px-4 py-3 rounded-xl bg-lime-soft border border-lime-border flex items-center gap-3">
+                                <CheckCircle className="w-5 h-5 text-forest shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-forest">Identity Verified</p>
+                                    <p className="text-xs text-muted font-medium font-mono mt-0.5 truncate">{matric}</p>
+                                </div>
+                                <button onClick={() => { setStep('verify'); setStudentInfo(null); }} className="text-xs font-bold text-muted hover:text-heading transition-colors shrink-0">
+                                    Change
                                 </button>
                             </div>
-                        </div>
 
-                        <div className="border-t border-white/10 pt-5 mt-2">
-                            <p className="text-xs font-bold text-white/30 uppercase tracking-widest mb-4">Next of Kin</p>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Full Name</label>
-                                    <input name="next_of_kin_name" className={inputClass} value={formData.next_of_kin_name} onChange={handleChange} placeholder="Parent/Guardian name" />
+                            {error && (
+                                <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold text-center">
+                                    {error}
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Phone</label>
-                                    <input name="next_of_kin_phone" type="tel" className={inputClass} value={formData.next_of_kin_phone} onChange={handleChange} placeholder="08012345678" />
+                            )}
+
+                            {/* Auto-populated read-only fields */}
+                            <div className="mb-5 p-4 rounded-2xl bg-surface-2 border border-sidebar-border space-y-3">
+                                <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em]">From Session Register</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <InfoRow label="Surname" value={studentInfo.surname} />
+                                    <InfoRow label="First Name" value={studentInfo.first_name} />
                                 </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <InfoRow label="Gender" value={studentInfo.gender?.charAt(0).toUpperCase() + studentInfo.gender?.slice(1)} />
+                                    <InfoRow label="Level" value={studentInfo.level} />
+                                    <InfoRow label="Type" value={studentInfo.study_type} />
+                                </div>
+                                <InfoRow label="Department" value={studentInfo.department} />
                             </div>
-                        </div>
 
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className={`w-full mt-4 text-forest bg-lime hover:bg-lime-hover focus:ring-4 focus:outline-none focus:ring-lime/30 font-black rounded-full text-lg px-5 py-4 text-center shadow-lg shadow-lime/25 transition-all ${loading ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
-                        >
-                            {loading ? 'Creating Account...' : 'Continue'}
-                        </button>
-                    </form>
+                            <form onSubmit={handleRegister} className="space-y-4">
+                                <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em]">Your Details</p>
 
-                    <p className="text-sm font-medium text-white/40 text-center mt-8">
-                        Already registered? <Link to="/login" className="text-lime hover:text-lime-hover font-bold tracking-tight">Sign In</Link>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <FormField label="Email" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="student@email.com" />
+                                    <FormField label="Phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} placeholder="08012345678" />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-muted uppercase tracking-widest">Password</label>
+                                    <div className="relative">
+                                        <input
+                                            name="password" type={showPassword ? 'text' : 'password'} required
+                                            className="glass-input w-full rounded-xl px-4 py-3 pr-11 text-sm font-medium text-heading placeholder:text-muted-light"
+                                            value={formData.password} onChange={handleChange} placeholder="Min 8 characters"
+                                        />
+                                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-light hover:text-muted transition-colors">
+                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em] pt-1">Next of Kin</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <FormField label="Full Name" name="next_of_kin_name" value={formData.next_of_kin_name} onChange={handleChange} placeholder="Guardian name" />
+                                    <FormField label="Phone" name="next_of_kin_phone" type="tel" value={formData.next_of_kin_phone} onChange={handleChange} placeholder="08012345678" />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className={`w-full mt-2 flex items-center justify-center gap-2 bg-forest text-white rounded-xl px-5 py-3.5 text-sm font-bold shadow-lg shadow-forest/20 transition-all ${
+                                        loading ? 'opacity-70 scale-[0.98]' : 'hover:bg-forest-hover hover:scale-[1.01]'
+                                    }`}
+                                >
+                                    {loading ? 'Creating Account…' : <><ArrowRight className="w-4 h-4" /> Create Account</>}
+                                </button>
+                            </form>
+                        </>
+                    )}
+
+                    <p className="text-center text-xs text-muted font-medium mt-6">
+                        Already registered?{' '}
+                        <Link to="/login" className="font-bold text-forest hover:text-forest-light transition-colors">Sign in</Link>
                     </p>
                 </div>
+
+                <p className="text-center text-[11px] text-muted/70 font-medium mt-5">
+                    AI-Driven Hostel Management System · Federal University Oye-Ekiti
+                </p>
             </div>
+        </div>
+    );
+}
+
+function InfoRow({ label, value }) {
+    return (
+        <div>
+            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-0.5">{label}</p>
+            <p className="text-sm font-semibold text-heading">{value || '—'}</p>
+        </div>
+    );
+}
+
+function FormField({ label, name, type = 'text', value, onChange, placeholder }) {
+    return (
+        <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-muted uppercase tracking-widest">{label}</label>
+            <input
+                name={name} type={type} value={value} onChange={onChange} placeholder={placeholder}
+                className="glass-input w-full rounded-xl px-4 py-3 text-sm font-medium text-heading placeholder:text-muted-light"
+            />
         </div>
     );
 }

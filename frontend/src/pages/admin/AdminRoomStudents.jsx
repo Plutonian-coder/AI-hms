@@ -36,17 +36,17 @@ export default function AdminRoomStudents() {
     const { room_number, room_status, block_name, hostel_name, total_beds, occupied_beds, vacant_beds, students } = data;
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-350">
             {/* Breadcrumb + back */}
             <div className="flex items-center gap-3">
                 <button onClick={() => navigate(-1)}
-                    className="p-2 rounded-xl bg-white border border-black/5 hover:bg-cream transition-colors"
+                    className="p-2 rounded-xl bg-white border border-black/5 hover:bg-surface transition-colors"
                 ><ArrowLeft className="w-5 h-5 text-muted" /></button>
                 <div>
                     <p className="text-xs font-bold text-muted uppercase tracking-widest">
                         {hostel_name} › {block_name}
                     </p>
-                    <h1 className="text-3xl font-extrabold text-heading tracking-tight">Room {room_number}</h1>
+                    <h1 className="text-2xl font-extrabold text-heading tracking-tight">Room {room_number}</h1>
                 </div>
             </div>
 
@@ -57,8 +57,8 @@ export default function AdminRoomStudents() {
                     { label: 'Occupied',   value: occupied_beds, icon: Users, color: 'text-amber-600' },
                     { label: 'Vacant',     value: vacant_beds,  icon: BedDouble, color: vacant_beds > 0 ? 'text-lime' : 'text-red-500' },
                 ].map(stat => (
-                    <div key={stat.label} className="bg-white rounded-2xl shadow-sm border border-black/5 p-5 flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-cream flex items-center justify-center">
+                    <div key={stat.label} className="glass rounded-2xl p-5 flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-surface flex items-center justify-center">
                             <stat.icon className={`w-5 h-5 ${stat.color}`} />
                         </div>
                         <div>
@@ -70,19 +70,19 @@ export default function AdminRoomStudents() {
             </div>
 
             {/* Occupancy bar */}
-            <div className="bg-white rounded-2xl shadow-sm border border-black/5 p-5">
+            <div className="glass rounded-2xl p-5">
                 <div className="flex justify-between text-xs font-bold text-muted uppercase tracking-widest mb-2">
                     <span>Room Occupancy</span>
                     <span>{total_beds > 0 ? Math.round((occupied_beds / total_beds) * 100) : 0}%</span>
                 </div>
-                <div className="w-full h-3 bg-cream rounded-full overflow-hidden">
+                <div className="w-full h-3 bg-surface rounded-full overflow-hidden">
                     <div className="h-full bg-lime rounded-full transition-all duration-700"
                         style={{ width: total_beds > 0 ? `${(occupied_beds / total_beds) * 100}%` : '0%' }} />
                 </div>
             </div>
 
             {/* Student Table */}
-            <div className="bg-white rounded-3xl shadow-sm border border-black/5 overflow-hidden">
+            <div className="glass rounded-2xl overflow-hidden">
                 <div className="px-6 py-5 border-b border-black/5 flex items-center justify-between">
                     <h2 className="text-lg font-bold text-heading flex items-center gap-2">
                         <Users className="w-5 h-5 text-muted" />
@@ -95,7 +95,7 @@ export default function AdminRoomStudents() {
 
                 {students.length === 0 ? (
                     <div className="p-12 text-center">
-                        <div className="w-16 h-16 bg-cream rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="w-16 h-16 bg-surface rounded-full flex items-center justify-center mx-auto mb-4">
                             <BedDouble className="w-8 h-8 text-muted" />
                         </div>
                         <p className="text-muted font-medium">No students currently allocated to this room.</p>
@@ -119,7 +119,7 @@ export default function AdminRoomStudents() {
                                     const pCfg = PAYMENT_CONFIG[student.payment_status] || PAYMENT_CONFIG.pending;
                                     const PIcon = pCfg.icon;
                                     return (
-                                        <tr key={student.student_id} className="hover:bg-cream/40 transition-colors">
+                                        <tr key={student.student_id} className="hover:bg-surface/40 transition-colors">
                                             <td className="px-6 py-4">
                                                 <span className="w-8 h-8 flex items-center justify-center bg-forest text-lime font-black text-sm rounded-lg">
                                                     {student.bed_number}

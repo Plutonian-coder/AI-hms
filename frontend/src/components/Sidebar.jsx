@@ -1,14 +1,20 @@
 import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShieldCheck, CreditCard, CheckSquare, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, FileText, CreditCard, ClipboardCheck, BedDouble, LogOut, X, Building2 } from 'lucide-react';
+
+const NAV_ITEMS = [
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/apply', label: 'Apply', icon: FileText },
+    { to: '/payment', label: 'Payment', icon: CreditCard },
+    { to: '/quiz', label: 'Compatibility Quiz', icon: ClipboardCheck },
+    { to: '/my-allocation', label: 'My Allocation', icon: BedDouble },
+];
 
 export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
     const { pathname } = useLocation();
 
-    useEffect(() => {
-        onClose();
-    }, [pathname, onClose]);
+    useEffect(() => { onClose(); }, [pathname, onClose]);
 
     const handleSignOut = () => {
         localStorage.removeItem('access_token');
@@ -16,67 +22,76 @@ export default function Sidebar({ isOpen, onClose }) {
         navigate('/login');
     };
 
-    const navItemClass = (isActive) =>
-        `flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${isActive
-            ? 'bg-lime/15 text-lime border-l-2 border-lime'
-            : 'text-white/60 hover:text-white hover:bg-white/5'
-        }`;
+    const NavItem = ({ item }) => (
+        <NavLink
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                    isActive
+                        ? 'bg-lime-soft text-forest border border-lime-border'
+                        : 'text-muted hover:text-heading hover:bg-surface-2'
+                }`
+            }
+        >
+            {({ isActive }) => (
+                <>
+                    <item.icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-forest' : 'text-muted-light'}`} />
+                    {item.label}
+                </>
+            )}
+        </NavLink>
+    );
 
-    const sidebarContent = (showClose) => (
-        <>
-            <div className={`p-6 border-b border-white/10 flex items-center ${showClose ? 'justify-between' : 'justify-center'}`}>
-                <h1 className="text-xl font-bold text-white tracking-tight">HMS</h1>
+    const SidebarContent = ({ showClose }) => (
+        <div className="flex flex-col h-full">
+            {/* Logo */}
+            <div className="px-5 py-5 border-b border-sidebar-border flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-forest flex items-center justify-center shadow-sm">
+                        <Building2 className="w-5 h-5 text-lime" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-black text-heading tracking-tight leading-none">HMS</p>
+                        <p className="text-[10px] text-muted font-medium mt-0.5">Student Portal</p>
+                    </div>
+                </div>
                 {showClose && (
-                    <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
-                        <X className="w-5 h-5" />
+                    <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-heading hover:bg-surface-2 transition-colors">
+                        <X className="w-4 h-4" />
                     </button>
                 )}
             </div>
 
-            <nav className="flex-1 px-4 py-6 space-y-2">
-                <NavLink to="/" end className={({ isActive }) => navItemClass(isActive)}>
-                    <LayoutDashboard className="w-5 h-5" />
-                    Dashboard
-                </NavLink>
-
-                <NavLink to="/eligibility" className={({ isActive }) => navItemClass(isActive)}>
-                    <ShieldCheck className="w-5 h-5" />
-                    Eligibility
-                </NavLink>
-
-                <NavLink to="/payment" className={({ isActive }) => navItemClass(isActive)}>
-                    <CreditCard className="w-5 h-5" />
-                    Payment
-                </NavLink>
-
-                <NavLink to="/my-allocation" className={({ isActive }) => navItemClass(isActive)}>
-                    <CheckSquare className="w-5 h-5" />
-                    My Allocation
-                </NavLink>
+            {/* Nav */}
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
+                <p className="text-[10px] font-bold text-muted-light uppercase tracking-[0.15em] px-3 mb-2">Main</p>
+                {NAV_ITEMS.map(item => <NavItem key={item.to} item={item} />)}
             </nav>
 
-            <div className="p-4 border-t border-white/10">
+            {/* Sign out */}
+            <div className="px-3 py-4 border-t border-sidebar-border shrink-0">
                 <button
                     onClick={handleSignOut}
-                    className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg font-medium text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-semibold text-muted hover:text-danger hover:bg-danger-bg transition-all duration-150"
                 >
-                    <LogOut className="w-5 h-5" />
+                    <LogOut className="w-4.5 h-4.5 shrink-0" />
                     Sign Out
                 </button>
             </div>
-        </>
+        </div>
     );
 
     return (
         <>
             {/* Desktop — always visible */}
-            <div className="hidden lg:flex w-64 flex-shrink-0 bg-forest h-full flex-col">
-                {sidebarContent(false)}
+            <div className="hidden lg:flex w-64 flex-shrink-0 glass-sidebar h-full flex-col">
+                <SidebarContent showClose={false} />
             </div>
 
             {/* Mobile backdrop */}
             <div
-                className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${
+                className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300 lg:hidden ${
                     isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
                 onClick={onClose}
@@ -84,11 +99,11 @@ export default function Sidebar({ isOpen, onClose }) {
 
             {/* Mobile drawer */}
             <div
-                className={`fixed inset-y-0 left-0 z-50 w-64 bg-forest flex flex-col transition-transform duration-300 ease-out lg:hidden ${
+                className={`fixed inset-y-0 left-0 z-50 w-64 glass-sidebar flex flex-col transition-transform duration-300 ease-out lg:hidden ${
                     isOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}
             >
-                {sidebarContent(true)}
+                <SidebarContent showClose={true} />
             </div>
         </>
     );

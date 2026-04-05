@@ -33,3 +33,5 @@ services:
         sync: false
       - key: PAYSTACK_CALLBACK_URL
         sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false

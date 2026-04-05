@@ -112,10 +112,10 @@ export default function AdminHostels() {
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Hostels...</div>;
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-350">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-heading tracking-tight">Hostel Management</h1>
+                    <h1 className="text-2xl font-extrabold text-heading tracking-tight">Hostel Management</h1>
                     <p className="text-muted mt-2 font-medium">Manage hostel buildings, statuses, pricing, and block hierarchy.</p>
                 </div>
                 <button
@@ -136,7 +136,7 @@ export default function AdminHostels() {
                                 <h3 className="text-lg font-bold text-heading">Set Prices</h3>
                                 <p className="text-sm text-muted font-medium">{pricingHostel.name}</p>
                             </div>
-                            <button onClick={() => setPricingHostel(null)} className="p-2 hover:bg-cream rounded-xl transition-colors">
+                            <button onClick={() => setPricingHostel(null)} className="p-2 hover:bg-surface rounded-xl transition-colors">
                                 <X className="w-5 h-5 text-muted" />
                             </button>
                         </div>
@@ -160,7 +160,7 @@ export default function AdminHostels() {
                                                     value={prices[pt.key] ?? ''}
                                                     onChange={e => setPrices(prev => ({ ...prev, [pt.key]: e.target.value }))}
                                                     placeholder="0"
-                                                    className="w-full pl-8 bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3 text-sm font-medium transition-colors"
+                                                    className="w-full pl-8 glass-input text-heading rounded-xl focus:ring-lime focus:border-lime p-3 text-sm font-medium transition-colors"
                                                 />
                                             </div>
                                         </div>
@@ -180,7 +180,7 @@ export default function AdminHostels() {
                             </button>
                             <button
                                 onClick={() => setPricingHostel(null)}
-                                className="bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                                className="bg-surface text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
                             >Cancel</button>
                         </div>
                     </div>
@@ -197,14 +197,14 @@ export default function AdminHostels() {
                             <input
                                 required value={name} onChange={e => setName(e.target.value)}
                                 placeholder="e.g. Akata Hall"
-                                className="w-full bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
+                                className="w-full glass-input text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-muted uppercase tracking-widest mb-2">Gender Restriction</label>
                                 <select value={gender} onChange={e => setGender(e.target.value)}
-                                    className="w-full bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
+                                    className="w-full glass-input text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
                                 >
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
@@ -214,7 +214,7 @@ export default function AdminHostels() {
                             <div>
                                 <label className="block text-xs font-bold text-muted uppercase tracking-widest mb-2">Initial Status</label>
                                 <select value={status} onChange={e => setStatus(e.target.value)}
-                                    className="w-full bg-cream border border-black/10 text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
+                                    className="w-full glass-input text-heading rounded-xl focus:ring-lime focus:border-lime p-3.5 font-medium transition-colors"
                                 >
                                     <option value="active">Active</option>
                                     <option value="maintenance">Maintenance</option>
@@ -228,7 +228,7 @@ export default function AdminHostels() {
                                 {submitting ? 'Creating...' : 'Create Hostel'}
                             </button>
                             <button type="button" onClick={() => setShowForm(false)}
-                                className="bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                                className="bg-surface text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
                             >Cancel</button>
                         </div>
                     </form>
@@ -271,7 +271,7 @@ export default function AdminHostels() {
                                         <span className="font-black text-heading">{hostel.occupied}</span> / {hostel.capacity} occupied
                                     </p>
                                     <div>
-                                        <div className="w-full h-2 bg-cream rounded-full overflow-hidden">
+                                        <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
                                             <div className={`h-full rounded-full transition-all duration-500 ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-400' : 'bg-lime'}`} style={{ width: `${pct}%` }} />
                                         </div>
                                         <p className="text-xs font-medium text-muted mt-1">{pct}% occupancy</p>
@@ -298,7 +298,7 @@ export default function AdminHostels() {
                                     <button
                                         onClick={() => cycleStatus(hostel)}
                                         disabled={togglingId === hostel.id}
-                                        className="flex items-center justify-center gap-1.5 bg-cream text-heading px-3 py-2 rounded-xl font-bold text-sm hover:bg-black/5 transition-colors disabled:opacity-50"
+                                        className="flex items-center justify-center gap-1.5 bg-surface text-heading px-3 py-2 rounded-xl font-bold text-sm hover:bg-black/5 transition-colors disabled:opacity-50"
                                         title={`Toggle status (currently: ${hostel.status})`}
                                     >
                                         <WrenchIcon className="w-3.5 h-3.5" />
@@ -309,8 +309,8 @@ export default function AdminHostels() {
                     })}
                 </div>
             ) : (
-                <div className="bg-white rounded-3xl shadow-sm border border-black/5 p-12 text-center">
-                    <div className="bg-cream rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <div className="glass rounded-2xl p-12 text-center">
+                    <div className="bg-surface rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                         <Building className="w-8 h-8 text-muted" />
                     </div>
                     <p className="text-muted font-medium">No hostels found. The database may need seeding — run v3_blocks_migration.sql first, or click "Add Hostel" to begin.</p>

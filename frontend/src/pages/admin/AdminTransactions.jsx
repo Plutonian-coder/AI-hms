@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { Receipt, Search, Loader2 } from 'lucide-react';
+import { Receipt, Search, Loader2, TrendingUp, CheckCircle2, Clock } from 'lucide-react';
 
-const STATUS_BADGES = {
+const STATUS_STYLE = {
     pending:   'bg-amber-50 text-amber-700 border border-amber-200',
-    completed: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    confirmed: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
     failed:    'bg-red-50 text-red-600 border border-red-200',
 };
 
 const TABS = [
     { key: '', label: 'All' },
-    { key: 'completed', label: 'Completed' },
+    { key: 'confirmed', label: 'Confirmed' },
     { key: 'pending', label: 'Pending' },
     { key: 'failed', label: 'Failed' },
 ];
@@ -37,119 +37,113 @@ export default function AdminTransactions() {
             t.full_name?.toLowerCase().includes(search.toLowerCase()) ||
             t.identifier?.toLowerCase().includes(search.toLowerCase()) ||
             t.reference?.toLowerCase().includes(search.toLowerCase())
-        )
+          )
         : transactions;
 
-    const totalAmount = filtered.reduce((sum, t) => sum + (t.status === 'completed' ? t.amount : 0), 0);
-    const completedCount = filtered.filter(t => t.status === 'completed').length;
-    const pendingCount = filtered.filter(t => t.status === 'pending').length;
+    const totalRevenue  = filtered.reduce((sum, t) => sum + (t.status === 'confirmed' ? t.amount : 0), 0);
+    const confirmedCount = filtered.filter(t => t.status === 'confirmed').length;
+    const pendingCount   = filtered.filter(t => t.status === 'pending').length;
+
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="space-y-5 animate-in fade-in duration-350">
+            {/* Header */}
             <div>
-                <h1 className="text-3xl font-extrabold text-heading tracking-tight flex items-center gap-3">
-                    <Receipt className="w-8 h-8 text-forest" />
-                    Transaction Monitoring
-                </h1>
-                <p className="text-muted mt-2 font-medium">View and track all hostel payment transactions.</p>
+                <p className="text-xs font-bold text-forest-muted uppercase tracking-[0.18em]">Records</p>
+                <h1 className="text-2xl font-extrabold text-heading tracking-tight mt-0.5">Transaction Monitoring</h1>
+                <p className="text-sm text-muted font-medium mt-1">View and track all hostel payment transactions.</p>
             </div>
 
-            {/* Summary cards */}
+            {/* Summary stat cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-forest p-5 rounded-2xl shadow-lg shadow-forest/20">
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.15em]">Total Revenue</p>
-                    <p className="text-xl font-black text-lime mt-1">{'\u20A6'}{totalAmount.toLocaleString()}</p>
-                </div>
-                <div className="bg-forest p-5 rounded-2xl shadow-lg shadow-forest/20">
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.15em]">Completed</p>
-                    <p className="text-xl font-black text-emerald-400 mt-1">{completedCount}</p>
-                </div>
-                <div className="bg-forest p-5 rounded-2xl shadow-lg shadow-forest/20">
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.15em]">Pending</p>
-                    <p className="text-xl font-black text-amber-400 mt-1">{pendingCount}</p>
-                </div>
+                <SummaryCard icon={TrendingUp} label="Total Revenue" value={`₦${totalRevenue.toLocaleString()}`} accent="forest" />
+                <SummaryCard icon={CheckCircle2} label="Confirmed" value={confirmedCount} accent="success" />
+                <SummaryCard icon={Clock} label="Pending" value={pendingCount} accent="warning" />
             </div>
 
-            {/* Tabs + Search */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex gap-2">
+            {/* Tabs + search */}
+            <div className="glass rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex gap-1.5">
                     {TABS.map(tab => (
                         <button
                             key={tab.key}
                             onClick={() => setActiveTab(tab.key)}
-                            className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
                                 activeTab === tab.key
-                                    ? 'bg-forest text-lime shadow-md'
-                                    : 'bg-cream text-muted hover:bg-black/5'
+                                    ? 'bg-forest text-white shadow-sm'
+                                    : 'text-muted hover:text-heading hover:bg-surface-2'
                             }`}
                         >
                             {tab.label}
                         </button>
                     ))}
                 </div>
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <div className="flex items-center gap-2.5 flex-1 glass-input rounded-xl px-3.5 py-2.5 sm:ml-auto sm:max-w-xs">
+                    <Search className="w-4 h-4 text-muted shrink-0" />
                     <input
                         type="text"
-                        placeholder="Search by name, matric, or reference..."
+                        placeholder="Search name, matric, reference…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        className="pl-10 pr-4 py-2.5 bg-white border border-black/10 rounded-xl text-sm font-medium focus:ring-lime focus:border-lime transition-colors w-full sm:w-80"
+                        className="flex-1 bg-transparent text-sm font-medium text-heading placeholder:text-muted-light outline-none"
                     />
                 </div>
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-3xl shadow-sm border border-black/5 overflow-hidden">
+            <div className="glass rounded-2xl overflow-hidden">
                 {loading ? (
                     <div className="flex items-center justify-center py-16">
-                        <Loader2 className="w-8 h-8 text-forest animate-spin" />
+                        <Loader2 className="w-6 h-6 text-forest animate-spin" />
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className="p-12 text-center">
-                        <div className="bg-cream rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                            <Receipt className="w-8 h-8 text-muted" />
+                    <div className="py-14 text-center">
+                        <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
+                            <Receipt className="w-6 h-6 text-muted" />
                         </div>
-                        <p className="text-muted font-medium">No transactions found.</p>
+                        <p className="text-muted font-medium text-sm">No transactions found.</p>
                     </div>
                 ) : (
                     <>
-                        {/* Desktop table */}
+                        {/* Desktop */}
                         <div className="hidden lg:block overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b border-black/5">
-                                        <th className="text-left px-5 py-4 text-xs font-bold text-muted uppercase tracking-widest">Student</th>
-                                        <th className="text-left px-5 py-4 text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
-                                        <th className="text-left px-5 py-4 text-xs font-bold text-muted uppercase tracking-widest">Amount</th>
-                                        <th className="text-left px-5 py-4 text-xs font-bold text-muted uppercase tracking-widest">Reference</th>
-                                        <th className="text-left px-5 py-4 text-xs font-bold text-muted uppercase tracking-widest">Status</th>
-                                        <th className="text-left px-5 py-4 text-xs font-bold text-muted uppercase tracking-widest">Choices</th>
-                                        <th className="text-left px-5 py-4 text-xs font-bold text-muted uppercase tracking-widest">Date</th>
+                                    <tr className="bg-surface border-b border-sidebar-border">
+                                        <Th>Student</Th>
+                                        <Th>Matric No.</Th>
+                                        <Th>Amount</Th>
+                                        <Th>Reference</Th>
+                                        <Th>Status</Th>
+                                        <Th>Hostel Choices</Th>
+                                        <Th>Date</Th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filtered.map(t => (
-                                        <tr key={t.id} className="border-b border-black/5 hover:bg-cream/50 transition-colors">
-                                            <td className="px-5 py-4 font-semibold text-heading text-sm">{t.full_name}</td>
-                                            <td className="px-5 py-4 text-sm font-mono text-muted">{t.identifier}</td>
-                                            <td className="px-5 py-4 text-sm font-bold text-heading">{'\u20A6'}{t.amount?.toLocaleString()}</td>
-                                            <td className="px-5 py-4 text-xs font-mono text-muted truncate max-w-[120px]" title={t.reference}>{t.reference}</td>
-                                            <td className="px-5 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_BADGES[t.status] || STATUS_BADGES.pending}`}>
-                                                    {t.status?.toUpperCase()}
+                                        <tr key={t.id} className="border-b border-sidebar-border hover:bg-surface/60 transition-colors">
+                                            <td className="px-5 py-3.5 font-semibold text-sm text-heading">{t.full_name}</td>
+                                            <td className="px-5 py-3.5">
+                                                <span className="font-mono text-[11px] font-bold px-2 py-1 rounded-md bg-forest text-white">
+                                                    {t.identifier}
                                                 </span>
                                             </td>
-                                            <td className="px-5 py-4 text-xs text-muted">
-                                                <div className="space-y-0.5">
-                                                    {t.choice_1 && <div>1. {t.choice_1}</div>}
-                                                    {t.choice_2 && <div>2. {t.choice_2}</div>}
-                                                    {t.choice_3 && <div>3. {t.choice_3}</div>}
-                                                </div>
+                                            <td className="px-5 py-3.5 text-sm font-bold text-heading">₦{t.amount?.toLocaleString()}</td>
+                                            <td className="px-5 py-3.5 text-xs font-mono text-muted max-w-[130px] truncate" title={t.reference}>
+                                                {t.reference}
                                             </td>
-                                            <td className="px-5 py-4 text-xs text-muted whitespace-nowrap">
-                                                {t.created_at ? new Date(t.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                            <td className="px-5 py-3.5">
+                                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide ${STATUS_STYLE[t.status] || STATUS_STYLE.pending}`}>
+                                                    {t.status}
+                                                </span>
                                             </td>
+                                            <td className="px-5 py-3.5 text-xs text-muted space-y-0.5">
+                                                {t.choice_1 && <div>1. {t.choice_1}</div>}
+                                                {t.choice_2 && <div>2. {t.choice_2}</div>}
+                                                {t.choice_3 && <div>3. {t.choice_3}</div>}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-xs text-muted whitespace-nowrap">{fmtDate(t.created_at)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -157,33 +151,59 @@ export default function AdminTransactions() {
                         </div>
 
                         {/* Mobile cards */}
-                        <div className="lg:hidden divide-y divide-black/5">
+                        <div className="lg:hidden divide-y divide-sidebar-border">
                             {filtered.map(t => (
-                                <div key={t.id} className="p-5 space-y-3">
-                                    <div className="flex items-center justify-between">
+                                <div key={t.id} className="p-4 space-y-2.5">
+                                    <div className="flex items-start justify-between gap-2">
                                         <div>
                                             <p className="font-bold text-heading text-sm">{t.full_name}</p>
-                                            <p className="text-xs font-mono text-muted">{t.identifier}</p>
+                                            <span className="inline-flex mt-1 px-2 py-0.5 rounded-md bg-forest text-white text-[10px] font-bold font-mono">
+                                                {t.identifier}
+                                            </span>
                                         </div>
-                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_BADGES[t.status] || STATUS_BADGES.pending}`}>
-                                            {t.status?.toUpperCase()}
+                                        <span className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase ${STATUS_STYLE[t.status] || STATUS_STYLE.pending}`}>
+                                            {t.status}
                                         </span>
                                     </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="font-bold text-heading">{'\u20A6'}{t.amount?.toLocaleString()}</span>
-                                        <span className="text-xs text-muted">
-                                            {t.created_at ? new Date(t.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) : '-'}
-                                        </span>
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-sm text-heading">₦{t.amount?.toLocaleString()}</span>
+                                        <span className="text-xs text-muted">{fmtDate(t.created_at)}</span>
                                     </div>
-                                    <div className="text-xs text-muted">
-                                        Choices: {[t.choice_1, t.choice_2, t.choice_3].filter(Boolean).join(' → ')}
-                                    </div>
-                                    <p className="text-[11px] font-mono text-muted/60 truncate">Ref: {t.reference}</p>
+                                    <p className="text-[11px] font-mono text-muted truncate">Ref: {t.reference}</p>
+                                    <p className="text-xs text-muted">{[t.choice_1, t.choice_2, t.choice_3].filter(Boolean).join(' → ')}</p>
                                 </div>
                             ))}
                         </div>
                     </>
                 )}
+            </div>
+        </div>
+    );
+}
+
+function Th({ children }) {
+    return (
+        <th className="px-5 py-3 text-left text-[10px] font-bold text-muted uppercase tracking-[0.15em]">
+            {children}
+        </th>
+    );
+}
+
+function SummaryCard({ icon: Icon, label, value, accent }) {
+    const styles = {
+        forest:  { bg: 'bg-forest/8',  icon: 'text-forest' },
+        success: { bg: 'bg-emerald-50', icon: 'text-emerald-600' },
+        warning: { bg: 'bg-amber-50',   icon: 'text-amber-600' },
+    };
+    const c = styles[accent] || styles.forest;
+    return (
+        <div className="glass rounded-xl p-5 flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center shrink-0`}>
+                <Icon className={`w-5 h-5 ${c.icon}`} />
+            </div>
+            <div>
+                <p className="text-xl font-black text-heading">{value}</p>
+                <p className="text-[10px] font-bold text-muted uppercase tracking-widest">{label}</p>
             </div>
         </div>
     );

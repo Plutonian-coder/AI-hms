@@ -19,6 +19,7 @@ JWT_EXPIRY_MINUTES  = int(os.getenv("JWT_EXPIRY_MINUTES", "1440"))  # 24 hours
 # ── File Uploads & OCR ───────────────────────────────────────────────────────
 UPLOAD_DIR     = os.getenv("UPLOAD_DIR", "./uploads")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ── Paystack (test mode) ──────────────────────────────────────────────────
 PAYSTACK_SECRET_KEY   = os.getenv("PAYSTACK_SECRET_KEY", "")

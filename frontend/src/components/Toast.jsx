@@ -11,17 +11,17 @@ const ICONS = {
 };
 
 const STYLES = {
-    success: 'bg-forest text-white border-lime/30',
-    error: 'bg-red-600 text-white border-red-400/30',
-    warning: 'bg-amber-500 text-white border-amber-300/30',
-    info: 'bg-forest text-white border-white/20',
+    success: 'bg-white/90 text-heading border-emerald-200 shadow-emerald-100',
+    error:   'bg-white/90 text-heading border-red-200 shadow-red-100',
+    warning: 'bg-white/90 text-heading border-amber-200 shadow-amber-100',
+    info:    'bg-white/90 text-heading border-blue-200 shadow-blue-100',
 };
 
 const ICON_STYLES = {
-    success: 'text-lime',
-    error: 'text-red-200',
-    warning: 'text-amber-100',
-    info: 'text-white/70',
+    success: 'text-emerald-600',
+    error:   'text-red-600',
+    warning: 'text-amber-600',
+    info:    'text-blue-600',
 };
 
 let toastId = 0;
@@ -69,7 +69,7 @@ function ToastItem({ toast, onRemove }) {
 
     return (
         <div
-            className={`pointer-events-auto flex items-start gap-3 px-4 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-sm transition-all duration-300 ${style} ${toast.exiting
+            className={`pointer-events-auto flex items-start gap-3 px-4 py-3.5 rounded-2xl border shadow-xl backdrop-blur-md transition-all duration-300 ${style} ${toast.exiting
                     ? 'opacity-0 translate-x-8 scale-95'
                     : 'opacity-100 translate-x-0 scale-100 animate-in slide-in-from-bottom-4'
                 }`}
@@ -78,7 +78,7 @@ function ToastItem({ toast, onRemove }) {
             <p className="text-sm font-semibold flex-1 leading-snug">{toast.message}</p>
             <button
                 onClick={() => onRemove(toast.id)}
-                className="shrink-0 p-0.5 rounded-lg hover:bg-white/10 transition-colors"
+                className="shrink-0 p-0.5 rounded-lg hover:bg-black/5 transition-colors"
             >
                 <X className="w-4 h-4 opacity-60" />
             </button>

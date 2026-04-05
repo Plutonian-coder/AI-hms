@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, Loader2, RotateCcw, ArrowRight } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, RotateCcw, ArrowRight, Receipt } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
@@ -11,7 +11,7 @@ export default function PaymentCallback() {
 
     const [steps, setSteps] = useState([]);
     const [pipelineError, setPipelineError] = useState(null);
-    const [pipelineSuccess, setPipelineSuccess] = useState(false);
+    const [pipelineResult, setPipelineResult] = useState(null);
     const [started, setStarted] = useState(false);
 
     const verify = useCallback(async () => {
@@ -60,7 +60,7 @@ export default function PaymentCallback() {
                             } else if (currentEvent === 'error') {
                                 setPipelineError(data);
                             } else if (currentEvent === 'result') {
-                                setPipelineSuccess(true);
+                                setPipelineResult(data);
                             }
                         } catch { /* skip */ }
                         currentEvent = null;
@@ -95,7 +95,7 @@ export default function PaymentCallback() {
         <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
             <div>
                 <h1 className="text-3xl font-extrabold text-heading tracking-tight">Payment Verification</h1>
-                <p className="text-muted mt-2 font-medium">Verifying your payment and allocating your bed space...</p>
+                <p className="text-muted mt-2 font-medium">Verifying your payment and generating your receipt...</p>
             </div>
 
             <div className="mt-8 bg-white p-8 rounded-3xl shadow-sm border border-black/5">
@@ -160,19 +160,47 @@ export default function PaymentCallback() {
                     </div>
                 )}
 
-                <div className="mt-8 flex gap-3">
+                {/* Success result */}
+                {pipelineResult && (
+                    <div className="mt-6 p-5 bg-lime/5 border border-lime/20 rounded-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                            <CheckCircle className="w-6 h-6 text-lime" />
+                            <h3 className="font-bold text-forest text-lg">Payment Confirmed!</h3>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between py-1">
+                                <span className="text-sm text-forest/60 font-medium">HMS Reference</span>
+                                <span className="text-sm font-mono font-bold text-forest">{pipelineResult.hms_reference}</span>
+                            </div>
+                            <div className="flex justify-between py-1">
+                                <span className="text-sm text-forest/60 font-medium">Amount</span>
+                                <span className="text-sm font-bold text-forest">{'\u20A6'}{pipelineResult.amount_paid?.toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="mt-8 flex flex-col sm:flex-row gap-3">
                     {pipelineError && (
                         <button onClick={() => navigate('/payment')} className="flex items-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors">
                             <RotateCcw className="w-4 h-4" /> Try Again
                         </button>
                     )}
-                    {pipelineSuccess && (
-                        <button
-                            onClick={() => navigate('/my-allocation')}
-                            className="flex items-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
-                        >
-                            View My Allocation <ArrowRight className="w-4 h-4" />
-                        </button>
+                    {pipelineResult && (
+                        <>
+                            <button
+                                onClick={() => navigate('/receipt')}
+                                className="flex-1 flex items-center justify-center gap-2 bg-forest text-white px-6 py-3 rounded-full font-bold hover:bg-forest-light transition-colors"
+                            >
+                                <Receipt className="w-4 h-4" /> View Receipt
+                            </button>
+                            <button
+                                onClick={() => navigate('/quiz')}
+                                className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
+                            >
+                                Take Quiz <ArrowRight className="w-4 h-4" />
+                            </button>
+                        </>
                     )}
                 </div>
             </div>

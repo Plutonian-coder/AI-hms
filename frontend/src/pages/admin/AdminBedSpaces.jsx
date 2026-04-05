@@ -22,9 +22,9 @@ export default function AdminBedSpaces() {
     if (loading) return <div className="text-muted animate-pulse font-medium">Loading Bed Space Data...</div>;
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-350">
             <div>
-                <h1 className="text-3xl font-extrabold text-heading tracking-tight">Bed Space Overview</h1>
+                <h1 className="text-2xl font-extrabold text-heading tracking-tight">Bed Space Overview</h1>
                 <p className="text-muted mt-2 font-medium">
                     Room and bed generation is now managed per-block. Click a hostel to manage its blocks and generate rooms.
                 </p>
@@ -44,7 +44,7 @@ export default function AdminBedSpaces() {
             </div>
 
             {/* Hostels Overview */}
-            <div className="bg-white rounded-3xl shadow-sm border border-black/5 overflow-hidden">
+            <div className="glass rounded-2xl overflow-hidden">
                 <div className="px-6 py-5 border-b border-black/5">
                     <h3 className="text-lg font-bold text-heading flex items-center gap-2">
                         <BedDouble className="w-5 h-5 text-muted" />
@@ -55,7 +55,7 @@ export default function AdminBedSpaces() {
                     {hostels.map((hostel) => {
                         const pct = hostel.capacity > 0 ? Math.round((hostel.occupied / hostel.capacity) * 100) : 0;
                         return (
-                            <div key={hostel.id} className="p-6 hover:bg-cream/50 transition-colors">
+                            <div key={hostel.id} className="p-6 hover:bg-surface/50 transition-colors">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="font-bold text-heading text-lg">{hostel.name}</p>
@@ -91,7 +91,7 @@ export default function AdminBedSpaces() {
                                         </button>
                                     </div>
                                 </div>
-                                <div className="mt-4 w-full bg-cream rounded-full h-3 overflow-hidden">
+                                <div className="mt-4 w-full bg-surface rounded-full h-3 overflow-hidden">
                                     <div className={`h-full rounded-full transition-all duration-500 ${pct > 80 ? 'bg-red-400' : pct > 50 ? 'bg-amber-400' : 'bg-lime'}`}
                                         style={{ width: `${pct}%` }} />
                                 </div>

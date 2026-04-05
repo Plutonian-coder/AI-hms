@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import { Link } from 'react-router-dom';
-import { Home, CheckCircle, ShieldCheck, Shield, ChevronRight, Pencil, X, Save } from 'lucide-react';
+import {
+    CheckCircle, Home, ChevronRight, Pencil, X, Save,
+    UserCheck, FileText, CreditCard, ClipboardCheck, BedDouble, Loader2
+} from 'lucide-react';
 import { useToast } from '../components/Toast';
 
 export default function Dashboard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
-    const [profileForm, setProfileForm] = useState({ department: '', level: '', study_mode: 'full_time', email: '', phone: '', next_of_kin_name: '', next_of_kin_phone: '' });
+    const [profileForm, setProfileForm] = useState({ email: '', phone: '', next_of_kin_name: '', next_of_kin_phone: '' });
     const [saving, setSaving] = useState(false);
     const toast = useToast();
 
@@ -17,17 +20,9 @@ export default function Dashboard() {
             .then(res => {
                 setData(res.data);
                 const p = res.data.profile;
-                setProfileForm({
-                    department: p.department || '',
-                    level: p.level || '',
-                    study_mode: p.study_mode || 'full_time',
-                    email: p.email || '',
-                    phone: p.phone || '',
-                    next_of_kin_name: p.next_of_kin_name || '',
-                    next_of_kin_phone: p.next_of_kin_phone || '',
-                });
+                setProfileForm({ email: p.email || '', phone: p.phone || '', next_of_kin_name: p.next_of_kin_name || '', next_of_kin_phone: p.next_of_kin_phone || '' });
             })
-            .catch(() => { toast.error('Failed to load dashboard data.'); })
+            .catch(() => toast.error('Failed to load dashboard data.'))
             .finally(() => setLoading(false));
     };
 
@@ -35,132 +30,240 @@ export default function Dashboard() {
 
     const handleProfileSave = async () => {
         setSaving(true);
-        const form = new FormData();
-        if (profileForm.department) form.append('department', profileForm.department);
-        if (profileForm.level) form.append('level', profileForm.level);
-        if (profileForm.study_mode) form.append('study_mode', profileForm.study_mode);
-        if (profileForm.email) form.append('email', profileForm.email);
-        if (profileForm.phone) form.append('phone', profileForm.phone);
-        if (profileForm.next_of_kin_name) form.append('next_of_kin_name', profileForm.next_of_kin_name);
-        if (profileForm.next_of_kin_phone) form.append('next_of_kin_phone', profileForm.next_of_kin_phone);
-
         try {
-            await apiClient.patch('/allocation/profile', form);
+            await apiClient.patch('/allocation/profile', profileForm);
             setEditing(false);
             toast.success('Profile updated successfully');
             fetchDashboard();
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Failed to save profile');
+        } finally {
+            setSaving(false);
         }
-        finally { setSaving(false); }
     };
 
-    if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Dashboard...</div>;
-    if (!data) return <div className="text-red-500 font-medium p-8">Failed to load dashboard data.</div>;
+    if (loading) return (
+        <div className="flex items-center gap-3 p-8 text-muted font-medium">
+            <Loader2 className="w-5 h-5 animate-spin text-forest" /> Loading dashboard…
+        </div>
+    );
+    if (!data) return <div className="text-red-600 font-medium p-8">Failed to load dashboard data.</div>;
 
-    const { profile, session, allocation, payment_status, application_status, eligibility } = data;
+    const { profile, session, progress, allocation } = data;
     const firstName = profile.first_name || 'Student';
-    const isEligible = eligibility?.is_eligible;
+
+    const steps = [
+        { key: 'registered',  label: 'Registered',  icon: UserCheck,     done: progress.registered,      link: null },
+        { key: 'applied',     label: 'Applied',      icon: FileText,      done: progress.applied,         link: '/apply',         sublabel: progress.application_status },
+        { key: 'paid',        label: 'Paid',         icon: CreditCard,    done: progress.paid,            link: '/payment',       sublabel: progress.payment_status },
+        { key: 'quiz',        label: 'Quiz',         icon: ClipboardCheck,done: progress.quiz_completed,  link: '/quiz' },
+        { key: 'allocated',   label: 'Allocated',    icon: BedDouble,     done: progress.allocated,       link: '/my-allocation' },
+        { key: 'view',        label: 'View Room',    icon: Home,          done: progress.allocated,       link: '/my-allocation' },
+    ];
+
+    const currentStepIdx = steps.findIndex(s => !s.done);
+    const completedCount = steps.filter(s => s.done).length;
+    const progressPct = Math.round((completedCount / steps.length) * 100);
+
+    const ctaLabels = { 'Applied': 'Submit Application', 'Paid': 'Make Payment', 'Quiz': 'Take Compatibility Quiz', 'Allocated': 'View Allocation', 'View Room': 'View Room Details' };
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
-            {/* Header */}
+        <div className="space-y-6 animate-in fade-in duration-350">
+            {/* Page header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <p className="text-xs font-bold text-lime uppercase tracking-[0.2em]">Hello, {firstName}</p>
-                    <h1 className="text-2xl font-extrabold text-heading tracking-tight mt-1">Your Accommodation Status Grid</h1>
+                    <p className="text-xs font-bold text-forest-muted uppercase tracking-[0.18em]">Welcome back</p>
+                    <h1 className="text-2xl font-extrabold text-heading tracking-tight mt-0.5">
+                        Hello, {firstName} 👋
+                    </h1>
                 </div>
                 {session && (
-                    <div className="flex items-center gap-2 bg-forest rounded-full px-4 py-2">
-                        <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Session</span>
-                        <span className="text-sm font-black text-white">{session.name}</span>
+                    <div className="inline-flex items-center gap-2 glass rounded-full px-4 py-2 self-start sm:self-auto">
+                        <span className="w-2 h-2 rounded-full bg-lime-500 pulse-dot" />
+                        <span className="text-xs font-bold text-forest">{session.name}</span>
+                        <span className="text-[10px] font-semibold text-muted">Active Session</span>
                     </div>
                 )}
             </div>
 
-            {/* Status Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <StatusCard icon={CheckCircle} label="Application Status" value={application_status} color={allocation ? 'lime' : 'muted'} />
-                <StatusCard icon={Shield} label="Payment Verification" value={payment_status} color={payment_status === 'VERIFIED' ? 'lime' : payment_status === 'PENDING' ? 'amber' : 'muted'} />
-                <StatusCard icon={ShieldCheck} label="Eligibility" value={isEligible ? 'ELIGIBLE' : 'NOT ELIGIBLE'} color={isEligible ? 'lime' : 'muted'} />
+            {/* Progress card */}
+            <div className="glass rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-muted uppercase tracking-[0.18em]">Application Progress</h3>
+                    <span className="text-sm font-black text-forest">{progressPct}%</span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-2 rounded-full bg-surface-2 mb-6 overflow-hidden">
+                    <div
+                        className="h-full rounded-full bg-gradient-to-r from-forest to-lime transition-all duration-700"
+                        style={{ width: `${progressPct}%` }}
+                    />
+                </div>
+
+                {/* Desktop stepper */}
+                <div className="hidden sm:flex items-start justify-between relative">
+                    <div className="absolute top-4 left-0 right-0 h-0.5 bg-surface-2 z-0 mx-5" />
+                    <div
+                        className="absolute top-4 left-5 h-0.5 bg-gradient-to-r from-forest to-lime z-0 transition-all duration-700"
+                        style={{ width: `${Math.max(0, (Math.max(0, currentStepIdx === -1 ? steps.length - 1 : currentStepIdx - 1)) / (steps.length - 1)) * (100 - (10 / steps.length))}%` }}
+                    />
+                    {steps.map((step, i) => {
+                        const Icon = step.icon;
+                        const isDone = step.done;
+                        const isCurrent = i === currentStepIdx;
+                        const content = (
+                            <div className="flex flex-col items-center relative z-10 w-16">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm ${
+                                    isDone    ? 'bg-forest text-white shadow-forest/20' :
+                                    isCurrent ? 'bg-white border-2 border-forest text-forest ring-4 ring-forest/10' :
+                                    'bg-white border border-gray-200 text-muted'
+                                }`}>
+                                    {isDone ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-3.5 h-3.5" />}
+                                </div>
+                                <span className={`text-[10px] font-bold mt-2 text-center leading-tight ${isDone ? 'text-forest' : isCurrent ? 'text-heading' : 'text-muted'}`}>
+                                    {step.label}
+                                </span>
+                            </div>
+                        );
+                        return step.link && !isDone && isCurrent
+                            ? <Link key={step.key} to={step.link} className="hover:scale-105 transition-transform">{content}</Link>
+                            : <div key={step.key}>{content}</div>;
+                    })}
+                </div>
+
+                {/* Mobile stepper */}
+                <div className="sm:hidden space-y-2">
+                    {steps.map((step, i) => {
+                        const Icon = step.icon;
+                        const isDone = step.done;
+                        const isCurrent = i === currentStepIdx;
+                        const inner = (
+                            <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                                isDone    ? 'bg-lime-soft border-lime-border' :
+                                isCurrent ? 'glass border-forest/20 shadow-sm' :
+                                'bg-surface border-transparent'
+                            }`}>
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                                    isDone ? 'bg-forest text-white' : isCurrent ? 'bg-white border-2 border-forest text-forest' : 'bg-surface-2 text-muted border border-gray-200'
+                                }`}>
+                                    {isDone ? <CheckCircle className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-bold ${isDone ? 'text-forest' : isCurrent ? 'text-heading' : 'text-muted'}`}>{step.label}</p>
+                                    {step.sublabel && <p className="text-[10px] text-muted font-medium">{step.sublabel}</p>}
+                                </div>
+                                {isCurrent && step.link && <ChevronRight className="w-4 h-4 text-forest" />}
+                            </div>
+                        );
+                        return step.link && !isDone && isCurrent
+                            ? <Link key={step.key} to={step.link}>{inner}</Link>
+                            : <div key={step.key}>{inner}</div>;
+                    })}
+                </div>
+
+                {/* CTA button */}
+                {currentStepIdx >= 0 && steps[currentStepIdx]?.link && (
+                    <div className="mt-6 text-center">
+                        <Link
+                            to={steps[currentStepIdx].link}
+                            className="inline-flex items-center gap-2 bg-forest text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-forest/20 hover:bg-forest-hover hover:scale-[1.02] transition-all"
+                        >
+                            {ctaLabels[steps[currentStepIdx].label] || steps[currentStepIdx].label}
+                            <ChevronRight className="w-4 h-4" />
+                        </Link>
+                    </div>
+                )}
             </div>
 
-            {/* Bottom Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Allocation Matrix */}
-                <div className="bg-white rounded-2xl shadow-sm border border-black/5 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-black/5 flex items-center justify-between">
-                        <h3 className="text-sm font-black text-heading uppercase tracking-widest">Allocation Matrix</h3>
+            {/* Bottom grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Allocation card */}
+                <div className="glass rounded-2xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-muted uppercase tracking-[0.18em]">Allocation</h3>
                         {allocation && (
-                            <Link to="/my-allocation" className="text-xs font-bold text-lime hover:text-lime-hover flex items-center gap-1 transition-colors">
-                                View Details <ChevronRight className="w-3 h-3" />
+                            <Link to="/my-allocation" className="text-xs font-bold text-forest hover:text-forest-light flex items-center gap-1 transition-colors">
+                                Details <ChevronRight className="w-3 h-3" />
                             </Link>
                         )}
                     </div>
 
                     {allocation ? (
-                        <div className="p-6 space-y-5">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-forest rounded-xl p-4">
-                                    <p className="text-[10px] font-bold text-lime uppercase tracking-widest">Hostel Block</p>
-                                    <p className="text-lg font-black text-white mt-1 truncate">{allocation.hostel_name}</p>
+                        <div className="p-5 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="glass-dark rounded-xl p-4">
+                                    <p className="text-[10px] font-bold text-lime/70 uppercase tracking-widest">Hostel</p>
+                                    <p className="text-base font-black text-white mt-1 truncate">{allocation.hostel_name}</p>
                                 </div>
-                                <div className="bg-lime/10 rounded-xl p-4 border border-lime/20">
-                                    <p className="text-[10px] font-bold text-forest uppercase tracking-widest">Room & Bed</p>
-                                    <p className="text-lg font-black text-heading mt-1">{allocation.room_number} / {allocation.bed_number}</p>
+                                <div className="bg-lime-soft rounded-xl p-4 border border-lime-border">
+                                    <p className="text-[10px] font-bold text-forest-muted uppercase tracking-widest">Room / Bed</p>
+                                    <p className="text-base font-black text-heading mt-1">{allocation.room_number} / Bed {allocation.bed_number}</p>
                                 </div>
                             </div>
 
-                            <div>
-                                <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-3">Roommates Detected</p>
-                                {allocation.roommates && allocation.roommates.length > 0 ? (
+                            {allocation.avg_compatibility_score != null && (
+                                <div className="glass rounded-xl p-4 text-center border border-forest/10">
+                                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest">Compatibility Score</p>
+                                    <p className="text-3xl font-black text-forest mt-1">{allocation.avg_compatibility_score.toFixed(1)}%</p>
+                                    <div className="w-24 h-1.5 rounded-full bg-surface-2 mx-auto mt-2">
+                                        <div className="h-full rounded-full bg-gradient-to-r from-forest to-lime" style={{ width: `${allocation.avg_compatibility_score}%` }} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {allocation.roommates?.length > 0 && (
+                                <div>
+                                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Roommates</p>
                                     <div className="space-y-2">
                                         {allocation.roommates.map((mate, i) => (
-                                            <div key={i} className="flex items-center gap-3 bg-cream rounded-xl p-3 border border-black/5">
-                                                <div className="w-9 h-9 rounded-full bg-forest text-lime font-bold flex items-center justify-center shrink-0 text-sm">
+                                            <div key={i} className="flex items-center gap-3 bg-surface rounded-xl p-3 border border-sidebar-border">
+                                                <div className="w-8 h-8 rounded-full bg-forest text-lime font-bold flex items-center justify-center shrink-0 text-xs shadow-sm">
                                                     {mate.full_name.charAt(0)}
                                                 </div>
-                                                <div className="min-w-0">
+                                                <div className="min-w-0 flex-1">
                                                     <p className="font-bold text-heading text-sm truncate">{mate.full_name}</p>
                                                     <p className="text-[11px] font-semibold text-muted font-mono">{mate.identifier}</p>
                                                 </div>
+                                                {mate.compatibility_score != null && (
+                                                    <span className="text-xs font-bold text-forest bg-lime-soft border border-lime-border px-2.5 py-1 rounded-full">
+                                                        {mate.compatibility_score.toFixed(0)}%
+                                                    </span>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    <p className="text-sm text-muted font-medium">No roommates assigned yet.</p>
-                                )}
-                            </div>
+                                </div>
+                            )}
+
+                            {progress.hms_reference && (
+                                <div className="text-center pt-1">
+                                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest">HMS Reference</p>
+                                    <p className="text-sm font-mono font-bold text-forest mt-0.5">{progress.hms_reference}</p>
+                                </div>
+                            )}
                         </div>
                     ) : (
-                        <div className="p-8 text-center">
-                            <div className="bg-cream rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                                <Home className="w-8 h-8 text-muted" />
+                        <div className="p-10 text-center">
+                            <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
+                                <Home className="w-6 h-6 text-muted" />
                             </div>
                             <p className="text-muted font-medium text-sm">No allocation yet for this session.</p>
-                            {payment_status === 'PENDING' ? (
-                                <Link to="/payment" className="inline-block mt-4 text-sm font-bold text-amber-500 hover:text-amber-600 transition-colors">
-                                    You have a pending payment — Continue &rarr;
-                                </Link>
-                            ) : isEligible ? (
-                                <Link to="/payment" className="inline-block mt-4 text-sm font-bold text-lime hover:text-lime-hover transition-colors">
-                                    Proceed to Payment &rarr;
-                                </Link>
-                            ) : (
-                                <Link to="/eligibility" className="inline-block mt-4 text-sm font-bold text-lime hover:text-lime-hover transition-colors">
-                                    Verify Eligibility &rarr;
+                            {currentStepIdx >= 0 && steps[currentStepIdx]?.link && (
+                                <Link to={steps[currentStepIdx].link} className="inline-block mt-3 text-sm font-bold text-forest hover:text-forest-light transition-colors">
+                                    Next: {steps[currentStepIdx].label} →
                                 </Link>
                             )}
                         </div>
                     )}
                 </div>
 
-                {/* Profile Summary */}
-                <div className="bg-white rounded-2xl shadow-sm border border-black/5 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-black/5 flex items-center justify-between">
-                        <h3 className="text-sm font-black text-heading uppercase tracking-widest">Profile Summary</h3>
+                {/* Profile card */}
+                <div className="glass rounded-2xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-muted uppercase tracking-[0.18em]">Profile</h3>
                         {!editing ? (
-                            <button onClick={() => setEditing(true)} className="text-xs font-bold text-lime hover:text-lime-hover flex items-center gap-1 transition-colors">
+                            <button onClick={() => setEditing(true)} className="text-xs font-bold text-forest hover:text-forest-light flex items-center gap-1 transition-colors">
                                 <Pencil className="w-3 h-3" /> Edit
                             </button>
                         ) : (
@@ -170,50 +273,37 @@ export default function Dashboard() {
                         )}
                     </div>
 
-                    <div className="p-6">
+                    <div className="p-5">
                         {!editing ? (
-                            <div className="space-y-4">
-                                <ProfileRow label="Matric Number" value={profile.identifier} />
+                            <div className="space-y-2.5">
+                                <ProfileRow label="Matric No." value={profile.identifier} mono />
                                 <ProfileRow label="Full Name" value={profile.full_name} />
                                 <ProfileRow label="Gender" value={profile.gender?.charAt(0).toUpperCase() + profile.gender?.slice(1)} />
-                                <ProfileRow label="Department" value={profile.department} placeholder="Not set" />
-                                <ProfileRow label="Level" value={profile.level} placeholder="Not set" />
-                                <ProfileRow label="Study Mode" value={profile.study_mode === 'part_time' ? 'Part Time' : 'Full Time'} />
+                                <ProfileRow label="Department" value={profile.department} />
+                                <ProfileRow label="Level" value={profile.level} />
+                                <ProfileRow label="Study Type" value={profile.study_type} />
                                 <ProfileRow label="Email" value={profile.email} placeholder="Not set" />
                                 <ProfileRow label="Phone" value={profile.phone} placeholder="Not set" />
                                 <ProfileRow label="Next of Kin" value={profile.next_of_kin_name} placeholder="Not set" />
                                 <ProfileRow label="Kin Phone" value={profile.next_of_kin_phone} placeholder="Not set" />
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                <ProfileRow label="Matric Number" value={profile.identifier} />
+                            <div className="space-y-3">
+                                <ProfileRow label="Matric No." value={profile.identifier} mono />
                                 <ProfileRow label="Full Name" value={profile.full_name} />
                                 <ProfileRow label="Gender" value={profile.gender?.charAt(0).toUpperCase() + profile.gender?.slice(1)} />
-                                <ProfileField label="Department" value={profileForm.department} onChange={v => setProfileForm(f => ({ ...f, department: v }))} placeholder="e.g. Computer Science" />
-                                <ProfileField label="Level" value={profileForm.level} onChange={v => setProfileForm(f => ({ ...f, level: v }))} placeholder="e.g. ND2, HND1" />
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-muted uppercase tracking-widest">Study Mode</label>
-                                    <select
-                                        value={profileForm.study_mode}
-                                        onChange={e => setProfileForm(f => ({ ...f, study_mode: e.target.value }))}
-                                        className="w-full bg-cream border border-black/10 text-heading rounded-lg focus:ring-lime focus:border-lime p-2.5 text-sm font-medium transition-colors"
-                                    >
-                                        <option value="full_time">Full Time</option>
-                                        <option value="part_time">Part Time</option>
-                                    </select>
-                                </div>
-                                <ProfileField label="Email" value={profileForm.email} onChange={v => setProfileForm(f => ({ ...f, email: v }))} placeholder="student@email.com" />
+                                <ProfileRow label="Department" value={profile.department} />
+                                <ProfileRow label="Level" value={profile.level} />
+                                <ProfileRow label="Study Type" value={profile.study_type} />
+                                <ProfileField label="Email" value={profileForm.email} onChange={v => setProfileForm(f => ({ ...f, email: v }))} placeholder="student@email.com" type="email" />
                                 <ProfileField label="Phone" value={profileForm.phone} onChange={v => setProfileForm(f => ({ ...f, phone: v }))} placeholder="08012345678" />
-                                <ProfileField label="Next of Kin" value={profileForm.next_of_kin_name} onChange={v => setProfileForm(f => ({ ...f, next_of_kin_name: v }))} placeholder="Parent/Guardian name" />
+                                <ProfileField label="Next of Kin" value={profileForm.next_of_kin_name} onChange={v => setProfileForm(f => ({ ...f, next_of_kin_name: v }))} placeholder="Guardian name" />
                                 <ProfileField label="Kin Phone" value={profileForm.next_of_kin_phone} onChange={v => setProfileForm(f => ({ ...f, next_of_kin_phone: v }))} placeholder="08012345678" />
-
                                 <button
-                                    onClick={handleProfileSave}
-                                    disabled={saving}
-                                    className={`mt-2 flex items-center gap-2 bg-lime text-forest px-5 py-2.5 rounded-full font-bold text-sm shadow-lg shadow-lime/25 transition-all ${saving ? 'opacity-70 scale-95' : 'hover:bg-lime-hover hover:scale-[1.02]'}`}
+                                    onClick={handleProfileSave} disabled={saving}
+                                    className={`mt-1 flex items-center gap-2 bg-forest text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md shadow-forest/15 transition-all ${saving ? 'opacity-70' : 'hover:bg-forest-hover'}`}
                                 >
-                                    <Save className="w-4 h-4" />
-                                    {saving ? 'Saving...' : 'Save Profile'}
+                                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save Profile</>}
                                 </button>
                             </div>
                         )}
@@ -224,50 +314,24 @@ export default function Dashboard() {
     );
 }
 
-/* Sub-components */
-
-const colorMap = {
-    lime: { bg: 'bg-forest', text: 'text-lime', value: 'text-lime', icon: 'text-lime' },
-    amber: { bg: 'bg-forest', text: 'text-amber-400', value: 'text-amber-400', icon: 'text-amber-400' },
-    muted: { bg: 'bg-forest', text: 'text-white/40', value: 'text-white/60', icon: 'text-white/30' },
-};
-
-function StatusCard({ icon: Icon, label, value, color }) {
-    const c = colorMap[color] || colorMap.muted;
+function ProfileRow({ label, value, placeholder, mono }) {
     return (
-        <div className={`${c.bg} p-5 rounded-2xl shadow-lg shadow-forest/20 hover:shadow-xl transition-shadow`}>
-            <div className="flex items-center gap-3 mb-3">
-                <div className="p-2.5 bg-white/10 rounded-lg">
-                    <Icon className={`w-5 h-5 ${c.icon}`} />
-                </div>
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.15em]">{label}</p>
-            </div>
-            <p className={`text-xl font-black ${c.value} tracking-tight`}>{value}</p>
-        </div>
-    );
-}
-
-function ProfileRow({ label, value, placeholder }) {
-    return (
-        <div className="flex items-center justify-between py-2 border-b border-black/5 last:border-0">
-            <span className="text-xs font-bold text-muted uppercase tracking-widest">{label}</span>
-            <span className={`text-sm font-semibold ${value ? 'text-heading' : 'text-muted/50 italic'}`}>
+        <div className="flex items-center justify-between py-1.5 border-b border-black/5 last:border-0">
+            <span className="text-[10px] font-bold text-muted uppercase tracking-widest shrink-0 mr-3">{label}</span>
+            <span className={`text-sm font-semibold text-right truncate max-w-[60%] ${value ? 'text-heading' : 'text-muted/50 italic'} ${mono ? 'font-mono text-xs' : ''}`}>
                 {value || placeholder || '—'}
             </span>
         </div>
     );
 }
 
-function ProfileField({ label, value, onChange, placeholder }) {
+function ProfileField({ label, value, onChange, placeholder, type = 'text' }) {
     return (
         <div className="space-y-1">
-            <label className="text-xs font-bold text-muted uppercase tracking-widest">{label}</label>
+            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest">{label}</label>
             <input
-                type="text"
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                placeholder={placeholder}
-                className="w-full bg-cream border border-black/10 text-heading rounded-lg focus:ring-lime focus:border-lime p-2.5 text-sm font-medium transition-colors"
+                type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+                className="glass-input w-full rounded-xl px-3.5 py-2.5 text-sm font-medium text-heading placeholder:text-muted-light"
             />
         </div>
     );

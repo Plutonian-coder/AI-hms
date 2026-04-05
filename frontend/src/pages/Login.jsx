@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import apiClient from '../api/client';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Building2, ArrowRight } from 'lucide-react';
 
 export default function Login() {
     const [identifier, setIdentifier] = useState('');
@@ -15,7 +15,6 @@ export default function Login() {
         e.preventDefault();
         setError('');
         setLoading(true);
-
         try {
             const res = await apiClient.post('/auth/login', { identifier, password });
             localStorage.setItem('access_token', res.data.access_token);
@@ -29,69 +28,102 @@ export default function Login() {
     };
 
     return (
-        <div className="flex h-screen bg-cream items-center justify-center p-6">
-            <div className="max-w-md w-full animate-in zoom-in-95 duration-300">
-                <div className="bg-forest rounded-3xl shadow-2xl p-8 sm:p-10">
-                    <div className="text-center mb-8">
-                        <h2 className="text-3xl font-black text-white tracking-tight">HMS</h2>
-                        <p className="text-white/50 font-medium text-sm mt-2">Sign in to the Automated Hostel Allocation portal</p>
+        <div
+            className="min-h-screen flex items-center justify-center p-5"
+            style={{ background: 'linear-gradient(135deg, #D8F3DC 0%, #E8F5EE 30%, #B7E4C7 60%, #D8F3DC 100%)' }}
+        >
+            {/* Background decoration */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-40 -right-40 w-96 h-96 bg-forest/8 rounded-full blur-3xl" />
+                <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-lime/10 rounded-full blur-3xl" />
+            </div>
+
+            <div className="relative w-full max-w-md animate-in zoom-in duration-300">
+                {/* Card */}
+                <div className="glass-elevated rounded-3xl p-8 sm:p-10">
+                    {/* Logo */}
+                    <div className="flex flex-col items-center mb-8">
+                        <div className="w-14 h-14 rounded-2xl bg-forest flex items-center justify-center shadow-lg mb-4">
+                            <Building2 className="w-7 h-7 text-lime" />
+                        </div>
+                        <h1 className="text-2xl font-black text-heading tracking-tight">Hostel Management</h1>
+                        <p className="text-sm text-muted font-medium mt-1">Sign in to your portal</p>
                     </div>
 
                     {error && (
-                        <div className="mb-6 p-4 rounded-xl bg-red-500/15 border border-red-500/20 text-red-300 text-sm font-bold text-center">
+                        <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold text-center">
                             {error}
                         </div>
                     )}
 
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        <div>
-                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Matric No.</label>
+                    <form onSubmit={handleLogin} className="space-y-5">
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-muted uppercase tracking-widest">
+                                Matric Number / Admin ID
+                            </label>
                             <input
                                 type="text"
                                 required
-                                className="w-full bg-white/10 border border-white/10 text-white rounded-xl focus:ring-lime focus:border-lime block p-3.5 font-medium transition-colors placeholder:text-white/30"
+                                className="glass-input w-full rounded-xl px-4 py-3 text-sm font-medium text-heading placeholder:text-muted-light"
                                 value={identifier}
                                 onChange={e => setIdentifier(e.target.value)}
-                                placeholder="Ex. F/ND/..."
+                                placeholder="e.g. FPT/CSC/25/..."
                             />
                         </div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Password</label>
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-muted uppercase tracking-widest">
+                                Password
+                            </label>
                             <div className="relative">
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     required
-                                    className="w-full bg-white/10 border border-white/10 text-white rounded-xl focus:ring-lime focus:border-lime block p-3.5 pr-12 font-medium transition-colors placeholder:text-white/30"
+                                    className="glass-input w-full rounded-xl px-4 py-3 pr-11 text-sm font-medium text-heading placeholder:text-muted-light"
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
+                                    placeholder="Your password"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-light hover:text-muted transition-colors"
                                 >
-                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                                 </button>
                             </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                            <Link to="/forgot-password" className="text-xs font-semibold text-forest hover:text-forest-light transition-colors">
+                                Forgot password?
+                            </Link>
                         </div>
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className={`w-full text-forest bg-lime hover:bg-lime-hover focus:ring-4 focus:outline-none focus:ring-lime/30 font-black rounded-full text-lg px-5 py-4 text-center shadow-lg shadow-lime/25 transition-all ${loading ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
+                            className={`w-full flex items-center justify-center gap-2 bg-forest text-white rounded-xl px-5 py-3.5 text-sm font-bold shadow-lg shadow-forest/20 transition-all ${
+                                loading ? 'opacity-70 scale-[0.98]' : 'hover:bg-forest-hover hover:scale-[1.01] hover:shadow-forest/30'
+                            }`}
                         >
-                            {loading ? 'Authenticating...' : 'Sign In'}
+                            {loading ? 'Signing in…' : (
+                                <>Sign In <ArrowRight className="w-4 h-4" /></>
+                            )}
                         </button>
                     </form>
 
-                    <p className="text-sm font-medium text-white/40 text-center mt-8">
-                        Don't have an account? <Link to="/register" className="text-lime hover:text-lime-hover font-bold tracking-tight">Register</Link>
-                    </p>
-                    <p className="text-sm font-medium text-white/30 text-center mt-3">
-                        <Link to="/forgot-password" className="text-white/50 hover:text-white/70 font-semibold transition-colors">Forgot Password?</Link>
+                    <p className="text-center text-xs text-muted font-medium mt-6">
+                        New student?{' '}
+                        <Link to="/register" className="font-bold text-forest hover:text-forest-light transition-colors">
+                            Register here
+                        </Link>
                     </p>
                 </div>
+
+                <p className="text-center text-[11px] text-muted/70 font-medium mt-5">
+                    AI-Driven Hostel Management System · Federal University Oye-Ekiti
+                </p>
             </div>
         </div>
     );
