@@ -55,11 +55,11 @@ export default function AdminBedSpaces() {
                     {hostels.map((hostel) => {
                         const pct = hostel.capacity > 0 ? Math.round((hostel.occupied / hostel.capacity) * 100) : 0;
                         return (
-                            <div key={hostel.id} className="p-6 hover:bg-surface/50 transition-colors">
-                                <div className="flex items-center justify-between">
+                            <div key={hostel.id} className="p-5 hover:bg-surface/50 transition-colors">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                     <div>
                                         <p className="font-bold text-heading text-lg">{hostel.name}</p>
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex flex-wrap items-center gap-2 mt-1">
                                             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${hostel.gender === 'male' ? 'bg-forest/5 text-forest' : 'bg-tag-pink/30 text-forest'}`}>
                                                 {hostel.gender.toUpperCase()}
                                             </span>
@@ -69,25 +69,26 @@ export default function AdminBedSpaces() {
                                             <span className="text-xs text-muted">{hostel.block_count} block{hostel.block_count !== 1 ? 's' : ''}</span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="flex gap-6 text-center">
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex gap-4 text-center">
                                             {[
                                                 { label: 'Total',    value: hostel.capacity, color: 'text-heading' },
                                                 { label: 'Occupied', value: hostel.occupied,  color: 'text-amber-600' },
                                                 { label: 'Vacant',   value: hostel.available, color: hostel.available > 0 ? 'text-lime' : 'text-red-500' },
                                             ].map(s => (
                                                 <div key={s.label}>
-                                                    <p className="text-xs font-bold text-muted uppercase tracking-widest">{s.label}</p>
-                                                    <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                                                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest">{s.label}</p>
+                                                    <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
                                                 </div>
                                             ))}
                                         </div>
                                         <button
                                             onClick={() => navigate(`/admin/hostels/${hostel.id}/blocks`)}
-                                            className="flex items-center gap-2 bg-forest text-lime px-4 py-2 rounded-xl font-bold text-sm hover:bg-forest/90 transition-colors"
+                                            className="flex items-center gap-2 bg-forest text-lime px-4 py-2 rounded-xl font-bold text-sm hover:bg-forest/90 transition-colors shrink-0"
                                         >
                                             <Building className="w-4 h-4" />
-                                            Manage Blocks
+                                            <span className="hidden sm:inline">Manage Blocks</span>
+                                            <span className="sm:hidden">Blocks</span>
                                         </button>
                                     </div>
                                 </div>

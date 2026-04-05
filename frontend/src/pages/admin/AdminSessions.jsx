@@ -121,7 +121,7 @@ export default function AdminSessions() {
                             {activeSession.session_name}
                         </span>
                     </div>
-                    <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {PORTAL_CONFIG.map(p => {
                             const isOpen = activeSession[p.field];
                             const isToggling = togglingPortal === p.key;

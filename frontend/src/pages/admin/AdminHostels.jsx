@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
-import { Building, Plus, Layers, AlertTriangle, CheckCircle, WrenchIcon, DollarSign, X, Save, Loader2 } from 'lucide-react';
+import { Building, Plus, Layers, AlertTriangle, CheckCircle, WrenchIcon, DollarSign, X, Save, Loader2, Trash2 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 const STATUS_CONFIG = {
@@ -30,6 +30,8 @@ export default function AdminHostels() {
     const [prices, setPrices] = useState({});
     const [priceSaving, setPriceSaving] = useState(false);
     const [priceLoading, setPriceLoading] = useState(false);
+    const [deletingId, setDeletingId] = useState(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
     const toast = useToast();
     const navigate = useNavigate();
 
@@ -109,18 +111,32 @@ export default function AdminHostels() {
         }
     };
 
+    const handleDelete = async (hostel) => {
+        setDeletingId(hostel.id);
+        try {
+            const res = await apiClient.delete(`/admin/hostels/${hostel.id}`);
+            toast.success(res.data.message);
+            fetchHostels();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to delete hostel');
+        } finally {
+            setDeletingId(null);
+            setConfirmDeleteId(null);
+        }
+    };
+
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Hostels...</div>;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-350">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-extrabold text-heading tracking-tight">Hostel Management</h1>
-                    <p className="text-muted mt-2 font-medium">Manage hostel buildings, statuses, pricing, and block hierarchy.</p>
+                    <p className="text-muted mt-2 font-medium">Manage hostel buildings, statuses, and block hierarchy.</p>
                 </div>
                 <button
                     onClick={() => setShowForm(!showForm)}
-                    className="flex items-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
+                    className="flex items-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all self-start sm:self-auto shrink-0"
                 >
                     <Plus className="w-5 h-5" />
                     Add Hostel
@@ -279,30 +295,47 @@ export default function AdminHostels() {
                                 </div>
 
                                 {/* Card Actions */}
-                                <div className="px-5 pb-5 flex gap-2">
-                                    <button
-                                        onClick={() => navigate(`/admin/hostels/${hostel.id}/blocks`)}
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-forest text-lime py-2 rounded-xl font-bold text-sm hover:bg-forest/90 transition-colors"
-                                    >
-                                        <Layers className="w-3.5 h-3.5" />
-                                        Blocks
-                                    </button>
-                                    <button
-                                        onClick={() => openPricing(hostel)}
-                                        className="flex items-center justify-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-2 rounded-xl font-bold text-sm hover:bg-indigo-100 transition-colors border border-indigo-200"
-                                        title="Set prices per program type"
-                                    >
-                                        <DollarSign className="w-3.5 h-3.5" />
-                                        Prices
-                                    </button>
-                                    <button
-                                        onClick={() => cycleStatus(hostel)}
-                                        disabled={togglingId === hostel.id}
-                                        className="flex items-center justify-center gap-1.5 bg-surface text-heading px-3 py-2 rounded-xl font-bold text-sm hover:bg-black/5 transition-colors disabled:opacity-50"
-                                        title={`Toggle status (currently: ${hostel.status})`}
-                                    >
-                                        <WrenchIcon className="w-3.5 h-3.5" />
-                                    </button>
+                                <div className="px-5 pb-5 space-y-2">
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => navigate(`/admin/hostels/${hostel.id}/blocks`)}
+                                            className="flex-1 flex items-center justify-center gap-1.5 bg-forest text-lime py-2 rounded-xl font-bold text-sm hover:bg-forest/90 transition-colors"
+                                        >
+                                            <Layers className="w-3.5 h-3.5" />
+                                            Blocks
+                                        </button>
+<button
+                                            onClick={() => cycleStatus(hostel)}
+                                            disabled={togglingId === hostel.id}
+                                            className="flex items-center justify-center gap-1.5 bg-surface text-heading px-3 py-2 rounded-xl font-bold text-sm hover:bg-black/5 transition-colors disabled:opacity-50"
+                                            title={`Toggle status (currently: ${hostel.status})`}
+                                        >
+                                            <WrenchIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={() => setConfirmDeleteId(hostel.id)}
+                                            className="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 px-3 py-2 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors border border-red-200"
+                                            title="Delete hostel"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                    {confirmDeleteId === hostel.id && (
+                                        <div className="flex items-center gap-2 p-3 bg-red-50 rounded-xl border border-red-200 animate-in slide-in-from-bottom-2 duration-200">
+                                            <p className="text-xs font-bold text-red-700 flex-1">Delete this hostel? This cannot be undone.</p>
+                                            <button
+                                                onClick={() => handleDelete(hostel)}
+                                                disabled={deletingId === hostel.id}
+                                                className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                            >
+                                                {deletingId === hostel.id ? 'Deleting…' : 'Confirm'}
+                                            </button>
+                                            <button
+                                                onClick={() => setConfirmDeleteId(null)}
+                                                className="text-xs font-bold text-red-600 hover:text-red-800 px-2 py-1.5 transition-colors"
+                                            >Cancel</button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );

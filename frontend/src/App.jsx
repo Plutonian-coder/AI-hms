@@ -124,7 +124,7 @@ const StudentLayout = ({ children }) => {
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden" style={{ background: 'linear-gradient(135deg, #E8F5EE 0%, #F2F6F3 50%, #EBF5F0 100%)' }}>
+    <div className="flex h-screen w-screen overflow-hidden app-bg">
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
       <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         {/* Header */}
@@ -147,7 +147,7 @@ const StudentLayout = ({ children }) => {
           <ProfileDropdown user={user} initial={initial} />
         </header>
         {/* Page content */}
-        <main className="flex-1 p-5 lg:p-8 w-full max-w-7xl mx-auto">
+        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full max-w-7xl mx-auto overflow-x-hidden">
           {children}
         </main>
       </div>
@@ -173,7 +173,7 @@ const AdminLayout = ({ children }) => {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden" style={{ background: 'linear-gradient(135deg, #E8F5EE 0%, #F2F6F3 50%, #EBF5F0 100%)' }}>
+    <div className="flex h-screen w-screen overflow-hidden app-bg">
       <AdminSidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} />
       <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         {/* Header */}
@@ -196,7 +196,7 @@ const AdminLayout = ({ children }) => {
           <ProfileDropdown user={user} initial={initial} />
         </header>
         {/* Page content */}
-        <main className="flex-1 p-5 lg:p-8 w-full max-w-7xl mx-auto">
+        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full max-w-7xl mx-auto overflow-x-hidden">
           {children}
         </main>
       </div>

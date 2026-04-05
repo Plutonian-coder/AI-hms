@@ -152,7 +152,7 @@ export default function AdminFeeComponents() {
                         <p className="text-white/50 text-xs font-bold uppercase tracking-widest">Active Session</p>
                         <p className="text-white text-lg font-bold mt-0.5">{session.session_name}</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {[
                             { label: 'Full-time Total', value: totalFulltime },
                             { label: 'Part-time Total', value: totalParttime },
@@ -317,74 +317,125 @@ export default function AdminFeeComponents() {
                         </button>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-surface">
-                                <tr>
-                                    <th className="px-5 py-3.5 text-left font-bold text-muted uppercase tracking-widest text-[10px]">Component</th>
-                                    <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Full-time</th>
-                                    <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Part-time</th>
-                                    <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Sandwich</th>
-                                    <th className="px-5 py-3.5 text-center font-bold text-muted uppercase tracking-widest text-[10px]">Applies To</th>
-                                    <th className="px-5 py-3.5 text-center font-bold text-muted uppercase tracking-widest text-[10px]">Mandatory</th>
-                                    <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-black/5">
-                                {components.map((c) => (
-                                    <tr key={c.id} className="hover:bg-surface/40 transition-colors">
-                                        <td className="px-5 py-4">
-                                            <p className="font-bold text-heading">{c.name}</p>
-                                            <p className="text-[10px] text-muted font-medium mt-0.5">Order: {c.sort_order}</p>
-                                        </td>
-                                        <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_fulltime)}</td>
-                                        <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_parttime)}</td>
-                                        <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_sandwich)}</td>
-                                        <td className="px-5 py-4 text-center">
-                                            <span className="text-[10px] font-bold bg-forest/10 text-forest px-2.5 py-1 rounded-full">
-                                                {APPLIES_TO_OPTIONS.find(o => o.value === c.applies_to)?.label || c.applies_to}
-                                            </span>
-                                        </td>
-                                        <td className="px-5 py-4 text-center">
-                                            {c.is_mandatory
-                                                ? <span className="text-[10px] font-bold bg-lime/10 text-lime px-2.5 py-1 rounded-full">Yes</span>
-                                                : <span className="text-[10px] font-bold bg-black/5 text-muted px-2.5 py-1 rounded-full">No</span>
-                                            }
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={() => openEdit(c)}
-                                                    className="p-2 rounded-lg text-muted hover:text-heading hover:bg-surface transition-colors"
-                                                    title="Edit"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(c.id, c.name)}
-                                                    disabled={deletingId === c.id}
-                                                    className="p-2 rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
+                    <>
+                        {/* Desktop table */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full text-sm min-w-[700px]">
+                                <thead className="bg-surface">
+                                    <tr>
+                                        <th className="px-5 py-3.5 text-left font-bold text-muted uppercase tracking-widest text-[10px]">Component</th>
+                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Full-time</th>
+                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Part-time</th>
+                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Sandwich</th>
+                                        <th className="px-5 py-3.5 text-center font-bold text-muted uppercase tracking-widest text-[10px]">Applies To</th>
+                                        <th className="px-5 py-3.5 text-center font-bold text-muted uppercase tracking-widest text-[10px]">Mandatory</th>
+                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Actions</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                            {/* Totals footer */}
-                            <tfoot className="bg-forest/5 border-t border-black/10">
-                                <tr>
-                                    <td className="px-5 py-3 font-black text-heading text-sm">TOTAL</td>
-                                    <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalFulltime)}</td>
-                                    <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalParttime)}</td>
-                                    <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalSandwich)}</td>
-                                    <td colSpan={3}></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="divide-y divide-black/5">
+                                    {components.map((c) => (
+                                        <tr key={c.id} className="hover:bg-surface/40 transition-colors">
+                                            <td className="px-5 py-4">
+                                                <p className="font-bold text-heading">{c.name}</p>
+                                                <p className="text-[10px] text-muted font-medium mt-0.5">Order: {c.sort_order}</p>
+                                            </td>
+                                            <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_fulltime)}</td>
+                                            <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_parttime)}</td>
+                                            <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_sandwich)}</td>
+                                            <td className="px-5 py-4 text-center">
+                                                <span className="text-[10px] font-bold bg-forest/10 text-forest px-2.5 py-1 rounded-full">
+                                                    {APPLIES_TO_OPTIONS.find(o => o.value === c.applies_to)?.label || c.applies_to}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-4 text-center">
+                                                {c.is_mandatory
+                                                    ? <span className="text-[10px] font-bold bg-lime/10 text-lime px-2.5 py-1 rounded-full">Yes</span>
+                                                    : <span className="text-[10px] font-bold bg-black/5 text-muted px-2.5 py-1 rounded-full">No</span>
+                                                }
+                                            </td>
+                                            <td className="px-5 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button onClick={() => openEdit(c)} className="p-2 rounded-lg text-muted hover:text-heading hover:bg-surface transition-colors" title="Edit">
+                                                        <Pencil className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => handleDelete(c.id, c.name)} disabled={deletingId === c.id} className="p-2 rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot className="bg-forest/5 border-t border-black/10">
+                                    <tr>
+                                        <td className="px-5 py-3 font-black text-heading text-sm">TOTAL</td>
+                                        <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalFulltime)}</td>
+                                        <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalParttime)}</td>
+                                        <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalSandwich)}</td>
+                                        <td colSpan={3}></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        {/* Mobile cards */}
+                        <div className="md:hidden divide-y divide-black/5">
+                            {components.map((c) => (
+                                <div key={c.id} className="p-4 space-y-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                            <p className="font-bold text-heading">{c.name}</p>
+                                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                <span className="text-[10px] font-bold bg-forest/10 text-forest px-2 py-0.5 rounded-full">
+                                                    {APPLIES_TO_OPTIONS.find(o => o.value === c.applies_to)?.label || c.applies_to}
+                                                </span>
+                                                {c.is_mandatory
+                                                    ? <span className="text-[10px] font-bold bg-lime/10 text-lime px-2 py-0.5 rounded-full">Mandatory</span>
+                                                    : <span className="text-[10px] font-bold bg-black/5 text-muted px-2 py-0.5 rounded-full">Optional</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button onClick={() => openEdit(c)} className="p-2 rounded-lg text-muted hover:text-heading hover:bg-surface transition-colors">
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleDelete(c.id, c.name)} disabled={deletingId === c.id} className="p-2 rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                        {[
+                                            { label: 'Full-time', value: koboToNaira(c.amount_fulltime) },
+                                            { label: 'Part-time', value: koboToNaira(c.amount_parttime) },
+                                            { label: 'Sandwich',  value: koboToNaira(c.amount_sandwich) },
+                                        ].map(row => (
+                                            <div key={row.label} className="bg-surface rounded-xl p-2">
+                                                <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{row.label}</p>
+                                                <p className="text-sm font-black text-heading mt-0.5">₦{row.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                            {/* Mobile totals */}
+                            <div className="p-4 bg-forest/5">
+                                <p className="text-xs font-black text-heading uppercase tracking-widest mb-2">Totals</p>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                    {[
+                                        { label: 'Full-time', value: koboToNaira(totalFulltime) },
+                                        { label: 'Part-time', value: koboToNaira(totalParttime) },
+                                        { label: 'Sandwich',  value: koboToNaira(totalSandwich) },
+                                    ].map(row => (
+                                        <div key={row.label} className="bg-white/60 rounded-xl p-2">
+                                            <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{row.label}</p>
+                                            <p className="text-sm font-black text-heading mt-0.5">₦{row.value}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </>
                 )}
             </div>
         </div>

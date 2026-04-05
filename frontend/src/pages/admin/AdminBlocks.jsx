@@ -83,18 +83,18 @@ export default function AdminBlocks() {
     return (
         <div className="space-y-8 animate-in fade-in duration-350">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <button onClick={() => navigate('/admin/hostels')}
-                        className="p-2 rounded-xl bg-white border border-black/5 hover:bg-surface transition-colors"
+                        className="p-2 rounded-xl bg-white border border-black/5 hover:bg-surface transition-colors shrink-0"
                     ><ArrowLeft className="w-5 h-5 text-muted" /></button>
-                    <div>
+                    <div className="min-w-0">
                         <p className="text-xs font-bold text-muted uppercase tracking-widest">Hostel</p>
-                        <h1 className="text-2xl font-extrabold text-heading tracking-tight">{hostel_name}</h1>
+                        <h1 className="text-2xl font-extrabold text-heading tracking-tight truncate">{hostel_name}</h1>
                     </div>
                 </div>
                 <button onClick={() => setShowBlockForm(!showBlockForm)}
-                    className="flex items-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
+                    className="flex items-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all self-start sm:self-auto shrink-0"
                 >
                     <Plus className="w-5 h-5" /> Add Block
                 </button>

@@ -155,8 +155,8 @@ export default function AdminAllocations() {
             {/* Tabs + Content */}
             <div className="glass rounded-2xl overflow-hidden">
                 {/* Tab Bar */}
-                <div className="px-6 pt-5 pb-0 border-b border-black/5">
-                    <div className="flex gap-1 bg-surface rounded-full p-1 inline-flex">
+                <div className="px-4 pt-4 pb-0 border-b border-black/5 overflow-x-auto">
+                    <div className="flex gap-1 bg-surface rounded-full p-1 w-fit min-w-full sm:min-w-0 sm:inline-flex">
                         {TABS.map(tab => {
                             const Icon = tab.icon;
                             const isActive = activeTab === tab.key;

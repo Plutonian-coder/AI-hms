@@ -122,7 +122,7 @@ export default function Login() {
                 </div>
 
                 <p className="text-center text-[11px] text-muted/70 font-medium mt-5">
-                    AI-Driven Hostel Management System · Federal University Oye-Ekiti
+                    AI-Driven Hostel Management System · For Nigerian Tertiary Institutions
                 </p>
             </div>
         </div>

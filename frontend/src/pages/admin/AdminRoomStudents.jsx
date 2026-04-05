@@ -51,7 +51,7 @@ export default function AdminRoomStudents() {
             </div>
 
             {/* Room summary cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
                     { label: 'Total Beds', value: total_beds, icon: BedDouble, color: 'text-forest' },
                     { label: 'Occupied',   value: occupied_beds, icon: Users, color: 'text-amber-600' },
@@ -101,51 +101,85 @@ export default function AdminRoomStudents() {
                         <p className="text-muted font-medium">No students currently allocated to this room.</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-black/5">
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Bed</th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Full Name</th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Gender</th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Department</th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Level</th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Payment</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-black/5">
-                                {students.map(student => {
-                                    const pCfg = PAYMENT_CONFIG[student.payment_status] || PAYMENT_CONFIG.pending;
-                                    const PIcon = pCfg.icon;
-                                    return (
-                                        <tr key={student.student_id} className="hover:bg-surface/40 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <span className="w-8 h-8 flex items-center justify-center bg-forest text-lime font-black text-sm rounded-lg">
-                                                    {student.bed_number}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 font-mono text-sm font-bold text-heading">{student.identifier}</td>
-                                            <td className="px-6 py-4 font-semibold text-heading">{student.full_name}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${student.gender === 'male' ? 'bg-forest/5 text-forest' : 'bg-tag-pink/30 text-forest'}`}>
-                                                    {student.gender}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-body">{student.department || '—'}</td>
-                                            <td className="px-6 py-4 text-sm text-body">{student.level || '—'}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`flex items-center gap-1 w-fit text-xs font-semibold px-2.5 py-1 rounded-full ${pCfg.color}`}>
-                                                    <PIcon className="w-3 h-3" />
-                                                    {pCfg.label}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    <>
+                        {/* Desktop table */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full min-w-[640px]">
+                                <thead>
+                                    <tr className="border-b border-black/5">
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Bed</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Matric No.</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Full Name</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Gender</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Department</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Level</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-muted uppercase tracking-widest">Payment</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-black/5">
+                                    {students.map(student => {
+                                        const pCfg = PAYMENT_CONFIG[student.payment_status] || PAYMENT_CONFIG.pending;
+                                        const PIcon = pCfg.icon;
+                                        return (
+                                            <tr key={student.student_id} className="hover:bg-surface/40 transition-colors">
+                                                <td className="px-6 py-4">
+                                                    <span className="w-8 h-8 flex items-center justify-center bg-forest text-lime font-black text-sm rounded-lg">
+                                                        {student.bed_number}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-sm font-bold text-heading">{student.identifier}</td>
+                                                <td className="px-6 py-4 font-semibold text-heading">{student.full_name}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${student.gender === 'male' ? 'bg-forest/5 text-forest' : 'bg-tag-pink/30 text-forest'}`}>
+                                                        {student.gender}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-body">{student.department || '—'}</td>
+                                                <td className="px-6 py-4 text-sm text-body">{student.level || '—'}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`flex items-center gap-1 w-fit text-xs font-semibold px-2.5 py-1 rounded-full ${pCfg.color}`}>
+                                                        <PIcon className="w-3 h-3" />
+                                                        {pCfg.label}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Mobile cards */}
+                        <div className="md:hidden divide-y divide-black/5">
+                            {students.map(student => {
+                                const pCfg = PAYMENT_CONFIG[student.payment_status] || PAYMENT_CONFIG.pending;
+                                const PIcon = pCfg.icon;
+                                return (
+                                    <div key={student.student_id} className="p-4 space-y-2.5">
+                                        <div className="flex items-center gap-3">
+                                            <span className="w-8 h-8 flex items-center justify-center bg-forest text-lime font-black text-sm rounded-lg shrink-0">
+                                                {student.bed_number}
+                                            </span>
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-sm text-heading truncate">{student.full_name}</p>
+                                                <p className="font-mono text-xs text-muted">{student.identifier}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${student.gender === 'male' ? 'bg-forest/5 text-forest' : 'bg-tag-pink/30 text-forest'}`}>
+                                                {student.gender}
+                                            </span>
+                                            {student.level && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-lime-soft border border-lime-border text-forest">{student.level}</span>}
+                                            {student.department && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-surface text-muted">{student.department}</span>}
+                                            <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${pCfg.color}`}>
+                                                <PIcon className="w-3 h-3" />{pCfg.label}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
                 )}
             </div>
         </div>

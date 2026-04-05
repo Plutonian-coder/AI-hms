@@ -14,7 +14,7 @@ from database import get_cursor, get_connection
 from dependencies import get_current_admin
 from services.audit_logger import (
     log_event, SESSION_CREATED, PORTAL_TOGGLED, SESSION_ENDED,
-    FEE_COMPONENT_ADDED, FEE_COMPONENT_UPDATED, HOSTEL_CREATED,
+    FEE_COMPONENT_ADDED, FEE_COMPONENT_UPDATED, HOSTEL_CREATED, HOSTEL_DELETED,
     ALLOCATION_REVOKED, ADMIN_NL_QUERY,
 )
 from services.gemini_query import generate_sql, validate_sql
@@ -347,6 +347,26 @@ def update_hostel_status(hostel_id: int, data: HostelStatusUpdate, admin=Depends
         if not row:
             raise HTTPException(status_code=404, detail="Hostel not found")
     return {"message": f"'{row[0]}' status updated to '{data.status}'"}
+
+
+@router.delete("/hostels/{hostel_id}")
+def delete_hostel(hostel_id: int, admin=Depends(get_current_admin)):
+    with get_cursor() as cur:
+        cur.execute("SELECT name, occupied FROM (SELECT h.name, COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) AS occupied FROM hostels h LEFT JOIN blocks bl ON bl.hostel_id = h.id LEFT JOIN rooms r ON r.block_id = bl.id LEFT JOIN beds b ON b.room_id = r.id WHERE h.id = %s GROUP BY h.name) sub", (hostel_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Hostel not found")
+        name, occupied = row
+        if occupied and int(occupied) > 0:
+            raise HTTPException(status_code=409, detail=f"Cannot delete '{name}': {occupied} bed(s) are currently occupied. Revoke all allocations first.")
+        cur.execute("DELETE FROM hostels WHERE id = %s", (hostel_id,))
+
+    log_event(
+        HOSTEL_DELETED, "admin", admin["identifier"],
+        f"Deleted hostel '{name}'",
+        target_entity="hostel", target_id=str(hostel_id),
+    )
+    return {"message": f"Hostel '{name}' deleted successfully"}
 
 
 # ════════════════════════════════════════════════════════════

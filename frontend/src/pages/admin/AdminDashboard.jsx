@@ -88,7 +88,7 @@ export default function AdminDashboard() {
                         </div>
                         <span className="text-xs text-muted font-medium hidden sm:block">Portal Controls</span>
                     </div>
-                    <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {portals.map(p => {
                             const isOpen = session[p.field];
                             const isToggling = togglingPortal === p.key;

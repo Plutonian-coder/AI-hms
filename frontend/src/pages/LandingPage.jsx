@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import apiClient from '../api/client';
-import { ArrowRight, Search, BedDouble, Users, DoorOpen, BarChart3, ShieldCheck, RefreshCw, ChevronRight } from 'lucide-react';
+import { ArrowRight, Search, BedDouble, Users, ShieldCheck, BarChart3, ClipboardList, RefreshCw, ChevronRight, Zap } from 'lucide-react';
 
 export default function LandingPage() {
     const [matric, setMatric] = useState('');
@@ -35,8 +35,8 @@ export default function LandingPage() {
         <div className="bg-cream min-h-screen overflow-x-hidden">
 
             {/* ─── NAVBAR ─── */}
-            <nav className="sticky top-0 z-50 bg-cream/80 backdrop-blur-md">
-                <div className="max-w-7xl mx-auto px-6 lg:px-8 h-16 flex items-center justify-between">
+            <nav className="sticky top-0 z-50 bg-cream/80 backdrop-blur-md border-b border-black/5">
+                <div className="max-w-6xl mx-auto px-6 lg:px-8 h-16 flex items-center justify-between">
                     <Link to="/" className="text-xl font-black text-heading tracking-tight">
                         HMS
                     </Link>
@@ -44,8 +44,8 @@ export default function LandingPage() {
                         <a href="#features" className="hidden sm:block text-sm font-semibold text-muted hover:text-heading transition-colors">
                             Features
                         </a>
-                        <a href="#metrics" className="hidden sm:block text-sm font-semibold text-muted hover:text-heading transition-colors">
-                            About
+                        <a href="#how-it-works" className="hidden sm:block text-sm font-semibold text-muted hover:text-heading transition-colors">
+                            How It Works
                         </a>
                         <Link to="/login" className="text-sm font-bold text-heading hover:text-forest transition-colors">
                             Sign In
@@ -61,26 +61,30 @@ export default function LandingPage() {
             </nav>
 
             {/* ─── HERO ─── */}
-            <section className="max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-24 lg:pt-24 lg:pb-32">
+            <section className="max-w-6xl mx-auto px-6 lg:px-8 pt-16 pb-24 lg:pt-24 lg:pb-32">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
 
                     {/* Left — Copy */}
                     <div className="space-y-8">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-lime/20 text-forest text-xs font-bold uppercase tracking-widest">
+                            <span className="w-1.5 h-1.5 rounded-full bg-forest" />
+                            AI-Driven Hostel Management
+                        </div>
                         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-heading tracking-tight leading-[0.95]">
                             Seamless<br />
                             Hostel Living<br />
                             Starts Here<span className="text-lime">.</span>
                         </h1>
                         <p className="text-lg text-body font-medium max-w-lg leading-relaxed">
-                            AI-powered hostel allocation with receipt verification, real-time tracking,
-                            and instant bed assignment. No queues. No stress.
+                            Compatibility-matched bed allocation, transparent multi-component fees,
+                            and Paystack-verified payments. No queues. No manual verification.
                         </p>
                         <div className="flex items-center gap-4">
                             <Link
                                 to="/register"
                                 className="inline-flex items-center gap-2 bg-lime text-forest font-bold px-7 py-4 rounded-full shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all text-base"
                             >
-                                Create Account
+                                Apply for Hostel
                                 <ArrowRight className="w-5 h-5" />
                             </Link>
                             <Link
@@ -111,7 +115,7 @@ export default function LandingPage() {
                                             required
                                             value={matric}
                                             onChange={e => setMatric(e.target.value)}
-                                            placeholder="e.g. F/ND/22/3501234"
+                                            placeholder="e.g. CSC/2022/001"
                                             className="w-full bg-white/8 border border-white/10 text-white rounded-xl p-3.5 font-medium transition-all placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-lime/50 focus:border-lime/50"
                                         />
                                     </div>
@@ -190,7 +194,6 @@ export default function LandingPage() {
                                     </div>
                                 </div>
 
-                                {/* Capacity Dots */}
                                 <div>
                                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-2">Room Capacity</p>
                                     <div className="flex items-center gap-2">
@@ -206,7 +209,6 @@ export default function LandingPage() {
                                     </div>
                                 </div>
 
-                                {/* Roommates */}
                                 {result.roommates?.length > 0 && (
                                     <div>
                                         <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-2">Roommates</p>
@@ -253,176 +255,140 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            {/* ─── HOW IT WORKS ─── */}
+            <section id="how-it-works" className="bg-white border-y border-black/5">
+                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28">
+                    <div className="text-center mb-16">
+                        <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">Student Journey</p>
+                        <h2 className="text-4xl sm:text-5xl font-black text-heading tracking-tight mt-3">
+                            Six Steps to Your Bed
+                        </h2>
+                        <p className="text-body font-medium mt-4 max-w-xl mx-auto">
+                            From registration to allocated bed — fully online, no office visits required.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {[
+                            { step: '01', title: 'Register', desc: 'Your matric number is verified against the official session register. Details are auto-populated from the institutional record.' },
+                            { step: '02', title: 'Apply', desc: 'Select three ranked hostel preferences and review the itemised fee breakdown for your study type before proceeding.' },
+                            { step: '03', title: 'Pay via Paystack', desc: 'Complete payment securely through Paystack. A session-scoped HMS receipt reference is generated upon confirmation.' },
+                            { step: '04', title: 'Lifestyle Quiz', desc: 'Answer eight lifestyle questions covering sleep time, study habits, cleanliness, and social preferences.' },
+                            { step: '05', title: 'AI Matching', desc: 'A weighted cosine similarity algorithm matches you with the most compatible roommates across your preferred hostels.' },
+                            { step: '06', title: 'Get Allocated', desc: 'Your bed is atomically assigned with zero chance of double-booking. View your room, bed, and roommate profiles instantly.' },
+                        ].map((s) => (
+                            <div key={s.step} className="group p-6 rounded-2xl border border-black/5 hover:border-lime/40 hover:bg-lime/5 transition-all">
+                                <span className="text-4xl font-black text-lime/30 group-hover:text-lime/60 transition-colors leading-none">{s.step}</span>
+                                <h3 className="text-base font-bold text-heading mt-3">{s.title}</h3>
+                                <p className="text-sm text-body font-medium mt-2 leading-relaxed">{s.desc}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
             {/* ─── FEATURES ─── */}
             <section id="features" className="bg-forest">
-                <div className="max-w-7xl mx-auto px-6 lg:px-8 py-24 lg:py-32">
-                    <div className="text-center mb-20">
+                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28">
+                    <div className="text-center mb-16">
                         <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">Platform Capabilities</p>
-                        <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tight mt-4">
-                            Built for Modern<br />Campus Operations
+                        <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tight mt-3">
+                            Built for Modern Campus Operations
                         </h2>
+                        <p className="text-white/40 font-medium mt-4 max-w-xl mx-auto">
+                            Every feature addresses a documented failure mode in manual Nigerian university hostel management.
+                        </p>
                     </div>
 
-                    {/* Feature 1: Text Left, Card Right */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center mb-24">
-                        <div>
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-lime/10 text-lime text-xs font-bold uppercase tracking-widest mb-5">
-                                <ShieldCheck className="w-3.5 h-3.5" />
-                                AI Verification
-                            </div>
-                            <h3 className="text-3xl font-black text-white tracking-tight">
-                                Receipt Validation<br />in Seconds
-                            </h3>
-                            <p className="text-white/50 font-medium mt-4 leading-relaxed max-w-md">
-                               Advanced OCR analyzes uploaded payment receipts in real-time — verifying authenticity,
-                                extracting RRR codes, and checking payment status. No manual verification needed.
-                            </p>
-                        </div>
-                        <div className="bg-forest-light rounded-3xl p-6 border border-white/5">
-                            <div className="space-y-3">
-                                {['Authenticity Check', 'RRR Extraction', 'Payment Verification', 'Duplicate Detection'].map((step, i) => (
-                                    <div key={i} className="flex items-center gap-3 bg-white/5 rounded-2xl p-4">
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                            i < 3 ? 'bg-lime/15' : 'bg-white/5'
-                                        }`}>
-                                            {i < 3 ? (
-                                                <svg className="w-4 h-4 text-lime" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            ) : (
-                                                <span className="w-4 h-4 border-2 border-white/20 border-t-lime rounded-full animate-spin" />
-                                            )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {[
+                            {
+                                icon: ShieldCheck,
+                                tag: 'Identity Verification',
+                                title: 'Session Register Validation',
+                                desc: 'Every registration is checked against the officially uploaded student register CSV. No enrollment, no access — eliminating unauthorised platform entry entirely.',
+                                detail: 'Admins upload the current session register. Matric numbers are validated in real-time at point of registration.',
+                            },
+                            {
+                                icon: BedDouble,
+                                tag: 'AI Compatibility',
+                                title: 'Weighted Cosine Similarity Matching',
+                                desc: 'Eight lifestyle dimensions — sleep time, study noise, cleanliness, visitor frequency, and more — are encoded as normalised vectors and matched using weighted cosine similarity.',
+                                detail: 'Dimension weights are derived from roommate conflict research specific to Nigerian university hostels.',
+                            },
+                            {
+                                icon: Zap,
+                                tag: 'Secure Payments',
+                                title: 'Paystack Multi-Component Fees',
+                                desc: 'Hostel fees are split into named components (accommodation, electricity levy, caution deposit, etc.) per study type, with Paystack as the verified payment gateway.',
+                                detail: 'Each payment generates a session-scoped HMS receipt reference replacing unverifiable paper receipts.',
+                            },
+                            {
+                                icon: ClipboardList,
+                                tag: 'Accountability',
+                                title: 'Immutable Audit Trail',
+                                desc: 'Twenty-two categories of administrative events are recorded in an append-only table. INSERT-only database permissions guarantee tamper resistance at the infrastructure level.',
+                                detail: 'Allocation decisions, portal toggles, fee changes, and register imports are all logged with actor, timestamp, and metadata.',
+                            },
+                            {
+                                icon: BarChart3,
+                                tag: 'Reporting',
+                                title: 'Admin Report Builder',
+                                desc: 'Construct custom data extracts by selecting filters and columns from a predefined catalogue spanning all system domains — students, payments, allocations, and sessions.',
+                                detail: 'Live preview with CSV export. Natural language queries powered by Google Gemini API.',
+                            },
+                            {
+                                icon: Users,
+                                tag: 'Concurrency Safety',
+                                title: 'Atomic Bed Assignment',
+                                desc: 'Bed allocation runs inside a PostgreSQL stored function using SELECT FOR UPDATE SKIP LOCKED — preventing double-bookings even under simultaneous student submissions.',
+                                detail: 'The entire compatibility computation, locking, and allocation insertion is a single atomic transaction.',
+                            },
+                        ].map((f, i) => {
+                            const Icon = f.icon;
+                            return (
+                                <div key={i} className="bg-forest-light rounded-2xl p-6 border border-white/5 hover:border-white/10 transition-all">
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-lime/10 flex items-center justify-center shrink-0 mt-0.5">
+                                            <Icon className="w-5 h-5 text-lime" />
                                         </div>
-                                        <span className={`text-sm font-bold ${i < 3 ? 'text-white' : 'text-white/40'}`}>{step}</span>
-                                        {i < 3 && <span className="ml-auto text-[10px] font-bold text-lime/60 uppercase tracking-widest">Done</span>}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Feature 2: Card Left, Text Right */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center mb-24">
-                        <div className="order-2 lg:order-1 bg-forest-light rounded-3xl p-6 border border-white/5">
-                            <div className="flex items-center justify-between mb-5">
-                                <p className="text-[11px] font-bold text-white/30 uppercase tracking-[0.2em]">Live Dashboard</p>
-                                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-lime uppercase tracking-widest">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-lime animate-pulse" />
-                                    Live
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                {[
-                                    { label: 'Total Beds', value: '800', accent: false },
-                                    { label: 'Occupied', value: '642', accent: true },
-                                    { label: 'Available', value: '158', accent: false },
-                                    { label: 'Occupancy', value: '80%', accent: true },
-                                ].map((stat, i) => (
-                                    <div key={i} className="bg-white/5 rounded-2xl p-4">
-                                        <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.15em]">{stat.label}</p>
-                                        <p className={`text-2xl font-black mt-1 ${stat.accent ? 'text-lime' : 'text-white'}`}>{stat.value}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-4">
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-xs font-bold text-white/40">Occupancy Rate</span>
-                                    <span className="text-xs font-bold text-lime">80%</span>
-                                </div>
-                                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-lime rounded-full" style={{ width: '80%' }} />
-                                </div>
-                            </div>
-                        </div>
-                        <div className="order-1 lg:order-2">
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-lime/10 text-lime text-xs font-bold uppercase tracking-widest mb-5">
-                                <BarChart3 className="w-3.5 h-3.5" />
-                                Real-time Analytics
-                            </div>
-                            <h3 className="text-3xl font-black text-white tracking-tight">
-                                Full Visibility<br />Across All Hostels
-                            </h3>
-                            <p className="text-white/50 font-medium mt-4 leading-relaxed max-w-md">
-                                Track occupancy rates, monitor allocation progress, and manage academic sessions
-                                from a centralized admin dashboard with live data updates.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Feature 3: Text Left, Card Right */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                        <div>
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-lime/10 text-lime text-xs font-bold uppercase tracking-widest mb-5">
-                                <BedDouble className="w-3.5 h-3.5" />
-                                Smart Allocation
-                            </div>
-                            <h3 className="text-3xl font-black text-white tracking-tight">
-                                First-Come, First-Served<br />Done Right
-                            </h3>
-                            <p className="text-white/50 font-medium mt-4 leading-relaxed max-w-md">
-                                Atomic database transactions guarantee no double-bookings. Students pick 3 hostel
-                                preferences. The system assigns the first available bed — fairly and instantly.
-                            </p>
-                        </div>
-                        <div className="bg-forest-light rounded-3xl p-6 border border-white/5">
-                            <div className="space-y-3">
-                                {['Akata Hostel', 'Hollywood Hostel', 'New Hall'].map((hostel, i) => {
-                                    const pcts = [87, 64, 32];
-                                    return (
-                                        <div key={i} className="bg-white/5 rounded-2xl p-4">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-bold text-white">{hostel}</span>
-                                                <span className={`text-xs font-bold ${pcts[i] > 80 ? 'text-amber-400' : 'text-lime'}`}>{pcts[i]}%</span>
-                                            </div>
-                                            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full ${pcts[i] > 80 ? 'bg-amber-400' : 'bg-lime'}`}
-                                                    style={{ width: `${pcts[i]}%` }}
-                                                />
-                                            </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-lime/60 uppercase tracking-widest mb-1">{f.tag}</p>
+                                            <h3 className="text-base font-bold text-white">{f.title}</h3>
+                                            <p className="text-sm text-white/50 font-medium mt-2 leading-relaxed">{f.desc}</p>
+                                            <p className="text-xs text-white/30 font-medium mt-3 leading-relaxed border-t border-white/5 pt-3">{f.detail}</p>
                                         </div>
-                                    );
-                                })}
-                                <div className="flex items-center gap-3 mt-2 p-3 bg-lime/10 rounded-xl border border-lime/20">
-                                    <span className="w-6 h-6 rounded-full bg-lime flex items-center justify-center">
-                                        <svg className="w-3.5 h-3.5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </span>
-                                    <span className="text-sm font-bold text-lime">Auto-assigned to Akata Hostel, Room 14</span>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
             </section>
 
             {/* ─── METRICS ─── */}
             <section id="metrics" className="bg-cream">
-                <div className="max-w-7xl mx-auto px-6 lg:px-8 py-24 lg:py-32">
+                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28">
                     <div className="text-center mb-16">
-                        <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">By the Numbers</p>
-                        <h2 className="text-4xl sm:text-5xl font-black text-heading tracking-tight mt-4">
-                            Trusted Performance
+                        <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">System Scope</p>
+                        <h2 className="text-4xl sm:text-5xl font-black text-heading tracking-tight mt-3">
+                            Designed for Scale
                         </h2>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 lg:gap-8">
                         {[
-                            { number: '98%', label: 'Allocation Accuracy', desc: 'AI-verified receipt processing with near-zero error rate' },
-                            { number: '3x', label: 'Faster Processing', desc: 'From upload to bed assignment in under 30 seconds' },
-                            { number: '500+', label: 'Students Managed', desc: 'Scalable platform handling peak allocation periods' },
+                            { number: '19', label: 'Application Screens', desc: '3 public, 8 student portal, 8 admin portal pages' },
+                            { number: '22', label: 'Audit Event Types', desc: 'Every significant system action recorded immutably' },
+                            { number: '8', label: 'Lifestyle Dimensions', desc: 'Vector dimensions used in compatibility matching' },
+                            { number: '15', label: 'Database Tables', desc: 'Third Normal Form schema with full referential integrity' },
                         ].map((stat, i) => (
-                            <div key={i} className="text-center lg:text-left">
-                                <div className="flex items-start justify-center lg:justify-start gap-2">
-                                    <span className="text-6xl sm:text-7xl font-black text-heading tracking-tighter leading-none">
-                                        {stat.number}
-                                    </span>
-                                    <span className="w-2.5 h-2.5 rounded-sm bg-lime mt-2 shrink-0" />
-                                </div>
-                                <p className="text-base font-bold text-heading mt-3 uppercase tracking-widest text-sm">
+                            <div key={i} className="text-center p-6 rounded-2xl border border-black/5 hover:border-lime/30 transition-all">
+                                <span className="text-5xl sm:text-6xl font-black text-heading tracking-tighter leading-none">
+                                    {stat.number}
+                                </span>
+                                <p className="text-sm font-bold text-heading mt-3 uppercase tracking-wider">
                                     {stat.label}
                                 </p>
-                                <p className="text-muted font-medium mt-2 leading-relaxed text-sm max-w-xs mx-auto lg:mx-0">
+                                <p className="text-muted font-medium mt-2 leading-relaxed text-xs">
                                     {stat.desc}
                                 </p>
                             </div>
@@ -432,47 +398,47 @@ export default function LandingPage() {
             </section>
 
             {/* ─── FINAL CTA ─── */}
-            <section className="bg-cream relative overflow-hidden">
-                <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-lime/10 rounded-full blur-3xl" />
-                <div className="absolute -top-20 -left-20 w-64 h-64 bg-lime/5 rounded-full blur-3xl" />
-
-                <div className="max-w-7xl mx-auto px-6 lg:px-8 py-24 lg:py-32 text-center relative z-10">
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-heading tracking-tight leading-[0.95]">
-                        Ready to Elevate<br />Campus Living<span className="text-lime">?</span>
+            <section className="bg-forest">
+                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28 text-center">
+                    <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">Get Started</p>
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[0.95] mt-4">
+                        Ready for a Smarter<br />Hostel Experience<span className="text-lime">?</span>
                     </h2>
-                    <p className="text-body font-medium mt-6 max-w-lg mx-auto leading-relaxed text-lg">
-                        Join the modern approach to hostel management. Fast, fair, and fully automated.
+                    <p className="text-white/50 font-medium mt-6 max-w-lg mx-auto leading-relaxed text-lg">
+                        Create your account today. Your matric number is all you need to begin.
                     </p>
                     <div className="flex items-center justify-center gap-4 mt-10">
                         <Link
                             to="/register"
                             className="inline-flex items-center gap-2 bg-lime text-forest font-bold px-8 py-4 rounded-full shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all text-lg"
                         >
-                            Get Started
+                            Create Account
                             <ArrowRight className="w-5 h-5" />
                         </Link>
                         <Link
                             to="/login"
-                            className="inline-flex items-center gap-2 bg-forest text-white font-bold px-8 py-4 rounded-full shadow-lg shadow-forest/25 hover:bg-forest-light transition-all text-lg"
+                            className="inline-flex items-center gap-2 text-white/60 font-bold px-8 py-4 rounded-full hover:text-white hover:bg-white/5 transition-all text-lg"
                         >
-                            Admin Login
+                            Sign In
+                            <ChevronRight className="w-5 h-5" />
                         </Link>
                     </div>
                 </div>
             </section>
 
             {/* ─── FOOTER ─── */}
-            <footer className="bg-forest">
-                <div className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
+            <footer className="bg-forest border-t border-white/10">
+                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-12">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                         <div>
                             <span className="text-lg font-black text-white tracking-tight">HMS</span>
-                            <p className="text-white/30 text-sm font-medium mt-1">Hostel Management System</p>
+                            <p className="text-white/30 text-sm font-medium mt-1">AI-Driven Hostel Management System</p>
                         </div>
                         <div className="flex items-center gap-6 text-sm font-medium text-white/40">
                             <Link to="/login" className="hover:text-white transition-colors">Sign In</Link>
                             <Link to="/register" className="hover:text-white transition-colors">Register</Link>
                             <a href="#features" className="hover:text-white transition-colors">Features</a>
+                            <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
                         </div>
                     </div>
                     <div className="border-t border-white/10 mt-8 pt-8 text-center">
