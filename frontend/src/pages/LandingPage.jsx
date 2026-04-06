@@ -76,8 +76,9 @@ export default function LandingPage() {
                             Starts Here<span className="text-lime">.</span>
                         </h1>
                         <p className="text-lg text-body font-medium max-w-lg leading-relaxed">
-                            Compatibility-matched bed allocation, transparent multi-component fees,
-                            and Paystack-verified payments. No queues. No manual verification.
+                            A modern hostel management portal for Nigerian tertiary institutions.
+                            Online applications, secure payments, intelligent roommate matching,
+                            and instant bed allocation — fully paperless, no queues.
                         </p>
                         <div className="flex items-center gap-4">
                             <Link
@@ -269,12 +270,12 @@ export default function LandingPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {[
-                            { step: '01', title: 'Register', desc: 'Your matric number is verified against the official session register. Details are auto-populated from the institutional record.' },
-                            { step: '02', title: 'Apply', desc: 'Select three ranked hostel preferences and review the itemised fee breakdown for your study type before proceeding.' },
-                            { step: '03', title: 'Pay via Paystack', desc: 'Complete payment securely through Paystack. A session-scoped HMS receipt reference is generated upon confirmation.' },
-                            { step: '04', title: 'Lifestyle Quiz', desc: 'Answer eight lifestyle questions covering sleep time, study habits, cleanliness, and social preferences.' },
-                            { step: '05', title: 'AI Matching', desc: 'A weighted cosine similarity algorithm matches you with the most compatible roommates across your preferred hostels.' },
-                            { step: '06', title: 'Get Allocated', desc: 'Your bed is atomically assigned with zero chance of double-booking. View your room, bed, and roommate profiles instantly.' },
+                            { step: '01', title: 'Register', desc: 'Verify your matric number against the official session register. Your profile is pre-filled from institutional records — no manual entry needed.' },
+                            { step: '02', title: 'Apply', desc: 'Select your top three hostel preferences and review a clear, itemised fee breakdown tailored to your study type before proceeding.' },
+                            { step: '03', title: 'Pay Securely', desc: 'Pay your hostel fee online through Paystack. A unique digital receipt reference is issued as your permanent payment confirmation.' },
+                            { step: '04', title: 'Lifestyle Quiz', desc: 'Answer a short questionnaire about your daily habits and living preferences to help find you the most compatible roommates.' },
+                            { step: '05', title: 'Smart Matching', desc: 'Our matching system pairs you with compatible roommates based on shared lifestyle preferences across your preferred hostels.' },
+                            { step: '06', title: 'Get Allocated', desc: 'Your bed is confirmed instantly with no risk of double-booking. View your room number, bed, and roommate details right away.' },
                         ].map((s) => (
                             <div key={s.step} className="group p-6 rounded-2xl border border-black/5 hover:border-lime/40 hover:bg-lime/5 transition-all">
                                 <span className="text-4xl font-black text-lime/30 group-hover:text-lime/60 transition-colors leading-none">{s.step}</span>
@@ -295,7 +296,7 @@ export default function LandingPage() {
                             Built for Modern Campus Operations
                         </h2>
                         <p className="text-white/40 font-medium mt-4 max-w-xl mx-auto">
-                            Every feature addresses a documented failure mode in manual Nigerian university hostel management.
+                            Purpose-built to replace paper-based hostel management with a reliable, auditable digital process.
                         </p>
                     </div>
 
@@ -303,45 +304,45 @@ export default function LandingPage() {
                         {[
                             {
                                 icon: ShieldCheck,
-                                tag: 'Identity Verification',
-                                title: 'Session Register Validation',
-                                desc: 'Every registration is checked against the officially uploaded student register CSV. No enrollment, no access — eliminating unauthorised platform entry entirely.',
-                                detail: 'Admins upload the current session register. Matric numbers are validated in real-time at point of registration.',
+                                tag: 'Access Control',
+                                title: 'Verified Student Access',
+                                desc: 'Only students on the officially uploaded session register can create an account. Every registration is cross-checked against current enrolment data before access is granted.',
+                                detail: 'Administrators upload the session register. Matric numbers are validated at the point of registration before any account is created.',
                             },
                             {
                                 icon: BedDouble,
                                 tag: 'AI Compatibility',
-                                title: 'Weighted Cosine Similarity Matching',
-                                desc: 'Eight lifestyle dimensions — sleep time, study noise, cleanliness, visitor frequency, and more — are encoded as normalised vectors and matched using weighted cosine similarity.',
-                                detail: 'Dimension weights are derived from roommate conflict research specific to Nigerian university hostels.',
+                                title: 'Smart Roommate Matching',
+                                desc: 'Students are matched with compatible roommates based on shared lifestyle preferences — covering sleep habits, study patterns, social preferences, and personal living standards.',
+                                detail: 'Matching considers multiple lifestyle dimensions to reduce the friction that causes roommate conflicts in residential halls.',
                             },
                             {
                                 icon: Zap,
                                 tag: 'Secure Payments',
-                                title: 'Paystack Multi-Component Fees',
-                                desc: 'Hostel fees are split into named components (accommodation, electricity levy, caution deposit, etc.) per study type, with Paystack as the verified payment gateway.',
-                                detail: 'Each payment generates a session-scoped HMS receipt reference replacing unverifiable paper receipts.',
+                                title: 'Transparent Online Payments',
+                                desc: 'Hostel fees are itemised by component — accommodation, utilities, levies — with amounts tailored per study type. All payments are processed securely through Paystack.',
+                                detail: 'Each payment generates a unique digital HMS receipt, replacing unverifiable paper receipts with a permanent digital record.',
                             },
                             {
                                 icon: ClipboardList,
                                 tag: 'Accountability',
-                                title: 'Immutable Audit Trail',
-                                desc: 'Twenty-two categories of administrative events are recorded in an append-only table. INSERT-only database permissions guarantee tamper resistance at the infrastructure level.',
-                                detail: 'Allocation decisions, portal toggles, fee changes, and register imports are all logged with actor, timestamp, and metadata.',
+                                title: 'Full Administrative Audit Trail',
+                                desc: 'Every significant administrative action — allocations, fee changes, portal controls, and register imports — is permanently recorded with a timestamp and actor identity.',
+                                detail: 'The audit record is tamper-resistant by design, providing a reliable history of all hostel management decisions.',
                             },
                             {
                                 icon: BarChart3,
                                 tag: 'Reporting',
                                 title: 'Admin Report Builder',
-                                desc: 'Construct custom data extracts by selecting filters and columns from a predefined catalogue spanning all system domains — students, payments, allocations, and sessions.',
-                                detail: 'Live preview with CSV export. Natural language queries powered by Google Gemini API.',
+                                desc: 'Build tailored reports from student, payment, and allocation data using a flexible filter and column builder. Results can be previewed instantly and exported as CSV.',
+                                detail: 'An AI-assisted query interface allows plain-English questions about hostel data, returning structured results without manual database access.',
                             },
                             {
                                 icon: Users,
-                                tag: 'Concurrency Safety',
-                                title: 'Atomic Bed Assignment',
-                                desc: 'Bed allocation runs inside a PostgreSQL stored function using SELECT FOR UPDATE SKIP LOCKED — preventing double-bookings even under simultaneous student submissions.',
-                                detail: 'The entire compatibility computation, locking, and allocation insertion is a single atomic transaction.',
+                                tag: 'Allocation Integrity',
+                                title: 'Conflict-Free Bed Assignment',
+                                desc: 'Bed assignments are processed with guaranteed uniqueness — two students can never be confirmed to the same bed, even under simultaneous submissions.',
+                                detail: 'Allocation integrity is enforced at the system level, eliminating the double-booking failures common in manual or spreadsheet-based hostel management.',
                             },
                         ].map((f, i) => {
                             const Icon = f.icon;
@@ -376,10 +377,10 @@ export default function LandingPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 lg:gap-8">
                         {[
-                            { number: '19', label: 'Application Screens', desc: '3 public, 8 student portal, 8 admin portal pages' },
-                            { number: '22', label: 'Audit Event Types', desc: 'Every significant system action recorded immutably' },
-                            { number: '8', label: 'Lifestyle Dimensions', desc: 'Vector dimensions used in compatibility matching' },
-                            { number: '15', label: 'Database Tables', desc: 'Third Normal Form schema with full referential integrity' },
+                            { number: '6',     label: 'Steps End-to-End',     desc: 'From first registration to confirmed bed allocation' },
+                            { number: '3',     label: 'Hostel Preferences',   desc: 'Students rank their top three hostel choices per session' },
+                            { number: '8',     label: 'Compatibility Factors', desc: 'Lifestyle dimensions used to match compatible roommates' },
+                            { number: '100%',  label: 'Paperless Process',    desc: 'Applications, payments, and receipts fully digital' },
                         ].map((stat, i) => (
                             <div key={i} className="text-center p-6 rounded-2xl border border-black/5 hover:border-lime/30 transition-all">
                                 <span className="text-5xl sm:text-6xl font-black text-heading tracking-tighter leading-none">

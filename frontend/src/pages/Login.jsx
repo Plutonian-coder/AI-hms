@@ -59,7 +59,7 @@ export default function Login() {
                     <form onSubmit={handleLogin} className="space-y-5">
                         <div className="space-y-1.5">
                             <label className="block text-xs font-bold text-muted uppercase tracking-widest">
-                                Matric Number / Admin ID
+                                Matric Number
                             </label>
                             <input
                                 type="text"

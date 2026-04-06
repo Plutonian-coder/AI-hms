@@ -1,14 +1,14 @@
 """
 Natural Language Query Service — Converts plain English admin queries
-to read-only SQL via Google Gemini API, validates for safety,
+to read-only SQL via Groq (OpenAI-compatible), validates for safety,
 and executes against the live database.
 """
 import re
-import google.generativeai as genai
+from openai import OpenAI
 
-from config import GEMINI_API_KEY
+from config import GROQ_API_KEY
 
-MODEL = "gemini-1.5-flash"
+MODEL = "llama-3.3-70b-versatile"
 
 DB_SCHEMA = """
 Tables:
@@ -23,9 +23,9 @@ Tables:
 - hostel_applications (id, student_id, session_id, choice_1_id, choice_2_id, choice_3_id, special_notes, status, submitted_at) — FK student_id → users, session_id → academic_sessions
 - confirmed_payments (id, student_id, session_id, hms_reference, paystack_id, total_amount_kobo, payment_channel, paystack_status, status, confirmed_at) — FK student_id → users, session_id → academic_sessions
 - payment_component_log (id, payment_id, component_id, component_name, amount_kobo) — FK payment_id → confirmed_payments
-- student_vectors (id, student_id, session_id, v1-v8, submitted_at) — lifestyle compatibility vectors (0.0-1.0 each). FK student_id → users
+- student_vectors (id, student_id, session_id, v1, v2, v3, v4, v5, v6, v7, v8, submitted_at) — lifestyle compatibility vectors (0.0–1.0 each). FK student_id → users
 - allocations (id, student_id, bed_id, session_id, payment_id, matched_from_preference, avg_compatibility_score, status, revocation_reason, revoked_by, revoked_at, allocated_at) — FK student_id → users, bed_id → beds
-- compatibility_scores (id, student_a_id, student_b_id, session_id, score, computed_at) — pairwise roommate scores (0-100)
+- compatibility_scores (id, student_a_id, student_b_id, session_id, score, computed_at) — pairwise roommate scores (0–100)
 - audit_logs (id, timestamp, actor_type, actor_id, action_type, target_entity, target_id, description, metadata, session_id)
 
 Notes:
@@ -59,11 +59,14 @@ def validate_sql(sql: str) -> tuple[bool, str]:
 
 
 def generate_sql(user_query: str) -> dict:
-    """Use Google Gemini API to generate a SQL query from plain English."""
-    if not GEMINI_API_KEY:
-        return {"error": "Gemini API key not configured. Set GEMINI_API_KEY in your environment."}
+    """Use Groq LLM to generate a SQL query from plain English."""
+    if not GROQ_API_KEY:
+        return {"error": "Groq API key not configured. Set GROQ_API_KEY in your environment."}
 
-    genai.configure(api_key=GEMINI_API_KEY)
+    client = OpenAI(
+        base_url="https://api.groq.com/openai/v1",
+        api_key=GROQ_API_KEY,
+    )
 
     prompt = f"""You are a SQL query generator for a hostel management system.
 Given the following PostgreSQL database schema:
@@ -77,17 +80,25 @@ Rules:
 3. Use descriptive column aliases for readability.
 4. Limit results to 100 rows unless the user specifically asks for more.
 5. For monetary amounts, divide kobo by 100 and label as Naira.
-6. Return ONLY the SQL query, nothing else. No markdown, no explanation.
+6. Return ONLY the raw SQL query — no markdown, no code fences, no explanation.
 
 User question: {user_query}
 """
 
     try:
-        model = genai.GenerativeModel(MODEL)
-        response = model.generate_content(prompt)
-        sql = response.text.strip()
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": "You output only raw PostgreSQL SELECT queries with no formatting or explanation."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0,
+            max_tokens=512,
+        )
 
-        # Strip markdown code fences if the model wraps the SQL
+        sql = response.choices[0].message.content.strip()
+
+        # Strip markdown code fences if present
         if sql.startswith("```"):
             lines = sql.split("\n")
             sql = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
