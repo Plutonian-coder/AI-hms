@@ -1,22 +1,15 @@
 """
 Natural Language Query Service — Converts plain English admin queries
-to read-only SQL via OpenRouter (Gemini 2.5 Flash), validates for safety,
+to read-only SQL via Google Gemini API, validates for safety,
 and executes against the live database.
 """
 import re
-from openai import OpenAI
+import google.generativeai as genai
 
-from config import OPENROUTER_API_KEY
+from config import GEMINI_API_KEY
 
-# OpenRouter uses the OpenAI-compatible API
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=OPENROUTER_API_KEY,
-)
+MODEL = "gemini-1.5-flash"
 
-MODEL = "google/gemini-3.1-flash-lite-preview"
-
-# The schema context sent to the LLM
 DB_SCHEMA = """
 Tables:
 - users (id, identifier, surname, first_name, email, phone, gender, department, level, study_type, role, next_of_kin_name, next_of_kin_phone, is_active, created_at)
@@ -66,9 +59,11 @@ def validate_sql(sql: str) -> tuple[bool, str]:
 
 
 def generate_sql(user_query: str) -> dict:
-    """Use OpenRouter (Gemini) to generate a SQL query from plain English."""
-    if not OPENROUTER_API_KEY:
-        return {"error": "OpenRouter API key not configured"}
+    """Use Google Gemini API to generate a SQL query from plain English."""
+    if not GEMINI_API_KEY:
+        return {"error": "Gemini API key not configured. Set GEMINI_API_KEY in your environment."}
+
+    genai.configure(api_key=GEMINI_API_KEY)
 
     prompt = f"""You are a SQL query generator for a hostel management system.
 Given the following PostgreSQL database schema:
@@ -88,13 +83,9 @@ User question: {user_query}
 """
 
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=1024,
-        )
-        sql = response.choices[0].message.content.strip()
+        model = genai.GenerativeModel(MODEL)
+        response = model.generate_content(prompt)
+        sql = response.text.strip()
 
         # Strip markdown code fences if the model wraps the SQL
         if sql.startswith("```"):

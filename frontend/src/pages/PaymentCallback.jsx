@@ -24,7 +24,7 @@ export default function PaymentCallback() {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
 
-            if (!response.ok && !response.headers.get('content-type')?.includes('text/event-stream')) {
+            if (!response.ok) {
                 const err = await response.json().catch(() => ({ detail: 'Server error' }));
                 setPipelineError({ step: 0, title: 'Verification Failed', detail: err.detail || 'Could not verify payment' });
                 return;

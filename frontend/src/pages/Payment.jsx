@@ -168,11 +168,11 @@ export default function Payment() {
                     <div className="space-y-3 mb-6">
                         <div className="flex justify-between py-2 border-b border-black/5">
                             <span className="text-xs font-bold text-muted uppercase tracking-widest">Reference</span>
-                            <span className="text-sm font-mono font-semibold text-heading">{paymentStatus.reference}</span>
+                            <span className="text-sm font-mono font-semibold text-heading">{paymentStatus.reference || '—'}</span>
                         </div>
                         <div className="flex justify-between py-2 border-b border-black/5">
                             <span className="text-xs font-bold text-muted uppercase tracking-widest">Amount</span>
-                            <span className="text-sm font-bold text-heading">{'\u20A6'}{paymentStatus.amount?.toLocaleString()}</span>
+                            <span className="text-sm font-bold text-heading">{'\u20A6'}{paymentStatus.amount_naira?.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between py-2 border-b border-black/5">
                             <span className="text-xs font-bold text-muted uppercase tracking-widest">HMS Reference</span>

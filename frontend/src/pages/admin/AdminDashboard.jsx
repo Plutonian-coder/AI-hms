@@ -130,12 +130,12 @@ export default function AdminDashboard() {
             {/* Stats grid */}
             {stats && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard icon={Users}       label="Total Students"  value={stats.total_students}          accent="forest" />
+                    <StatCard icon={Users}       label="In Register"     value={stats.eligible_count ?? 0}     accent="forest" />
+                    <StatCard icon={Users}       label="Portal Accounts" value={stats.total_students ?? 0}     accent="lime" />
                     <StatCard icon={CheckCircle} label="Allocated"       value={stats.active_allocations}      accent="success" />
                     <StatCard icon={TrendingUp}  label="Occupancy"       value={`${occupancyRate}%`}           accent="lime" />
                     <StatCard icon={BedDouble}   label="Total Beds"      value={stats.total_beds}              accent="info" />
                     <StatCard icon={Building}    label="Hostels"         value={stats.total_hostels}           accent="forest" />
-                    <StatCard icon={Users}       label="In Register"     value={stats.eligible_count ?? 0}     accent="lime" />
                     <StatCard icon={BedDouble}   label="Available Beds"  value={stats.available_beds ?? 0}     accent="success" />
                     <StatCard icon={BarChart3}   label="Occupied Beds"   value={stats.occupied_beds ?? 0}      accent="warning" />
                 </div>

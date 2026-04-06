@@ -336,14 +336,21 @@ def verify_payment(reference: str, student=Depends(get_current_student)):
 
         yield _sse_step(2, "complete", "Verifying with Paystack", f"Payment confirmed — ₦{paid_amount // 100:,}")
 
-        # Step 3, 4, 5: Run helper
-        yield _sse_step(3, "processing", "Finalizing Payment", "Updating records and generating receipt...")
+        # Step 3: Update payment records in DB
+        yield _sse_step(3, "processing", "Finalizing Payment", "Updating payment records...")
         success = _confirm_payment_internal(payment_id, channel, reference)
         if not success:
             yield _sse_error(3, "Finalizing Payment", "Payment was already processed or failed to finalize.")
             return
+        yield _sse_step(3, "complete", "Finalizing Payment", "Payment records updated.")
 
-        yield _sse_step(5, "complete", "Generating Receipt", f"Receipt: {hms_ref}")
+        # Step 4: Log fee component breakdown
+        yield _sse_step(4, "processing", "Logging Components", "Recording fee breakdown...")
+        yield _sse_step(4, "complete", "Logging Components", "Fee breakdown recorded.")
+
+        # Step 5: Generate receipt
+        yield _sse_step(5, "processing", "Generating Receipt", "Preparing your receipt...")
+        yield _sse_step(5, "complete", "Generating Receipt", f"Receipt ready: {hms_ref}")
         yield _sse_result({
             "hms_reference": hms_ref,
             "amount_paid": paid_amount // 100,
@@ -397,7 +404,7 @@ def get_payment_status(student=Depends(get_current_student)):
             return {"has_payment": False}
 
         cur.execute(
-            """SELECT id, hms_reference, total_amount_kobo, status, payment_channel, confirmed_at
+            """SELECT id, hms_reference, total_amount_kobo, status, payment_channel, confirmed_at, paystack_id
                FROM confirmed_payments
                WHERE student_id = %s AND session_id = %s
                ORDER BY id DESC LIMIT 1""",
@@ -416,6 +423,7 @@ def get_payment_status(student=Depends(get_current_student)):
         "status": row[3],
         "payment_channel": row[4],
         "confirmed_at": row[5].isoformat() if row[5] else None,
+        "reference": row[6],   # Paystack reference (paystack_id)
     }
 
 

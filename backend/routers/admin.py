@@ -631,8 +631,18 @@ def get_admin_stats(admin=Depends(get_current_admin)):
             """, (session_id,))
             unallocated = cur.fetchone()[0]
 
+        # Students in the session register (eligible roster count)
+        eligible_count = 0
+        if session_id:
+            cur.execute("SELECT COUNT(*) FROM session_register WHERE session_id = %s", (session_id,))
+            eligible_count = cur.fetchone()[0]
+
+        # Students who have created portal accounts (regardless of session)
+        portal_registered = total_students  # already queried above
+
     return {
         "total_students": total_students,
+        "eligible_count": eligible_count,
         "total_hostels": total_hostels,
         "total_beds": total_beds,
         "occupied_beds": occupied_beds,
@@ -652,25 +662,65 @@ def get_admin_stats(admin=Depends(get_current_admin)):
 @router.get("/students")
 def list_students(admin=Depends(get_current_admin)):
     with get_cursor() as cur:
-        cur.execute("""
-            SELECT u.id, u.identifier, u.surname, u.first_name, u.gender,
-                   u.department, u.level, u.study_type,
-                   CASE WHEN a.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_allocated
-            FROM users u
-            LEFT JOIN allocations a ON a.student_id = u.id
-                AND a.session_id = (SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1)
-                AND a.status = 'active'
-            WHERE u.role = 'student'
-            ORDER BY u.surname, u.first_name
-        """)
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        session = cur.fetchone()
+        session_id = session[0] if session else None
+
+        if session_id:
+            # Show all students in the session register + their portal/payment/allocation status
+            cur.execute("""
+                SELECT
+                    sr.matric_number                                    AS identifier,
+                    COALESCE(u.surname,     sr.surname)                 AS surname,
+                    COALESCE(u.first_name,  sr.first_name)              AS first_name,
+                    COALESCE(u.gender,      sr.gender)                  AS gender,
+                    COALESCE(u.department,  sr.department)              AS department,
+                    COALESCE(u.level,       sr.level)                   AS level,
+                    COALESCE(u.study_type,  sr.study_type)              AS study_type,
+                    u.id                                                AS user_id,
+                    u.phone,
+                    u.next_of_kin_phone,
+                    (u.id IS NOT NULL)                                  AS has_portal_access,
+                    (cp.id IS NOT NULL)                                 AS has_paid,
+                    (a.id  IS NOT NULL)                                 AS is_allocated
+                FROM session_register sr
+                LEFT JOIN users u
+                    ON UPPER(u.identifier) = UPPER(sr.matric_number)
+                LEFT JOIN confirmed_payments cp
+                    ON cp.student_id = u.id AND cp.session_id = %s AND cp.status = 'confirmed'
+                LEFT JOIN allocations a
+                    ON a.student_id = u.id AND a.session_id = %s AND a.status = 'active'
+                WHERE sr.session_id = %s
+                ORDER BY surname, first_name
+            """, (session_id, session_id, session_id))
+        else:
+            # No active session — fall back to portal accounts only
+            cur.execute("""
+                SELECT u.identifier, u.surname, u.first_name, u.gender,
+                       u.department, u.level, u.study_type,
+                       u.id, u.phone, u.next_of_kin_phone,
+                       TRUE AS has_portal_access, FALSE AS has_paid, FALSE AS is_allocated
+                FROM users u
+                WHERE u.role = 'student'
+                ORDER BY u.surname, u.first_name
+            """)
+
         rows = cur.fetchall()
 
     return [
         {
-            "id": r[0], "identifier": r[1],
-            "full_name": f"{r[2]} {r[3]}",
-            "gender": r[4], "department": r[5], "level": r[6],
-            "study_type": r[7], "is_allocated": r[8],
+            "identifier":        r[0],
+            "full_name":         f"{r[1]} {r[2]}",
+            "gender":            r[3],
+            "department":        r[4],
+            "level":             r[5],
+            "study_type":        r[6],
+            "id":                r[7],   # user_id — None if no portal account yet
+            "phone":             r[8],
+            "next_of_kin_phone": r[9],
+            "has_portal_access": bool(r[10]),
+            "has_paid":          bool(r[11]),
+            "is_allocated":      bool(r[12]),
         }
         for r in rows
     ]

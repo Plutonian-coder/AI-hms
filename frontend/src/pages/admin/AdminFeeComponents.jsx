@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { Plus, Pencil, Trash2, DollarSign, CheckCircle, X, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, DollarSign, CheckCircle, X, AlertCircle, Save } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 const APPLIES_TO_OPTIONS = [
-    { value: 'all', label: 'All Students' },
+    { value: 'all',           label: 'All Students' },
     { value: 'fulltime_only', label: 'Full-time Only' },
     { value: 'parttime_only', label: 'Part-time Only' },
     { value: 'sandwich_only', label: 'Sandwich Only' },
@@ -55,9 +55,15 @@ export default function AdminFeeComponents() {
 
     useEffect(() => { fetchData(); }, []);
 
-    const totalFulltime = components.filter(c => c.applies_to !== 'parttime_only' && c.applies_to !== 'sandwich_only').reduce((s, c) => s + (c.amount_fulltime || 0), 0);
-    const totalParttime = components.filter(c => c.applies_to !== 'fulltime_only' && c.applies_to !== 'sandwich_only').reduce((s, c) => s + (c.amount_parttime || 0), 0);
-    const totalSandwich = components.filter(c => c.applies_to !== 'fulltime_only' && c.applies_to !== 'parttime_only').reduce((s, c) => s + (c.amount_sandwich || 0), 0);
+    const totalFulltime = components
+        .filter(c => c.applies_to !== 'parttime_only' && c.applies_to !== 'sandwich_only')
+        .reduce((s, c) => s + (c.amount_fulltime || 0), 0);
+    const totalParttime = components
+        .filter(c => c.applies_to !== 'fulltime_only' && c.applies_to !== 'sandwich_only')
+        .reduce((s, c) => s + (c.amount_parttime || 0), 0);
+    const totalSandwich = components
+        .filter(c => c.applies_to !== 'fulltime_only' && c.applies_to !== 'parttime_only')
+        .reduce((s, c) => s + (c.amount_sandwich || 0), 0);
 
     const openCreate = () => {
         setEditingId(null);
@@ -77,6 +83,7 @@ export default function AdminFeeComponents() {
             sort_order: comp.sort_order,
         });
         setShowForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleSubmit = async (e) => {
@@ -94,10 +101,10 @@ export default function AdminFeeComponents() {
         try {
             if (editingId) {
                 await apiClient.put(`/admin/fee-components/${editingId}`, payload);
-                toast.success('Fee component updated');
+                toast.success('Fee line updated');
             } else {
                 await apiClient.post('/admin/fee-components', payload);
-                toast.success('Fee component created');
+                toast.success('Fee line added');
             }
             setShowForm(false);
             setForm(EMPTY_FORM);
@@ -111,11 +118,11 @@ export default function AdminFeeComponents() {
     };
 
     const handleDelete = async (id, name) => {
-        if (!window.confirm(`Delete fee component "${name}"? This cannot be undone.`)) return;
+        if (!window.confirm(`Remove "${name}" from the fee structure?`)) return;
         setDeletingId(id);
         try {
             await apiClient.delete(`/admin/fee-components/${id}`);
-            toast.success(`"${name}" deleted`);
+            toast.success(`"${name}" removed`);
             fetchData();
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Delete failed');
@@ -124,254 +131,252 @@ export default function AdminFeeComponents() {
         }
     };
 
-    if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading fee components...</div>;
+    const cancelForm = () => {
+        setShowForm(false);
+        setEditingId(null);
+        setForm(EMPTY_FORM);
+    };
+
+    if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading fee structure...</div>;
 
     return (
         <div className="space-y-6 animate-in fade-in duration-350">
+
             {/* Header */}
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-extrabold text-heading tracking-tight">Fee Management</h1>
-                    <p className="text-muted mt-2 font-medium">
-                        Define hostel fee components per study type for the active session.
+                    <p className="text-xs font-bold text-forest-muted uppercase tracking-[0.18em]">Session</p>
+                    <h1 className="text-2xl font-extrabold text-heading tracking-tight mt-0.5">Fee Structure Builder</h1>
+                    <p className="text-sm text-muted font-medium mt-1">
+                        Define each charge for the active session. Every line item adds to the total.
                     </p>
                 </div>
-                <button
-                    onClick={openCreate}
-                    className="flex items-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all shrink-0"
-                >
-                    <Plus className="w-5 h-5" />
-                    Add Component
-                </button>
+                {!showForm && (
+                    <button
+                        onClick={openCreate}
+                        disabled={!session}
+                        className="flex items-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all self-start sm:self-auto shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Plus className="w-5 h-5" />
+                        Add Fee Line
+                    </button>
+                )}
             </div>
 
-            {/* Active session badge */}
-            {session ? (
-                <div className="bg-forest px-6 py-4 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                        <p className="text-white/50 text-xs font-bold uppercase tracking-widest">Active Session</p>
-                        <p className="text-white text-lg font-bold mt-0.5">{session.session_name}</p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {[
-                            { label: 'Full-time Total', value: totalFulltime },
-                            { label: 'Part-time Total', value: totalParttime },
-                            { label: 'Sandwich Total', value: totalSandwich },
-                        ].map(t => (
-                            <div key={t.label} className="bg-white/10 rounded-xl px-4 py-2.5 text-center">
-                                <p className="text-lime font-black text-base">₦{koboToNaira(t.value)}</p>
-                                <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mt-0.5">{t.label}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ) : (
+            {/* No active session warning */}
+            {!session && (
                 <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
                     <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
                     <p className="text-sm font-bold text-amber-800">No active session. Create a session first to manage fees.</p>
                 </div>
             )}
 
-            {/* Add/Edit Form */}
+            {/* Add / Edit Form */}
             {showForm && (
-                <div className="glass rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-                    <div className="px-6 py-5 border-b border-black/5 flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-heading flex items-center gap-2">
-                            <DollarSign className="w-5 h-5 text-muted" />
-                            {editingId ? 'Edit Fee Component' : 'New Fee Component'}
-                        </h3>
-                        <button onClick={() => { setShowForm(false); setEditingId(null); setForm(EMPTY_FORM); }} className="text-muted hover:text-heading transition-colors">
-                            <X className="w-5 h-5" />
+                <div className="glass rounded-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                    <div className="px-6 py-4 border-b border-black/5 flex items-center justify-between bg-surface/50">
+                        <div className="flex items-center gap-2">
+                            <DollarSign className="w-4 h-4 text-forest" />
+                            <h3 className="text-base font-bold text-heading">
+                                {editingId ? 'Edit Fee Line' : 'New Fee Line'}
+                            </h3>
+                        </div>
+                        <button onClick={cancelForm} className="p-1.5 text-muted hover:text-heading hover:bg-surface rounded-lg transition-colors">
+                            <X className="w-4 h-4" />
                         </button>
                     </div>
-                    <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="sm:col-span-2">
-                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Component Name *</label>
-                                <input
-                                    value={form.name}
-                                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                                    placeholder="e.g. Accommodation, Electricity Levy, Caution Deposit"
-                                    required
-                                    className="w-full glass-input text-heading rounded-xl p-3 font-medium text-sm focus:outline-none focus:border-lime"
-                                />
-                            </div>
 
-                            {/* Amounts */}
-                            <div>
-                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Full-time Amount (₦) *</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted font-bold text-sm">₦</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={form.amount_fulltime}
-                                        onChange={e => setForm(f => ({ ...f, amount_fulltime: e.target.value }))}
-                                        placeholder="0.00"
-                                        required
-                                        className="w-full glass-input text-heading rounded-xl p-3 pl-7 font-medium text-sm focus:outline-none focus:border-lime"
-                                    />
+                    <form onSubmit={handleSubmit} className="p-6">
+                        {/* Line item description */}
+                        <div className="mb-5">
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">
+                                What is this fee for? *
+                            </label>
+                            <input
+                                value={form.name}
+                                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                                placeholder="e.g. Accommodation, Electricity Levy, Caution Deposit, Security Levy…"
+                                required
+                                className="w-full glass-input text-heading rounded-xl p-3.5 font-medium text-sm focus:outline-none focus:border-lime"
+                            />
+                        </div>
+
+                        {/* Amount fields — 3 columns */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                            {[
+                                { label: 'Full-time Amount (₦)', key: 'amount_fulltime', required: true },
+                                { label: 'Part-time Amount (₦)', key: 'amount_parttime', required: false },
+                                { label: 'Sandwich Amount (₦)',  key: 'amount_sandwich', required: false },
+                            ].map(f => (
+                                <div key={f.key}>
+                                    <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">
+                                        {f.label} {f.required ? '*' : <span className="text-muted/50">(optional)</span>}
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted font-bold text-sm">₦</span>
+                                        <input
+                                            type="number" min="0" step="0.01"
+                                            value={form[f.key]}
+                                            onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                                            placeholder="0.00"
+                                            required={f.required}
+                                            className="w-full glass-input text-heading rounded-xl p-3.5 pl-7 font-medium text-sm focus:outline-none focus:border-lime"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Part-time Amount (₦)</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted font-bold text-sm">₦</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={form.amount_parttime}
-                                        onChange={e => setForm(f => ({ ...f, amount_parttime: e.target.value }))}
-                                        placeholder="0.00"
-                                        className="w-full glass-input text-heading rounded-xl p-3 pl-7 font-medium text-sm focus:outline-none focus:border-lime"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Sandwich Amount (₦)</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted font-bold text-sm">₦</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={form.amount_sandwich}
-                                        onChange={e => setForm(f => ({ ...f, amount_sandwich: e.target.value }))}
-                                        placeholder="0.00"
-                                        className="w-full glass-input text-heading rounded-xl p-3 pl-7 font-medium text-sm focus:outline-none focus:border-lime"
-                                    />
-                                </div>
-                            </div>
-                            <div>
+                            ))}
+                        </div>
+
+                        {/* Bottom row: applies-to + mandatory + save */}
+                        <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                            <div className="flex-1">
                                 <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Applies To</label>
                                 <select
                                     value={form.applies_to}
                                     onChange={e => setForm(f => ({ ...f, applies_to: e.target.value }))}
-                                    className="w-full glass-input text-heading rounded-xl p-3 font-medium text-sm focus:outline-none focus:border-lime"
+                                    className="w-full glass-input text-heading rounded-xl p-3.5 font-medium text-sm focus:outline-none focus:border-lime"
                                 >
                                     {APPLIES_TO_OPTIONS.map(o => (
                                         <option key={o.value} value={o.value}>{o.label}</option>
                                     ))}
                                 </select>
                             </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Sort Order</label>
+                            <div className="flex items-center gap-3 pb-1">
                                 <input
-                                    type="number"
-                                    value={form.sort_order}
-                                    onChange={e => setForm(f => ({ ...f, sort_order: e.target.value }))}
-                                    placeholder="0"
-                                    className="w-full glass-input text-heading rounded-xl p-3 font-medium text-sm focus:outline-none focus:border-lime"
-                                />
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="checkbox"
-                                    id="is_mandatory"
+                                    type="checkbox" id="is_mandatory"
                                     checked={form.is_mandatory}
                                     onChange={e => setForm(f => ({ ...f, is_mandatory: e.target.checked }))}
-                                    className="w-4 h-4 accent-lime"
+                                    className="w-4 h-4 accent-lime rounded"
                                 />
-                                <label htmlFor="is_mandatory" className="text-sm font-bold text-heading cursor-pointer">
-                                    Mandatory fee (cannot be waived)
+                                <label htmlFor="is_mandatory" className="text-sm font-bold text-heading cursor-pointer whitespace-nowrap">
+                                    Mandatory charge
                                 </label>
                             </div>
-                        </div>
-
-                        <div className="flex gap-3 pt-2">
-                            <button
-                                type="submit"
-                                disabled={submitting || !session}
-                                className={`flex items-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 transition-all ${submitting || !session ? 'opacity-60' : 'hover:bg-lime-hover hover:scale-[1.02]'}`}
-                            >
-                                <CheckCircle className="w-4 h-4" />
-                                {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Add Component'}
-                            </button>
-                            <button type="button" onClick={() => { setShowForm(false); setEditingId(null); setForm(EMPTY_FORM); }}
-                                className="px-6 py-3 rounded-full font-bold bg-surface text-heading hover:bg-black/5 transition-colors">
-                                Cancel
-                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    type="submit"
+                                    disabled={submitting}
+                                    className={`flex items-center gap-2 bg-lime text-forest px-6 py-3.5 rounded-xl font-bold shadow-lg shadow-lime/25 transition-all ${submitting ? 'opacity-60' : 'hover:bg-lime-hover'}`}
+                                >
+                                    <Save className="w-4 h-4" />
+                                    {submitting ? 'Saving…' : editingId ? 'Update' : 'Add to Fee'}
+                                </button>
+                                <button type="button" onClick={cancelForm}
+                                    className="px-5 py-3.5 rounded-xl font-bold bg-surface text-heading hover:bg-black/5 transition-colors">
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
             )}
 
-            {/* Fee Components Table */}
+            {/* Fee Table */}
             <div className="glass rounded-2xl overflow-hidden">
-                <div className="px-6 py-5 border-b border-black/5 flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-heading flex items-center gap-2">
-                        <DollarSign className="w-5 h-5 text-muted" />
-                        Fee Components ({components.length})
+                {/* Table header */}
+                <div className="px-6 py-4 border-b border-black/5 flex items-center justify-between">
+                    <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-muted" />
+                        Fee Structure
+                        <span className="text-xs font-bold text-muted bg-surface px-2 py-0.5 rounded-full">
+                            {components.length} {components.length === 1 ? 'line' : 'lines'}
+                        </span>
                     </h3>
+                    {session && (
+                        <span className="text-xs font-bold text-forest bg-lime-soft border border-lime-border px-3 py-1 rounded-full">
+                            {session.session_name}
+                        </span>
+                    )}
                 </div>
 
                 {components.length === 0 ? (
-                    <div className="p-12 text-center">
-                        <DollarSign className="w-10 h-10 text-black/10 mx-auto mb-3" />
-                        <p className="text-muted font-medium">No fee components yet for this session.</p>
-                        <p className="text-sm text-muted mt-1">Add components like Accommodation, Electricity Levy, Caution Deposit, etc.</p>
-                        <button onClick={openCreate} className="mt-4 bg-lime text-forest px-5 py-2.5 rounded-full font-bold text-sm hover:bg-lime-hover transition-colors">
-                            Add First Component
-                        </button>
+                    <div className="p-14 text-center">
+                        <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-4">
+                            <DollarSign className="w-7 h-7 text-muted/40" />
+                        </div>
+                        <p className="text-heading font-bold text-base">No fee lines yet</p>
+                        <p className="text-sm text-muted mt-1 max-w-xs mx-auto">
+                            Start building by clicking "Add Fee Line". Add items like Accommodation, Electricity Levy, Caution Deposit…
+                        </p>
+                        {session && (
+                            <button onClick={openCreate}
+                                className="mt-5 inline-flex items-center gap-2 bg-lime text-forest px-5 py-2.5 rounded-full font-bold text-sm hover:bg-lime-hover transition-colors">
+                                <Plus className="w-4 h-4" /> Add First Fee Line
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <>
                         {/* Desktop table */}
                         <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-sm min-w-[700px]">
-                                <thead className="bg-surface">
-                                    <tr>
-                                        <th className="px-5 py-3.5 text-left font-bold text-muted uppercase tracking-widest text-[10px]">Component</th>
-                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Full-time</th>
-                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Part-time</th>
-                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Sandwich</th>
-                                        <th className="px-5 py-3.5 text-center font-bold text-muted uppercase tracking-widest text-[10px]">Applies To</th>
-                                        <th className="px-5 py-3.5 text-center font-bold text-muted uppercase tracking-widest text-[10px]">Mandatory</th>
-                                        <th className="px-5 py-3.5 text-right font-bold text-muted uppercase tracking-widest text-[10px]">Actions</th>
+                                <thead>
+                                    <tr className="bg-surface border-b border-black/5">
+                                        <th className="px-5 py-3 text-left text-[10px] font-bold text-muted uppercase tracking-widest">#</th>
+                                        <th className="px-5 py-3 text-left text-[10px] font-bold text-muted uppercase tracking-widest">Description / Charge</th>
+                                        <th className="px-5 py-3 text-right text-[10px] font-bold text-muted uppercase tracking-widest">Full-time</th>
+                                        <th className="px-5 py-3 text-right text-[10px] font-bold text-muted uppercase tracking-widest">Part-time</th>
+                                        <th className="px-5 py-3 text-right text-[10px] font-bold text-muted uppercase tracking-widest">Sandwich</th>
+                                        <th className="px-5 py-3 text-center text-[10px] font-bold text-muted uppercase tracking-widest">Applies To</th>
+                                        <th className="px-5 py-3 text-center text-[10px] font-bold text-muted uppercase tracking-widest">Type</th>
+                                        <th className="px-5 py-3"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-black/5">
-                                    {components.map((c) => (
-                                        <tr key={c.id} className="hover:bg-surface/40 transition-colors">
-                                            <td className="px-5 py-4">
+                                    {components.map((c, idx) => (
+                                        <tr key={c.id} className="hover:bg-surface/40 transition-colors group">
+                                            <td className="px-5 py-3.5 text-xs font-bold text-muted/50">{idx + 1}</td>
+                                            <td className="px-5 py-3.5">
                                                 <p className="font-bold text-heading">{c.name}</p>
-                                                <p className="text-[10px] text-muted font-medium mt-0.5">Order: {c.sort_order}</p>
                                             </td>
-                                            <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_fulltime)}</td>
-                                            <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_parttime)}</td>
-                                            <td className="px-5 py-4 text-right font-bold text-heading">₦{koboToNaira(c.amount_sandwich)}</td>
-                                            <td className="px-5 py-4 text-center">
-                                                <span className="text-[10px] font-bold bg-forest/10 text-forest px-2.5 py-1 rounded-full">
+                                            <td className="px-5 py-3.5 text-right font-bold text-heading">₦{koboToNaira(c.amount_fulltime)}</td>
+                                            <td className="px-5 py-3.5 text-right font-medium text-body">₦{koboToNaira(c.amount_parttime)}</td>
+                                            <td className="px-5 py-3.5 text-right font-medium text-body">₦{koboToNaira(c.amount_sandwich)}</td>
+                                            <td className="px-5 py-3.5 text-center">
+                                                <span className="text-[10px] font-bold bg-forest/8 text-forest px-2.5 py-1 rounded-full">
                                                     {APPLIES_TO_OPTIONS.find(o => o.value === c.applies_to)?.label || c.applies_to}
                                                 </span>
                                             </td>
-                                            <td className="px-5 py-4 text-center">
+                                            <td className="px-5 py-3.5 text-center">
                                                 {c.is_mandatory
-                                                    ? <span className="text-[10px] font-bold bg-lime/10 text-lime px-2.5 py-1 rounded-full">Yes</span>
-                                                    : <span className="text-[10px] font-bold bg-black/5 text-muted px-2.5 py-1 rounded-full">No</span>
+                                                    ? <span className="text-[10px] font-bold bg-lime/10 text-lime px-2.5 py-1 rounded-full">Mandatory</span>
+                                                    : <span className="text-[10px] font-bold bg-black/5 text-muted px-2.5 py-1 rounded-full">Optional</span>
                                                 }
                                             </td>
-                                            <td className="px-5 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button onClick={() => openEdit(c)} className="p-2 rounded-lg text-muted hover:text-heading hover:bg-surface transition-colors" title="Edit">
-                                                        <Pencil className="w-4 h-4" />
+                                            <td className="px-5 py-3.5">
+                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => openEdit(c)}
+                                                        className="p-1.5 rounded-lg text-muted hover:text-heading hover:bg-surface transition-colors" title="Edit">
+                                                        <Pencil className="w-3.5 h-3.5" />
                                                     </button>
-                                                    <button onClick={() => handleDelete(c.id, c.name)} disabled={deletingId === c.id} className="p-2 rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
-                                                        <Trash2 className="w-4 h-4" />
+                                                    <button onClick={() => handleDelete(c.id, c.name)}
+                                                        disabled={deletingId === c.id}
+                                                        className="p-1.5 rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition-colors" title="Remove">
+                                                        <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot className="bg-forest/5 border-t border-black/10">
-                                    <tr>
-                                        <td className="px-5 py-3 font-black text-heading text-sm">TOTAL</td>
-                                        <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalFulltime)}</td>
-                                        <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalParttime)}</td>
-                                        <td className="px-5 py-3 text-right font-black text-heading">₦{koboToNaira(totalSandwich)}</td>
+
+                                {/* Totals footer */}
+                                <tfoot>
+                                    <tr className="border-t-2 border-forest/20 bg-forest/5">
+                                        <td className="px-5 py-4 text-xs font-black text-muted/50">{components.length}</td>
+                                        <td className="px-5 py-4 font-black text-heading text-sm">TOTAL</td>
+                                        <td className="px-5 py-4 text-right">
+                                            <p className="text-lg font-black text-heading">₦{koboToNaira(totalFulltime)}</p>
+                                            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">Full-time</p>
+                                        </td>
+                                        <td className="px-5 py-4 text-right">
+                                            <p className="text-lg font-black text-heading">₦{koboToNaira(totalParttime)}</p>
+                                            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">Part-time</p>
+                                        </td>
+                                        <td className="px-5 py-4 text-right">
+                                            <p className="text-lg font-black text-heading">₦{koboToNaira(totalSandwich)}</p>
+                                            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">Sandwich</p>
+                                        </td>
                                         <td colSpan={3}></td>
                                     </tr>
                                 </tfoot>
@@ -380,13 +385,16 @@ export default function AdminFeeComponents() {
 
                         {/* Mobile cards */}
                         <div className="md:hidden divide-y divide-black/5">
-                            {components.map((c) => (
+                            {components.map((c, idx) => (
                                 <div key={c.id} className="p-4 space-y-3">
                                     <div className="flex items-start justify-between gap-2">
                                         <div>
-                                            <p className="font-bold text-heading">{c.name}</p>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-bold text-muted/50">#{idx + 1}</span>
+                                                <p className="font-bold text-heading">{c.name}</p>
+                                            </div>
                                             <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                                <span className="text-[10px] font-bold bg-forest/10 text-forest px-2 py-0.5 rounded-full">
+                                                <span className="text-[10px] font-bold bg-forest/8 text-forest px-2 py-0.5 rounded-full">
                                                     {APPLIES_TO_OPTIONS.find(o => o.value === c.applies_to)?.label || c.applies_to}
                                                 </span>
                                                 {c.is_mandatory
@@ -397,39 +405,41 @@ export default function AdminFeeComponents() {
                                         </div>
                                         <div className="flex items-center gap-1 shrink-0">
                                             <button onClick={() => openEdit(c)} className="p-2 rounded-lg text-muted hover:text-heading hover:bg-surface transition-colors">
-                                                <Pencil className="w-4 h-4" />
+                                                <Pencil className="w-3.5 h-3.5" />
                                             </button>
-                                            <button onClick={() => handleDelete(c.id, c.name)} disabled={deletingId === c.id} className="p-2 rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition-colors">
-                                                <Trash2 className="w-4 h-4" />
+                                            <button onClick={() => handleDelete(c.id, c.name)} disabled={deletingId === c.id}
+                                                className="p-2 rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition-colors">
+                                                <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="grid grid-cols-3 gap-2">
                                         {[
-                                            { label: 'Full-time', value: koboToNaira(c.amount_fulltime) },
-                                            { label: 'Part-time', value: koboToNaira(c.amount_parttime) },
-                                            { label: 'Sandwich',  value: koboToNaira(c.amount_sandwich) },
-                                        ].map(row => (
-                                            <div key={row.label} className="bg-surface rounded-xl p-2">
-                                                <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{row.label}</p>
-                                                <p className="text-sm font-black text-heading mt-0.5">₦{row.value}</p>
+                                            { label: 'Full-time', val: c.amount_fulltime },
+                                            { label: 'Part-time', val: c.amount_parttime },
+                                            { label: 'Sandwich',  val: c.amount_sandwich },
+                                        ].map(r => (
+                                            <div key={r.label} className="bg-surface rounded-xl p-2.5 text-center">
+                                                <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{r.label}</p>
+                                                <p className="text-sm font-black text-heading mt-0.5">₦{koboToNaira(r.val)}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             ))}
+
                             {/* Mobile totals */}
-                            <div className="p-4 bg-forest/5">
-                                <p className="text-xs font-black text-heading uppercase tracking-widest mb-2">Totals</p>
-                                <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-4 bg-forest/5 border-t-2 border-forest/20">
+                                <p className="text-xs font-black text-heading uppercase tracking-widest mb-3">Total Fee</p>
+                                <div className="grid grid-cols-3 gap-2">
                                     {[
-                                        { label: 'Full-time', value: koboToNaira(totalFulltime) },
-                                        { label: 'Part-time', value: koboToNaira(totalParttime) },
-                                        { label: 'Sandwich',  value: koboToNaira(totalSandwich) },
-                                    ].map(row => (
-                                        <div key={row.label} className="bg-white/60 rounded-xl p-2">
-                                            <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{row.label}</p>
-                                            <p className="text-sm font-black text-heading mt-0.5">₦{row.value}</p>
+                                        { label: 'Full-time', val: totalFulltime },
+                                        { label: 'Part-time', val: totalParttime },
+                                        { label: 'Sandwich',  val: totalSandwich },
+                                    ].map(r => (
+                                        <div key={r.label} className="bg-white/70 rounded-xl p-3 text-center">
+                                            <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{r.label}</p>
+                                            <p className="text-base font-black text-heading mt-0.5">₦{koboToNaira(r.val)}</p>
                                         </div>
                                     ))}
                                 </div>

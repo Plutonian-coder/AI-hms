@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { Search, Users, CreditCard, CheckCircle2, Loader2 } from 'lucide-react';
+import { Search, Users, CreditCard, CheckCircle2, Loader2, ShieldOff } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 export default function AdminStudents() {
@@ -51,14 +51,25 @@ export default function AdminStudents() {
                 </div>
             </div>
 
-            {/* Total badge */}
-            <div className="glass rounded-xl px-5 py-4 inline-flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-forest/8 flex items-center justify-center">
-                    <Users className="w-4.5 h-4.5 text-forest" />
+            {/* Total badges */}
+            <div className="flex flex-wrap gap-3">
+                <div className="glass rounded-xl px-5 py-4 inline-flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-forest/8 flex items-center justify-center">
+                        <Users className="w-4.5 h-4.5 text-forest" />
+                    </div>
+                    <div>
+                        <p className="text-2xl font-black text-heading leading-none">{students.length}</p>
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">In Register</p>
+                    </div>
                 </div>
-                <div>
-                    <p className="text-2xl font-black text-heading leading-none">{students.length}</p>
-                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">Total Students</p>
+                <div className="glass rounded-xl px-5 py-4 inline-flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-lime-soft flex items-center justify-center">
+                        <CheckCircle2 className="w-4.5 h-4.5 text-forest-muted" />
+                    </div>
+                    <div>
+                        <p className="text-2xl font-black text-heading leading-none">{students.filter(s => s.has_portal_access).length}</p>
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">Portal Access</p>
+                    </div>
                 </div>
             </div>
 
@@ -108,13 +119,13 @@ export default function AdminStudents() {
                                         <Th>Student Name</Th>
                                         <Th>Class</Th>
                                         <Th>Gender</Th>
-                                        <Th>Parent Phone</Th>
-                                        <Th>Actions</Th>
+                                        <Th>Portal</Th>
+                                        <Th>Status</Th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filtered.map(s => (
-                                        <tr key={s.id} className="border-b border-sidebar-border hover:bg-surface/60 transition-colors">
+                                    {filtered.map((s, idx) => (
+                                        <tr key={s.identifier || idx} className="border-b border-sidebar-border hover:bg-surface/60 transition-colors">
                                             <td className="px-5 py-3.5">
                                                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-forest text-white text-[11px] font-bold font-mono tracking-wide">
                                                     {s.identifier}
@@ -123,7 +134,7 @@ export default function AdminStudents() {
                                             <td className="px-5 py-3.5">
                                                 <div className="flex items-center gap-2.5">
                                                     <div className="w-8 h-8 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-xs shrink-0 border border-forest/10">
-                                                        {s.full_name.charAt(0)}
+                                                        {s.full_name?.charAt(0) || '?'}
                                                     </div>
                                                     <span className="font-semibold text-sm text-heading">{s.full_name}</span>
                                                 </div>
@@ -142,8 +153,16 @@ export default function AdminStudents() {
                                                     {s.gender?.charAt(0).toUpperCase() + s.gender?.slice(1) || '—'}
                                                 </span>
                                             </td>
-                                            <td className="px-5 py-3.5 text-sm text-muted font-medium">
-                                                {s.phone || '—'}
+                                            <td className="px-5 py-3.5">
+                                                {s.has_portal_access ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700">
+                                                        <CheckCircle2 className="w-3 h-3" /> Registered
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-surface border border-sidebar-border text-muted">
+                                                        <ShieldOff className="w-3 h-3" /> Not Yet
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-5 py-3.5">
                                                 {s.is_allocated ? (
@@ -154,13 +173,15 @@ export default function AdminStudents() {
                                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700">
                                                         <CheckCircle2 className="w-3 h-3" /> Paid
                                                     </span>
-                                                ) : (
+                                                ) : s.has_portal_access ? (
                                                     <button
                                                         onClick={() => markAsPaid(s.id, s.identifier)}
                                                         className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-surface border border-sidebar-border text-muted hover:bg-forest hover:text-white hover:border-forest transition-all"
                                                     >
                                                         <CreditCard className="w-3 h-3" /> Mark Paid
                                                     </button>
+                                                ) : (
+                                                    <span className="text-[10px] text-muted font-medium">—</span>
                                                 )}
                                             </td>
                                         </tr>
@@ -171,11 +192,11 @@ export default function AdminStudents() {
 
                         {/* Mobile cards */}
                         <div className="md:hidden divide-y divide-sidebar-border">
-                            {filtered.map(s => (
-                                <div key={s.id} className="p-4 space-y-2.5">
+                            {filtered.map((s, idx) => (
+                                <div key={s.identifier || idx} className="p-4 space-y-2.5">
                                     <div className="flex items-center gap-3">
                                         <div className="w-9 h-9 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-sm shrink-0">
-                                            {s.full_name.charAt(0)}
+                                            {s.full_name?.charAt(0) || '?'}
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="font-bold text-sm text-heading truncate">{s.full_name}</p>
@@ -189,15 +210,20 @@ export default function AdminStudents() {
                                         <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${s.gender === 'male' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-pink-50 text-pink-700 border-pink-200'}`}>
                                             {s.gender?.charAt(0).toUpperCase() + s.gender?.slice(1) || '—'}
                                         </span>
+                                        {s.has_portal_access ? (
+                                            <span className="px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700">Registered</span>
+                                        ) : (
+                                            <span className="px-2 py-0.5 rounded-lg bg-surface border border-sidebar-border text-[10px] font-bold text-muted">No Portal</span>
+                                        )}
                                         {s.is_allocated ? (
                                             <span className="px-2 py-0.5 rounded-lg bg-lime-soft border border-lime-border text-[10px] font-bold text-forest">Allocated</span>
                                         ) : s.has_paid ? (
                                             <span className="px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700">Paid</span>
-                                        ) : (
+                                        ) : s.has_portal_access ? (
                                             <button onClick={() => markAsPaid(s.id, s.identifier)} className="px-2 py-0.5 rounded-lg bg-surface border border-sidebar-border text-[10px] font-bold text-muted hover:bg-forest hover:text-white transition-all">
                                                 Mark Paid
                                             </button>
-                                        )}
+                                        ) : null}
                                     </div>
                                 </div>
                             ))}
