@@ -23,7 +23,7 @@ services:
         sync: false
       - key: UPLOAD_DIR
         sync: false
-      - key: GEMINI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       - key: CORS_ORIGINS
         sync: false
@@ -32,6 +32,4 @@ services:
       - key: PAYSTACK_PUBLIC_KEY
         sync: false
       - key: PAYSTACK_CALLBACK_URL
-        sync: false
-      - key: OPENROUTER_API_KEY
         sync: false

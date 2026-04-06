@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
-import { Menu, LogOut, ChevronDown, Building2, Settings as SettingsIcon } from 'lucide-react';
+import { Menu, LogOut, ChevronDown, Building2, Settings as SettingsIcon, BookOpen } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AdminSidebar from './components/AdminSidebar';
 import LandingPage from './pages/LandingPage';
@@ -28,6 +28,7 @@ import AdminReports from './pages/admin/AdminReports';
 import AdminRegisterImport from './pages/admin/AdminRegisterImport';
 import AdminFeeComponents from './pages/admin/AdminFeeComponents';
 import Settings from './pages/Settings';
+import Docs from './pages/Docs';
 
 function getUser() {
   try {
@@ -100,6 +101,14 @@ const ProfileDropdown = ({ user, initial }) => {
             >
               <SettingsIcon className="w-4 h-4 text-muted" />
               Settings
+            </Link>
+            <Link
+              to="/docs"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-body hover:bg-surface-2 transition-colors"
+            >
+              <BookOpen className="w-4 h-4 text-muted" />
+              Help & Docs
             </Link>
             <button
               onClick={handleSignOut}
@@ -232,6 +241,7 @@ export default function App() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/docs" element={<Docs />} />
 
       {/* Smart root */}
       <Route path="/" element={<SmartRoot />} />

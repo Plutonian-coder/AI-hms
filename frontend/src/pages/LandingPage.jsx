@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import apiClient from '../api/client';
-import { ArrowRight, Search, BedDouble, Users, ShieldCheck, BarChart3, ClipboardList, RefreshCw, ChevronRight, Zap } from 'lucide-react';
+import { ArrowRight, Search, BedDouble, Users, ShieldCheck, BarChart3, ClipboardList, RefreshCw, ChevronRight, Zap, BookOpen } from 'lucide-react';
 
 export default function LandingPage() {
     const [matric, setMatric] = useState('');
@@ -47,6 +47,10 @@ export default function LandingPage() {
                         <a href="#how-it-works" className="hidden sm:block text-sm font-semibold text-muted hover:text-heading transition-colors">
                             How It Works
                         </a>
+                        <Link to="/docs" className="hidden sm:flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-heading transition-colors">
+                            <BookOpen className="w-3.5 h-3.5" />
+                            Docs
+                        </Link>
                         <Link to="/login" className="text-sm font-bold text-heading hover:text-forest transition-colors">
                             Sign In
                         </Link>
@@ -424,6 +428,12 @@ export default function LandingPage() {
                             <ChevronRight className="w-5 h-5" />
                         </Link>
                     </div>
+                    <p className="text-white/30 text-sm font-medium mt-8">
+                        Need a complete walkthrough?{' '}
+                        <Link to="/docs" className="text-lime/70 font-bold hover:text-lime transition-colors underline underline-offset-2">
+                            Read the full documentation →
+                        </Link>
+                    </p>
                 </div>
             </section>
 
@@ -440,6 +450,10 @@ export default function LandingPage() {
                             <Link to="/register" className="hover:text-white transition-colors">Register</Link>
                             <a href="#features" className="hover:text-white transition-colors">Features</a>
                             <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
+                            <Link to="/docs" className="flex items-center gap-1.5 hover:text-white transition-colors">
+                                <BookOpen className="w-3.5 h-3.5" />
+                                Docs
+                            </Link>
                         </div>
                     </div>
                     <div className="border-t border-white/10 mt-8 pt-8 text-center">
