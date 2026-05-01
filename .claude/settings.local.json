@@ -6,7 +6,12 @@
       "Bash(git push:*)",
       "Bash(git mv:*)",
       "WebFetch(domain:docs.google.com)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git remote:*)",
+      "Bash(ls /home/user/AI-hms/backend/.env*)",
+      "Bash(npm run:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }
