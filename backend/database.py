@@ -8,10 +8,13 @@ _pool = None
 def get_pool():
     global _pool
     if _pool is None:
+        if not DATABASE_URL:
+            raise ValueError("DATABASE_URL is missing or empty. Check your .env file and config.py.")
         _pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=2,
             maxconn=10,
-            dsn=DATABASE_URL
+            dsn=DATABASE_URL,
+            sslmode="require"
         )
     return _pool
 
