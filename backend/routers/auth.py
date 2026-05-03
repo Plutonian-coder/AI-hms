@@ -12,7 +12,7 @@ Flow:
 import hashlib
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from jose import jwt
 from passlib.context import CryptContext
 
@@ -21,6 +21,7 @@ from database import get_cursor
 from models import TokenResponse, UserLogin, UserRegister
 from dependencies import get_current_user
 from services.audit_logger import log_event, STUDENT_REGISTERED, PASSWORD_CHANGED
+from services.email import send_registration_email
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -93,7 +94,7 @@ def verify_matric(matric: str = Query(...)):
 # ── Register ─────────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-def register(data: UserRegister):
+def register(data: UserRegister, background_tasks: BackgroundTasks):
     identifier = data.identifier.strip().upper()
 
     with get_cursor() as cur:
@@ -154,6 +155,10 @@ def register(data: UserRegister):
         target_entity="user", target_id=str(user_id),
         session_id=session_id,
     )
+
+    # Trigger the background email task
+    if data.email:
+        background_tasks.add_task(send_registration_email, data.email.strip(), first_name, identifier)
 
     token = _create_token({
         "sub": str(user_id),
