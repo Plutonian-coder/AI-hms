@@ -24,7 +24,19 @@ export default function Register() {
         setVerifying(true);
         try {
             const res = await apiClient.get(`/auth/verify-matric?matric=${encodeURIComponent(matric.trim())}`);
-            setStudentInfo(res.data);
+            const data = res.data;
+
+            if (!data.found) {
+                setVerifyError(data.message || 'Matric number not found in the current session register. Contact Student Affairs.');
+                return;
+            }
+
+            if (data.already_registered) {
+                setVerifyError(data.message || 'An account already exists for this matric number. Please log in.');
+                return;
+            }
+
+            setStudentInfo(data);
             setStep('form');
         } catch (err) {
             setVerifyError(err.response?.data?.detail || 'Matric number not found in session register. Contact Student Affairs.');
@@ -147,7 +159,7 @@ export default function Register() {
                                     <InfoRow label="First Name" value={studentInfo.first_name} />
                                 </div>
                                 <div className="grid grid-cols-3 gap-3">
-                                    <InfoRow label="Gender" value={studentInfo.gender?.charAt(0).toUpperCase() + studentInfo.gender?.slice(1)} />
+                                    <InfoRow label="Gender" value={studentInfo.gender ? studentInfo.gender.charAt(0).toUpperCase() + studentInfo.gender.slice(1) : '—'} />
                                     <InfoRow label="Level" value={studentInfo.level} />
                                     <InfoRow label="Type" value={studentInfo.study_type} />
                                 </div>
