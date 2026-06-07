@@ -17,6 +17,7 @@ const EMPTY_FORM = {
     amount_parttime: '',
     amount_codfel: '',
     applies_to: 'all',
+    fee_type: 'hostel',
     is_mandatory: true,
     sort_order: 0,
 };
@@ -79,6 +80,7 @@ export default function AdminFeeComponents() {
             amount_parttime: (comp.amount_parttime / 100).toString(),
             amount_codfel: (comp.amount_codfel / 100).toString(),
             applies_to: comp.applies_to,
+            fee_type: comp.fee_type || 'hostel',
             is_mandatory: comp.is_mandatory,
             sort_order: comp.sort_order,
         });
@@ -95,6 +97,7 @@ export default function AdminFeeComponents() {
             amount_parttime: nairaToKobo(form.amount_parttime),
             amount_codfel: nairaToKobo(form.amount_codfel),
             applies_to: form.applies_to,
+            fee_type: form.fee_type,
             is_mandatory: form.is_mandatory,
             sort_order: parseInt(form.sort_order) || 0,
         };
@@ -241,6 +244,17 @@ export default function AdminFeeComponents() {
                                     ))}
                                 </select>
                             </div>
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Fee Type</label>
+                                <select
+                                    value={form.fee_type}
+                                    onChange={e => setForm(f => ({ ...f, fee_type: e.target.value }))}
+                                    className="w-full glass-input text-heading rounded-xl p-3.5 font-medium text-sm focus:outline-none focus:border-lime"
+                                >
+                                    <option value="hostel">Hostel Fee</option>
+                                    <option value="application">Application Fee</option>
+                                </select>
+                            </div>
                             <div className="flex items-center gap-3 pb-1">
                                 <input
                                     type="checkbox" id="is_mandatory"
@@ -335,6 +349,11 @@ export default function AdminFeeComponents() {
                                             <td className="px-5 py-3.5 text-center">
                                                 <span className="text-[10px] font-bold bg-forest/8 text-forest px-2.5 py-1 rounded-full">
                                                     {APPLIES_TO_OPTIONS.find(o => o.value === c.applies_to)?.label || c.applies_to}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3.5 text-center">
+                                                <span className="text-[10px] font-bold bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full uppercase">
+                                                    {c.fee_type || 'hostel'}
                                                 </span>
                                             </td>
                                             <td className="px-5 py-3.5 text-center">

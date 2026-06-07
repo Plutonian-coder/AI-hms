@@ -146,15 +146,21 @@ const StudentLayout = ({ children }) => {
     });
   }, []);
 
-  // Check payment status to conditionally hide Payment nav
+  const [progress, setProgress] = useState(null);
+
+  // Check progress globally to configure nav links dynamically
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
     import('./api/client').then(({ default: apiClient }) => {
-      apiClient.get('/payment/status')
+      apiClient.get('/allocation/dashboard')
         .then(res => {
-          if (res.data?.has_payment && res.data?.status === 'confirmed') {
-            setHiddenRoutes(prev => prev.includes('/payment') ? prev : [...prev, '/payment']);
+          if (res.data?.progress) {
+            setProgress(res.data.progress);
+            // Hide payment route if BOTH fees are paid (or handle logic in Sidebar)
+            if (res.data.progress.app_fee_paid && res.data.progress.hostel_fee_paid) {
+              setHiddenRoutes(prev => prev.includes('/payment') ? prev : [...prev, '/payment']);
+            }
           }
         })
         .catch(() => { /* silently ignore */ });
@@ -163,7 +169,7 @@ const StudentLayout = ({ children }) => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden app-bg">
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} hiddenRoutes={hiddenRoutes} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} hiddenRoutes={hiddenRoutes} progress={progress} />
       <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         {/* Header */}
         <header className="glass-header sticky top-0 z-10 px-5 py-3 flex items-center justify-between shrink-0">

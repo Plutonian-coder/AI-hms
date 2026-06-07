@@ -2,17 +2,23 @@ import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, CreditCard, ClipboardCheck, BedDouble, LogOut, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
-const NAV_ITEMS = [
+const DEFAULT_NAV_ITEMS = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/apply', label: 'Apply', icon: FileText },
-    { to: '/payment', label: 'Make Payment', icon: CreditCard },
+    { to: '/payment?type=application', label: 'Application Fee', icon: CreditCard },
     { to: '/quiz', label: 'Compatibility Quiz', icon: ClipboardCheck },
     { to: '/my-allocation', label: 'My Allocation', icon: BedDouble },
 ];
 
-export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, hiddenRoutes = [] }) {
+export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, hiddenRoutes = [], progress = null }) {
     const navigate = useNavigate();
     const { pathname } = useLocation();
+
+    // Dynamically adjust payment link
+    const NAV_ITEMS = [...DEFAULT_NAV_ITEMS];
+    if (progress?.allocated) {
+        NAV_ITEMS.push({ to: '/payment?type=hostel', label: 'Hostel Fee', icon: CreditCard });
+    }
 
     useEffect(() => { onClose(); }, [pathname, onClose]);
 

@@ -117,7 +117,8 @@ def get_student_dashboard(student=Depends(get_current_student)):
     # Session
     with get_cursor() as cur:
         cur.execute(
-            """SELECT id, session_name, application_portal_open, payment_portal_open, allocation_portal_open
+            """SELECT id, session_name, application_portal_open, payment_portal_open, allocation_portal_open,
+                      hostel_fee_deadline
                FROM academic_sessions WHERE is_active = TRUE LIMIT 1"""
         )
         sess = cur.fetchone()
@@ -129,6 +130,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
         session = {
             "id": sess[0], "name": sess[1],
             "application_open": sess[2], "payment_open": sess[3], "allocation_open": sess[4],
+            "hostel_fee_deadline": sess[5].isoformat() if sess[5] else None,
         }
 
     # 6-step progress
@@ -150,19 +152,44 @@ def get_student_dashboard(student=Depends(get_current_student)):
             )
             app_row = cur.fetchone()
             if app_row:
-                has_application = True
                 application_status = app_row[0]
+                has_application = application_status not in ('draft',)
 
-            # Payment
+            # Payment - Application Fee
             cur.execute(
-                "SELECT status, hms_reference FROM confirmed_payments WHERE student_id = %s AND session_id = %s ORDER BY id DESC LIMIT 1",
+                """SELECT cp.status, cp.hms_reference 
+                   FROM confirmed_payments cp
+                   JOIN payment_component_log pcl ON pcl.payment_id = cp.id
+                   JOIN fee_components fc ON fc.id = pcl.component_id
+                   WHERE cp.student_id = %s AND cp.session_id = %s AND fc.fee_type = 'application'
+                   ORDER BY cp.id DESC LIMIT 1""",
                 (student_id, session_id),
             )
-            pay_row = cur.fetchone()
-            if pay_row:
-                has_payment = True
-                payment_status = pay_row[0]
-                hms_reference = pay_row[1]
+            app_pay_row = cur.fetchone()
+            app_fee_paid = False
+            app_payment_status = None
+            if app_pay_row:
+                app_payment_status = app_pay_row[0]
+                app_fee_paid = (app_payment_status == "confirmed")
+                hms_reference = app_pay_row[1]
+
+            # Payment - Hostel Fee
+            cur.execute(
+                """SELECT cp.status, cp.hms_reference 
+                   FROM confirmed_payments cp
+                   JOIN payment_component_log pcl ON pcl.payment_id = cp.id
+                   JOIN fee_components fc ON fc.id = pcl.component_id
+                   WHERE cp.student_id = %s AND cp.session_id = %s AND fc.fee_type = 'hostel'
+                   ORDER BY cp.id DESC LIMIT 1""",
+                (student_id, session_id),
+            )
+            hostel_pay_row = cur.fetchone()
+            hostel_fee_paid = False
+            hostel_payment_status = None
+            if hostel_pay_row:
+                hostel_payment_status = hostel_pay_row[0]
+                hostel_fee_paid = (hostel_payment_status == "confirmed")
+                hms_reference = hostel_pay_row[1]
 
             # Quiz
             cur.execute(
@@ -182,11 +209,13 @@ def get_student_dashboard(student=Depends(get_current_student)):
             "registered": True,
             "applied": has_application,
             "application_status": application_status,
-            "paid": has_payment and payment_status == "confirmed",
-            "payment_status": payment_status,
-            "hms_reference": hms_reference,
+            "app_fee_paid": app_fee_paid,
+            "app_payment_status": app_payment_status,
             "quiz_completed": has_quiz,
             "allocated": has_allocation,
+            "hostel_fee_paid": hostel_fee_paid,
+            "hostel_payment_status": hostel_payment_status,
+            "hms_reference": hms_reference,
         },
         "allocation": allocation,
     }

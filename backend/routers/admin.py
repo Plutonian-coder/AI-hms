@@ -83,7 +83,8 @@ def list_sessions(admin=Depends(get_current_admin)):
         cur.execute(
             """SELECT id, session_name, is_active, year_start, year_end,
                       eligible_levels, application_portal_open, payment_portal_open,
-                      allocation_portal_open, register_import_open, session_ended
+                      allocation_portal_open, register_import_open, session_ended,
+                      application_fee_deadline, hostel_fee_deadline
                FROM academic_sessions ORDER BY id DESC"""
         )
         rows = cur.fetchall()
@@ -97,9 +98,37 @@ def list_sessions(admin=Depends(get_current_admin)):
             "allocation_portal_open": r[8],
             "register_import_open": r[9],
             "session_ended": r[10],
+            "application_fee_deadline": r[11].isoformat() if r[11] else None,
+            "hostel_fee_deadline": r[12].isoformat() if r[12] else None,
         }
         for r in rows
     ]
+
+
+@router.patch("/session/deadlines")
+def update_deadlines(data: dict, admin=Depends(get_current_admin)):
+    """Update deadlines for the active session. Expects application_fee_deadline and/or hostel_fee_deadline."""
+    updates = []
+    params = []
+    
+    for field in ["application_fee_deadline", "hostel_fee_deadline"]:
+        if field in data:
+            updates.append(f"{field} = %s")
+            params.append(data[field])
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No deadlines provided")
+
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        session = cur.fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="No active session found")
+            
+        params.append(session[0])
+        cur.execute(f"UPDATE academic_sessions SET {', '.join(updates)} WHERE id = %s", params)
+        
+    return {"message": "Deadlines updated successfully"}
 
 
 @router.patch("/session/toggle/{portal}")
@@ -251,7 +280,8 @@ def get_session_status(admin=Depends(get_current_admin)):
         cur.execute(
             """SELECT id, session_name, year_start, year_end,
                       application_portal_open, payment_portal_open,
-                      allocation_portal_open, register_import_open
+                      allocation_portal_open, register_import_open,
+                      application_fee_deadline, hostel_fee_deadline
                FROM academic_sessions WHERE is_active = TRUE LIMIT 1"""
         )
         s = cur.fetchone()
@@ -270,6 +300,8 @@ def get_session_status(admin=Depends(get_current_admin)):
         "payment_portal_open": s[5],
         "allocation_portal_open": s[6],
         "register_import_open": s[7],
+        "application_fee_deadline": s[8].isoformat() if s[8] else None,
+        "hostel_fee_deadline": s[9].isoformat() if s[9] else None,
         "register_count": register_count,
     }
 
@@ -289,7 +321,7 @@ def list_fee_components(admin=Depends(get_current_admin)):
 
         cur.execute(
             """SELECT id, name, amount_fulltime, amount_parttime, amount_codfel,
-                      applies_to, is_mandatory, sort_order
+                      applies_to, is_mandatory, sort_order, fee_type
                FROM fee_components WHERE session_id = %s ORDER BY sort_order, id""",
             (session[0],),
         )
@@ -299,7 +331,7 @@ def list_fee_components(admin=Depends(get_current_admin)):
         {
             "id": r[0], "name": r[1],
             "amount_fulltime": r[2], "amount_parttime": r[3], "amount_codfel": r[4],
-            "applies_to": r[5], "is_mandatory": r[6], "sort_order": r[7],
+            "applies_to": r[5], "is_mandatory": r[6], "sort_order": r[7], "fee_type": r[8],
         }
         for r in rows
     ]
@@ -316,10 +348,10 @@ def create_fee_component(data: FeeComponentCreate, admin=Depends(get_current_adm
         cur.execute(
             """INSERT INTO fee_components
                (session_id, name, amount_fulltime, amount_parttime, amount_codfel,
-                applies_to, is_mandatory, sort_order)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                applies_to, fee_type, is_mandatory, sort_order)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (session[0], data.name, data.amount_fulltime, data.amount_parttime,
-             data.amount_codfel, data.applies_to, data.is_mandatory, data.sort_order),
+             data.amount_codfel, data.applies_to, data.fee_type, data.is_mandatory, data.sort_order),
         )
         comp_id = cur.fetchone()[0]
 
@@ -337,7 +369,7 @@ def update_fee_component(comp_id: int, data: FeeComponentUpdate, admin=Depends(g
     updates = []
     params = []
     for field in ["name", "amount_fulltime", "amount_parttime", "amount_codfel",
-                   "applies_to", "is_mandatory", "sort_order"]:
+                   "applies_to", "fee_type", "is_mandatory", "sort_order"]:
         val = getattr(data, field, None)
         if val is not None:
             updates.append(f"{field} = %s")
@@ -451,7 +483,16 @@ def delete_hostel(hostel_id: int, admin=Depends(get_current_admin)):
                 status_code=409,
                 detail=f"Cannot delete '{name}': {occupied} bed(s) are currently occupied. Revoke all allocations first.",
             )
-        cur.execute("DELETE FROM hostels WHERE id = %s", (hostel_id,))
+            
+        try:
+            # Nullify any application preferences for this hostel to prevent foreign key errors
+            cur.execute("UPDATE hostel_applications SET choice_1_id = NULL WHERE choice_1_id = %s", (hostel_id,))
+            cur.execute("UPDATE hostel_applications SET choice_2_id = NULL WHERE choice_2_id = %s", (hostel_id,))
+            cur.execute("UPDATE hostel_applications SET choice_3_id = NULL WHERE choice_3_id = %s", (hostel_id,))
+
+            cur.execute("DELETE FROM hostels WHERE id = %s", (hostel_id,))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Cannot delete hostel: {str(e)}")
 
     log_event(
         HOSTEL_DELETED, "admin", admin["identifier"],
@@ -595,6 +636,21 @@ def update_block_status(block_id: int, data: BlockStatusUpdate, admin=Depends(ge
 # ROOMS & BEDS
 # ════════════════════════════════════════════════════════════
 
+class RoomUpdate(BaseModel):
+    room_number: str
+    disability_reserved: bool
+
+@router.put("/rooms/{room_id}")
+def update_room(room_id: int, data: RoomUpdate, admin=Depends(get_current_admin)):
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE rooms SET room_number = %s, disability_reserved = %s WHERE id = %s",
+            (data.room_number.strip(), data.disability_reserved, room_id),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Room not found")
+    return {"message": f"Room updated successfully"}
+
 @router.post("/blocks/{block_id}/rooms")
 def create_many_rooms_and_beds(block_id: int, data: BulkRoomGenerate, admin=Depends(get_current_admin)):
     num_rooms = max(4, min(data.num_rooms, 50))
@@ -652,7 +708,7 @@ def list_block_rooms(block_id: int, admin=Depends(get_current_admin)):
             raise HTTPException(status_code=404, detail="Block not found")
 
         cur.execute("""
-            SELECT r.id, r.room_number, r.status,
+            SELECT r.id, r.room_number, r.status, r.disability_reserved,
                    COUNT(b.id) AS total_beds,
                    COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) AS occupied_beds
             FROM rooms r
@@ -666,9 +722,9 @@ def list_block_rooms(block_id: int, admin=Depends(get_current_admin)):
         "block_name": block[0],
         "rooms": [
             {
-                "id": r[0], "room_number": r[1], "status": r[2],
-                "total_beds": r[3], "occupied_beds": r[4],
-                "available_beds": r[3] - r[4],
+                "id": r[0], "room_number": r[1], "status": r[2], "disability_reserved": r[3],
+                "total_beds": r[4], "occupied_beds": r[5],
+                "available_beds": r[4] - r[5],
             }
             for r in rows
         ],

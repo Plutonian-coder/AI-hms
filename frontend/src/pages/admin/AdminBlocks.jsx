@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
-import { ArrowLeft, Layers, Plus, WrenchIcon, CheckCircle, Users, BedDouble } from 'lucide-react';
+import { ArrowLeft, Layers, Plus, WrenchIcon, CheckCircle, Users, BedDouble, Edit2, Save, X, Accessibility } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 export default function AdminBlocks() {
@@ -19,6 +19,10 @@ export default function AdminBlocks() {
     const [numRooms, setNumRooms] = useState(10);
     const [bedsPerRoom, setBedsPerRoom] = useState(4);
     const [submitting, setSubmitting] = useState(false);
+    
+    // Room edit state
+    const [editingRoomId, setEditingRoomId] = useState(null);
+    const [editRoomData, setEditRoomData] = useState({ room_number: '', disability_reserved: false });
 
     const fetchBlocks = () => {
         setLoading(true);
@@ -68,12 +72,36 @@ export default function AdminBlocks() {
     };
 
     const loadRooms = async (block) => {
-        if (expandedBlock === block.id) { setExpandedBlock(null); setRooms(null); return; }
+        if (expandedBlock === block.id) { 
+            setExpandedBlock(null); 
+            setRooms(null); 
+            setEditingRoomId(null);
+            return; 
+        }
         setExpandedBlock(block.id);
         try {
             const res = await apiClient.get(`/admin/blocks/${block.id}/rooms`);
             setRooms(res.data);
+            setEditingRoomId(null);
         } catch { toast.error('Failed to load rooms'); }
+    };
+
+    const handleEditRoom = (room) => {
+        setEditingRoomId(room.id);
+        setEditRoomData({ room_number: room.room_number, disability_reserved: room.disability_reserved });
+    };
+
+    const handleSaveRoom = async (roomId) => {
+        try {
+            await apiClient.put(`/admin/rooms/${roomId}`, editRoomData);
+            toast.success('Room updated successfully');
+            setEditingRoomId(null);
+            // Refresh rooms
+            const res = await apiClient.get(`/admin/blocks/${expandedBlock}/rooms`);
+            setRooms(res.data);
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to update room');
+        }
     };
 
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Blocks...</div>;
@@ -215,20 +243,58 @@ export default function AdminBlocks() {
                                         <p className="text-center text-muted text-sm font-medium py-6">No rooms yet. Click "Generate Rooms" to create some.</p>
                                     )}
                                     {rooms.rooms?.map(room => (
-                                        <div key={room.id} className="flex items-center justify-between px-6 py-3 hover:bg-white/60 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <span className="font-bold text-heading">{room.room_number}</span>
-                                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${room.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{room.status}</span>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-sm text-muted">{room.occupied_beds}/{room.total_beds} beds</span>
-                                                <button
-                                                    onClick={() => navigate(`/admin/rooms/${room.id}/students`)}
-                                                    className="flex items-center gap-1.5 text-xs font-bold text-forest bg-forest/10 hover:bg-forest/20 px-3 py-1.5 rounded-lg transition-colors"
-                                                >
-                                                    <Users className="w-3 h-3" /> View Students
-                                                </button>
-                                            </div>
+                                        <div key={room.id} className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-3 hover:bg-white/60 transition-colors gap-3">
+                                            {editingRoomId === room.id ? (
+                                                <div className="flex-1 flex flex-wrap items-center gap-3">
+                                                    <input 
+                                                        value={editRoomData.room_number} 
+                                                        onChange={e => setEditRoomData({...editRoomData, room_number: e.target.value})}
+                                                        className="glass-input text-heading rounded-lg px-3 py-1.5 font-bold focus:ring-lime focus:border-lime max-w-[120px]"
+                                                        placeholder="Room No."
+                                                    />
+                                                    <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-muted">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={editRoomData.disability_reserved}
+                                                            onChange={e => setEditRoomData({...editRoomData, disability_reserved: e.target.checked})}
+                                                            className="w-4 h-4 text-lime focus:ring-lime rounded border-black/10"
+                                                        />
+                                                        Disability Reserved
+                                                    </label>
+                                                    <div className="flex items-center gap-2 ml-auto">
+                                                        <button onClick={() => handleSaveRoom(room.id)} className="p-1.5 bg-lime text-forest rounded hover:bg-lime-hover"><Save className="w-4 h-4" /></button>
+                                                        <button onClick={() => setEditingRoomId(null)} className="p-1.5 bg-surface text-muted rounded hover:bg-black/5"><X className="w-4 h-4" /></button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-3 flex-wrap">
+                                                        <span className="font-bold text-heading">{room.room_number}</span>
+                                                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${room.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{room.status}</span>
+                                                        {room.disability_reserved && (
+                                                            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+                                                                <Accessibility className="w-3 h-3" /> Disability
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="text-sm text-muted whitespace-nowrap">{room.occupied_beds}/{room.total_beds} beds</span>
+                                                        <button
+                                                            onClick={() => handleEditRoom(room)}
+                                                            className="flex items-center gap-1.5 text-xs font-bold text-muted bg-surface hover:bg-black/5 px-2 py-1.5 rounded-lg transition-colors"
+                                                            title="Edit Room"
+                                                        >
+                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => navigate(`/admin/rooms/${room.id}/students`)}
+                                                            className="flex items-center gap-1.5 text-xs font-bold text-forest bg-forest/10 hover:bg-forest/20 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                                                        >
+                                                            <Users className="w-3 h-3" /> Students
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

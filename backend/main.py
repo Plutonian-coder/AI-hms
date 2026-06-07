@@ -19,6 +19,8 @@ from logging_config import setup_logging
 from config import CORS_ORIGINS
 from database import get_pool, close_pool
 from routers import auth, allocation, admin, payment, application, register_import, quiz, report
+import tasks
+import asyncio
 
 # ── Initialize structured logging before anything else ───────────────────────
 setup_logging()
@@ -26,6 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 # ── Lifespan: startup validation + graceful shutdown (Factor IX) ─────────────
+async def run_background_tasks():
+    while True:
+        try:
+            tasks.revoke_expired_allocations()
+        except Exception as e:
+            logger.error(f"Background task error: {e}")
+        await asyncio.sleep(3600)  # Run every 1 hour
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: validate database connectivity
@@ -40,10 +50,14 @@ async def lifespan(app: FastAPI):
         logger.critical("Startup health check FAILED — database unreachable: %s", e)
         raise
 
+    # Start background tasks
+    bg_task = asyncio.create_task(run_background_tasks())
+
     yield
 
     # Shutdown: close all database connections
-    logger.info("Shutting down — closing database connections")
+    logger.info("Shutting down — canceling background tasks and closing database connections")
+    bg_task.cancel()
     close_pool()
     logger.info("Shutdown complete")
 

@@ -82,8 +82,8 @@ export default function PaymentCallback() {
                     <div>
                         <h3 className="font-bold text-red-800">No Payment Reference</h3>
                         <p className="text-red-600 text-sm mt-1">No payment reference was found. Please try again from the payment page.</p>
-                        <button onClick={() => navigate('/payment')} className="mt-3 text-sm font-bold text-forest underline">
-                            Back to Payment
+                        <button onClick={() => navigate('/')} className="mt-3 text-sm font-bold text-forest underline">
+                            Return to Dashboard
                         </button>
                     </div>
                 </div>
@@ -182,24 +182,39 @@ export default function PaymentCallback() {
 
                 <div className="mt-8 flex flex-col sm:flex-row gap-3">
                     {pipelineError && (
-                        <button onClick={() => navigate('/payment')} className="flex items-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors">
-                            <RotateCcw className="w-4 h-4" /> Try Again
+                        <button onClick={() => navigate('/')} className="flex items-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors">
+                            <RotateCcw className="w-4 h-4" /> Return to Dashboard
                         </button>
                     )}
                     {pipelineResult && (
                         <>
+                            <button
+                                onClick={() => navigate('/')}
+                                className="flex items-center justify-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                            >
+                                <RotateCcw className="w-4 h-4" /> Return to Dashboard
+                            </button>
                             <button
                                 onClick={() => navigate('/receipt')}
                                 className="flex-1 flex items-center justify-center gap-2 bg-forest text-white px-6 py-3 rounded-full font-bold hover:bg-forest-light transition-colors"
                             >
                                 <Receipt className="w-4 h-4" /> View Receipt
                             </button>
-                            <button
-                                onClick={() => navigate('/quiz')}
-                                className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
-                            >
-                                Take Quiz <ArrowRight className="w-4 h-4" />
-                            </button>
+                            {pipelineResult.fee_type === 'hostel' ? (
+                                <button
+                                    onClick={() => navigate('/my-allocation')}
+                                    className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
+                                >
+                                    View My Allocation <ArrowRight className="w-4 h-4" />
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => navigate('/quiz')}
+                                    className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
+                                >
+                                    Take Quiz <ArrowRight className="w-4 h-4" />
+                                </button>
+                            )}
                         </>
                     )}
                 </div>

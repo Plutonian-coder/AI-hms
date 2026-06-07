@@ -3,13 +3,13 @@ import apiClient from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import {
     FileText, Loader2, CheckCircle, AlertCircle, Upload, X, User,
-    HeartPulse, Building, Send, ChevronRight, AlertTriangle, FileUp, Eye
+    HeartPulse, Building, Send, ChevronRight, AlertTriangle, FileUp, Eye, CreditCard
 } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
 const STAGES = [
     { num: 1, label: 'Profile', icon: User },
-    { num: 2, label: 'Accommodations', icon: HeartPulse },
+    { num: 2, label: 'Disability', icon: HeartPulse },
     { num: 3, label: 'Preferences', icon: Building },
     { num: 4, label: 'Submit', icon: Send },
 ];
@@ -32,9 +32,11 @@ export default function HostelApplication() {
 
     // Stage 1
     const [academicData, setAcademicData] = useState(null);
+    const [progress, setProgress] = useState(null);
     // Stage 2
     const [hasSpecialNeeds, setHasSpecialNeeds] = useState(false);
     const [specialNeedsType, setSpecialNeedsType] = useState('');
+    const [otherDisability, setOtherDisability] = useState('');
     const [medicalFile, setMedicalFile] = useState(null);
     const [filePreview, setFilePreview] = useState(null);
     const [uploadAttempt, setUploadAttempt] = useState(0);
@@ -48,13 +50,34 @@ export default function HostelApplication() {
     useEffect(() => {
         const init = async () => {
             try {
-                const res = await apiClient.get('/application/status');
-                if (res.data.has_application) {
-                    const d = res.data;
+                let statusData = { has_application: false };
+                try {
+                    const statusRes = await apiClient.get('/application/status');
+                    statusData = statusRes.data;
+                } catch (e) {
+                    console.error('Status Error:', e);
+                    setError('Failed to load application status: ' + (e.response?.data?.detail || e.message || String(e)));
+                    // We don't throw, we just proceed with has_application: false
+                }
+
+                const [hRes, dashRes] = await Promise.all([
+                    apiClient.get('/allocation/hostels').catch(() => ({ data: [] })),
+                    apiClient.get('/allocation/dashboard').catch(() => ({ data: null }))
+                ]);
+
+                if (statusData.has_application) {
+                    const d = statusData;
                     setAppStatus(d);
                     setStageCompleted(d.stage_completed || 0);
                     setHasSpecialNeeds(d.has_special_needs || false);
-                    setSpecialNeedsType(d.special_needs_type || '');
+                    
+                    if (d.special_needs_type?.startsWith('Other: ')) {
+                        setSpecialNeedsType('Other');
+                        setOtherDisability(d.special_needs_type.replace('Other: ', ''));
+                    } else {
+                        setSpecialNeedsType(d.special_needs_type || '');
+                    }
+                    
                     setUploadAttempt(d.upload_attempt || 0);
                     if (d.choices?.[0]?.id) setChoice1(String(d.choices[0].id));
                     if (d.choices?.[1]?.id) setChoice2(String(d.choices[1].id));
@@ -69,16 +92,11 @@ export default function HostelApplication() {
                         setCurrentStage(Math.min((d.stage_completed || 0) + 1, 4));
                     }
                 }
-                // Fetch hostels
-                const hRes = await apiClient.get('/allocation/hostels');
                 setHostels(hRes.data || []);
-                // Try to load academic data
-                try {
-                    const dashRes = await apiClient.get('/allocation/dashboard');
-                    if (dashRes.data?.profile) setAcademicData(dashRes.data.profile);
-                } catch {}
-            } catch {
-                setError('Failed to load application data.');
+                if (dashRes.data?.profile) setAcademicData(dashRes.data.profile);
+                if (dashRes.data?.progress) setProgress(dashRes.data.progress);
+            } catch (err) {
+                setError('Failed to load application data: ' + (err.message || String(err)));
             } finally {
                 setLoading(false);
             }
@@ -105,8 +123,11 @@ export default function HostelApplication() {
             const formData = new FormData();
             formData.append('has_special_needs', hasSpecialNeeds);
             if (hasSpecialNeeds) {
-                if (!specialNeedsType) { setError('Please select a special needs type'); setSubmitting(false); return; }
-                formData.append('special_needs_type', specialNeedsType);
+                if (!specialNeedsType) { setError('Please select a disability type'); setSubmitting(false); return; }
+                if (specialNeedsType === 'Other' && !otherDisability.trim()) { setError('Please describe your disability'); setSubmitting(false); return; }
+                
+                formData.append('special_needs_type', specialNeedsType === 'Other' ? `Other: ${otherDisability.trim()}` : specialNeedsType);
+                
                 if (!medicalFile && !appStatus?.medical_doc_name) { setError('Please upload medical documentation'); setSubmitting(false); return; }
                 if (medicalFile) formData.append('medical_doc', medicalFile);
             }
@@ -164,7 +185,12 @@ export default function HostelApplication() {
         }
     }, []);
 
-    if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-forest animate-spin" /></div>;
+    if (loading) return (
+        <div className="max-w-3xl mx-auto p-6 animate-pulse space-y-6">
+            <div className="h-8 bg-black/5 rounded w-1/3 mb-8"></div>
+            <div className="h-64 bg-black/5 rounded-2xl w-full"></div>
+        </div>
+    );
 
     // ── Step Indicator ──
     const StepIndicator = () => (
@@ -224,7 +250,7 @@ export default function HostelApplication() {
                         </div>
                     )}
                     {isReady && (
-                        <button onClick={() => navigate('/payment')} className="mt-6 w-full flex items-center justify-center gap-2 bg-forest text-white px-5 py-3.5 rounded-xl font-bold shadow-lg shadow-forest/20 hover:bg-forest-hover hover:scale-[1.02] transition-all">
+                        <button onClick={() => navigate('/payment?type=application')} className="mt-6 w-full flex items-center justify-center gap-2 bg-forest text-white px-5 py-3.5 rounded-xl font-bold shadow-lg shadow-forest/20 hover:bg-forest-hover hover:scale-[1.02] transition-all">
                             Proceed to Payment <ChevronRight className="w-4 h-4" />
                         </button>
                     )}
@@ -297,13 +323,13 @@ export default function HostelApplication() {
                     <div className="animate-in fade-in duration-300 space-y-6">
                         <div className="flex items-center gap-2 border-b border-black/5 pb-3">
                             <span className="bg-forest text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">2</span>
-                            <h3 className="text-lg font-bold text-heading">Special Accommodations</h3>
+                            <h3 className="text-lg font-bold text-heading">Disability Information</h3>
                         </div>
                         <div className="space-y-2">
-                            <p className="text-sm font-semibold text-body">Do you require special accommodation?</p>
+                            <p className="text-sm font-semibold text-body">Do you have a disability that requires accommodation?</p>
                             <div className="flex gap-3">
                                 {[true, false].map(val => (
-                                    <button key={String(val)} onClick={() => { setHasSpecialNeeds(val); if (!val) { setSpecialNeedsType(''); setMedicalFile(null); setFilePreview(null); } }}
+                                    <button key={String(val)} onClick={() => { setHasSpecialNeeds(val); if (!val) { setSpecialNeedsType(''); setOtherDisability(''); setMedicalFile(null); setFilePreview(null); } }}
                                         className={`flex-1 py-3 rounded-xl font-bold text-sm border-2 transition-all ${hasSpecialNeeds === val ? 'border-forest bg-lime-soft text-forest' : 'border-gray-200 text-muted hover:border-forest/30'}`}>
                                         {val ? 'Yes' : 'No'}
                                     </button>
@@ -312,12 +338,25 @@ export default function HostelApplication() {
                         </div>
                         {hasSpecialNeeds && (
                             <>
-                                <div className="space-y-2">
-                                    <label className="block text-xs font-bold text-body uppercase tracking-widest">Type of Accommodation</label>
-                                    <select value={specialNeedsType} onChange={e => setSpecialNeedsType(e.target.value)} className="w-full glass-input rounded-xl px-4 py-3 text-sm font-medium">
-                                        <option value="">Select type…</option>
-                                        {SPECIAL_NEEDS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="block text-xs font-bold text-body uppercase tracking-widest">Type of Disability</label>
+                                        <select value={specialNeedsType} onChange={e => setSpecialNeedsType(e.target.value)} className="w-full glass-input rounded-xl px-4 py-3 text-sm font-medium">
+                                            <option value="">Select type…</option>
+                                            {SPECIAL_NEEDS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                    {specialNeedsType === 'Other' && (
+                                        <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                                            <label className="block text-xs font-bold text-body uppercase tracking-widest">Please Specify</label>
+                                            <input 
+                                                value={otherDisability} 
+                                                onChange={e => setOtherDisability(e.target.value)} 
+                                                className="w-full glass-input rounded-xl px-4 py-3 text-sm font-medium" 
+                                                placeholder="Describe your disability..."
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
@@ -400,8 +439,12 @@ export default function HostelApplication() {
                                 </div>
                             </div>
                             <div className="bg-surface rounded-xl p-4 border border-black/5">
-                                <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Special Accommodations</p>
-                                <p className="text-sm font-semibold text-heading">{hasSpecialNeeds ? `Yes — ${specialNeedsType}` : 'No special accommodations required'}</p>
+                                <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Disability Information</p>
+                                <p className="text-sm font-semibold text-heading">
+                                    {hasSpecialNeeds 
+                                        ? `Yes — ${specialNeedsType === 'Other' ? otherDisability : specialNeedsType}` 
+                                        : 'No disability requiring accommodation'}
+                                </p>
                             </div>
                             <div className="bg-surface rounded-xl p-4 border border-black/5">
                                 <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Hostel Preferences</p>
@@ -417,13 +460,19 @@ export default function HostelApplication() {
                             </div>
                         </div>
                         <div className="p-4 bg-warning-bg/30 border border-warning/20 rounded-xl">
-                            <p className="text-xs text-warning font-semibold">⚠️ Your application will be locked after submission. Fee details will be shown after bed allocation.</p>
+                            <p className="text-xs text-warning font-semibold">⚠️ You must pay the Application Fee before you can submit. Your application will be locked after submission.</p>
                         </div>
                         <div className="flex gap-3">
                             <button onClick={() => setCurrentStage(3)} className="px-5 py-3 rounded-xl border border-gray-200 text-sm font-bold text-muted hover:text-heading hover:bg-surface transition-all">Back</button>
-                            <button onClick={handleSubmit} disabled={submitting} className="flex-1 flex justify-center items-center py-3.5 rounded-xl shadow-lg shadow-lime/25 text-sm font-black text-forest bg-lime hover:bg-lime-hover transition-all hover:scale-[1.02] disabled:opacity-50">
-                                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Send className="w-4 h-4 mr-2" /> Submit Application</>}
-                            </button>
+                            {progress?.app_fee_paid ? (
+                                <button onClick={handleSubmit} disabled={submitting} className="flex-1 flex justify-center items-center py-3.5 rounded-xl shadow-lg shadow-lime/25 text-sm font-black text-forest bg-lime hover:bg-lime-hover transition-all hover:scale-[1.02] disabled:opacity-50">
+                                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Send className="w-4 h-4 mr-2" /> Submit Application</>}
+                                </button>
+                            ) : (
+                                <button onClick={() => navigate('/payment?type=application')} className="flex-1 flex justify-center items-center py-3.5 rounded-xl shadow-lg shadow-forest/25 text-sm font-black text-white bg-forest hover:bg-forest-hover transition-all hover:scale-[1.02]">
+                                    <CreditCard className="w-4 h-4 mr-2" /> Pay Application Fee
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}

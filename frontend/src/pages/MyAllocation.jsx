@@ -16,14 +16,25 @@ export default function MyAllocation() {
     const navigate = useNavigate();
     const toast = useToast();
     const [allocation, setAllocation] = useState(null);
+    const [hostelFeePaid, setHostelFeePaid] = useState(false);
+    const [hostelFeeDeadline, setHostelFeeDeadline] = useState(null);
     const [loading, setLoading] = useState(true);
 
     const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1').replace('/api/v1', '');
 
     useEffect(() => {
-        apiClient.get('/allocation/my-allocation')
-            .then(res => { if (res.data) setAllocation(res.data); })
-            .finally(() => setLoading(false));
+        Promise.all([
+            apiClient.get('/allocation/my-allocation'),
+            apiClient.get('/allocation/dashboard'),
+        ]).then(([allocRes, dashRes]) => {
+            if (allocRes.data) setAllocation(allocRes.data);
+            if (dashRes.data) {
+                setHostelFeePaid(dashRes.data.progress?.hostel_fee_paid ?? false);
+                if (dashRes.data.session?.hostel_fee_deadline) {
+                    setHostelFeeDeadline(dashRes.data.session.hostel_fee_deadline);
+                }
+            }
+        }).finally(() => setLoading(false));
     }, []);
 
     if (loading) {
@@ -77,12 +88,7 @@ export default function MyAllocation() {
                         View and manage your hostel block, room details, and roommate information.
                     </p>
                 </div>
-                {allocation.hms_reference && (
-                    <div className="flex flex-col items-start md:items-end gap-1 shrink-0 bg-white border border-sidebar-border rounded-xl p-3 shadow-sm">
-                        <span className="text-[10px] font-bold text-muted uppercase tracking-widest">HMS Reference</span>
-                        <span className="text-sm font-mono font-black text-forest">{allocation.hms_reference}</span>
-                    </div>
-                )}
+
             </div>
 
             {/* Content container */}
@@ -116,6 +122,28 @@ export default function MyAllocation() {
                 </div>
 
                 {/* ── Meta & Print CTA Row ── */}
+                {!hostelFeePaid && (
+                    <div className="bg-orange-50 rounded-2xl p-5 border border-orange-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div>
+                            <h3 className="font-bold text-orange-900">Hostel Fee Payment Required</h3>
+                            <p className="text-sm font-medium text-orange-800 mt-1">
+                                Please pay your Hostel Fee to avoid getting your allocation revoked.
+                            </p>
+                            {hostelFeeDeadline && (
+                                <p className="text-xs font-bold text-orange-700 mt-1.5">
+                                    ⏰ Deadline: {new Date(hostelFeeDeadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => navigate('/payment?type=hostel')}
+                            className="w-full sm:w-auto bg-forest text-white font-extrabold py-2.5 px-6 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs"
+                        >
+                            Pay Hostel Fee
+                        </button>
+                    </div>
+                )}
+
                 <div className="bg-white rounded-2xl p-5 border border-sidebar-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-6 w-full sm:w-auto">
                         {allocation.allocated_at && (

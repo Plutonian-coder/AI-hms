@@ -253,6 +253,12 @@ export default function CompatibilityQuiz() {
                                     )}
                                 </p>
                             </div>
+
+                            <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl text-center">
+                                <p className="text-sm font-bold text-orange-800">
+                                    Your bed is reserved! Please proceed to pay your Hostel Fee to finalize your allocation.
+                                </p>
+                            </div>
                         </div>
                     )}
 
@@ -264,10 +270,10 @@ export default function CompatibilityQuiz() {
                         )}
                         {pipelineResult && (
                             <button
-                                onClick={() => navigate('/my-allocation')}
-                                className="w-full flex items-center justify-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
+                                onClick={() => navigate('/payment?type=hostel')}
+                                className="w-full flex items-center justify-center gap-2 bg-forest text-white px-6 py-3 rounded-full font-bold shadow-lg shadow-forest/25 hover:bg-forest-light hover:scale-[1.02] transition-all"
                             >
-                                View My Allocation <ArrowRight className="w-4 h-4" />
+                                Pay Hostel Fee <ArrowRight className="w-4 h-4" />
                             </button>
                         )}
                     </div>

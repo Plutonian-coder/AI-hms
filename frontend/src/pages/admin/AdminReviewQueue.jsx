@@ -40,8 +40,16 @@ export default function AdminReviewQueue() {
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
             setTimeout(() => URL.revokeObjectURL(url), 10000);
-        } catch {
-            toast.error('Failed to view medical document');
+        } catch (error) {
+            let msg = 'Failed to view medical document';
+            if (error.response && error.response.data instanceof Blob) {
+                try {
+                    const text = await error.response.data.text();
+                    const json = JSON.parse(text);
+                    msg = json.detail || msg;
+                } catch (e) {}
+            }
+            toast.error(msg);
         } finally {
             setFetchingFile({ id: null, type: null });
         }
@@ -62,8 +70,16 @@ export default function AdminReviewQueue() {
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
-        } catch {
-            toast.error('Failed to download medical document');
+        } catch (error) {
+            let msg = 'Failed to download medical document';
+            if (error.response && error.response.data instanceof Blob) {
+                try {
+                    const text = await error.response.data.text();
+                    const json = JSON.parse(text);
+                    msg = json.detail || msg;
+                } catch (e) {}
+            }
+            toast.error(msg);
         } finally {
             setFetchingFile({ id: null, type: null });
         }

@@ -16,47 +16,75 @@ logger = logging.getLogger(__name__)
 
 def revoke_expired_allocations():
     """
-    One-shot task: Revokes any allocation where:
-      - payment_status = 'pending'  (student not yet validated payment)
-      - payment_deadline < NOW      (7-day window has passed)
-      - status = 'active'
-
-    Also records checkout entries for each revoked allocation.
+    Checks active academic sessions. If the hostel_fee_deadline has passed,
+    it revokes any active allocations for students who have NOT paid the hostel fee.
     """
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Find expired allocations with full details for checkout records
+                # Get active session with passed hostel fee deadline
                 cur.execute("""
-                    SELECT a.id, a.bed_id, a.student_id, a.session_id,
-                           h.name, bl.name, r.room_number, b.bed_number
-                    FROM allocations a
-                    JOIN beds b    ON b.id  = a.bed_id
-                    JOIN rooms r   ON r.id  = b.room_id
-                    JOIN blocks bl ON bl.id = r.block_id
-                    JOIN hostels h ON h.id  = bl.hostel_id
-                    WHERE a.payment_status = 'pending'
-                      AND a.payment_deadline IS NOT NULL
-                      AND a.payment_deadline < CURRENT_TIMESTAMP
-                      AND (a.status = 'active' OR a.status IS NULL)
+                    SELECT id, hostel_fee_deadline FROM academic_sessions
+                    WHERE is_active = TRUE AND hostel_fee_deadline IS NOT NULL
+                      AND hostel_fee_deadline < NOW()
                 """)
-                expired = cur.fetchall()
+                sess = cur.fetchone()
+                if not sess:
+                    logger.info("AUTO-REVOKE: No active session with an expired hostel fee deadline.")
+                    return
 
-                if expired:
-                    for alloc_id, bed_id, student_id, session_id, hostel_name, block_name, room_number, bed_number in expired:
-                        # Record checkout
-                        cur.execute("""
-                            INSERT INTO checkouts (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number, checkout_type, reason, recorded_by_name)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, 'payment_expired', 'Payment deadline expired (auto-revocation)', 'SYSTEM')
-                        """, (student_id, session_id, bed_id, hostel_name, block_name, room_number, bed_number))
+                session_id = sess[0]
 
-                        cur.execute("UPDATE allocations SET status = 'expired' WHERE id = %s", (alloc_id,))
-                        cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
-
-                    conn.commit()
-                    logger.info("AUTO-REVOKE: Freed %d bed(s) from expired allocations", len(expired))
-                else:
-                    logger.info("AUTO-REVOKE: No expired allocations found")
+                # Find active allocations without confirmed hostel fee payment
+                cur.execute("""
+                    SELECT a.id, a.bed_id, a.student_id 
+                    FROM allocations a
+                    WHERE a.session_id = %s AND a.status = 'active'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM confirmed_payments cp
+                          JOIN payment_component_log pcl ON pcl.payment_id = cp.id
+                          JOIN fee_components fc ON fc.id = pcl.component_id
+                          WHERE cp.student_id = a.student_id AND cp.session_id = %s
+                            AND cp.status = 'confirmed' AND fc.fee_type = 'hostel'
+                      )
+                """, (session_id, session_id))
+                
+                expired_allocations = cur.fetchall()
+                
+                if not expired_allocations:
+                    logger.info("AUTO-REVOKE: No unpaid allocations found past the deadline.")
+                    return
+                
+                # Revoke them
+                logger.info("AUTO-REVOKE: Found %d expired allocations to revoke for session %s.", len(expired_allocations), session_id)
+                
+                for alloc_id, bed_id, student_id in expired_allocations:
+                    # 1. Update allocation status
+                    cur.execute("""
+                        UPDATE allocations
+                        SET status = 'revoked', revocation_reason = 'Hostel fee deadline passed',
+                            revoked_by = 'SYSTEM', revoked_at = NOW()
+                        WHERE id = %s
+                    """, (alloc_id,))
+                    
+                    # 2. Free up the bed
+                    cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
+                    
+                    # 3. Update application status
+                    cur.execute("""
+                        UPDATE hostel_applications
+                        SET status = 'ready_for_allocation'
+                        WHERE student_id = %s AND session_id = %s
+                    """, (student_id, session_id))
+                    
+                    # 4. Audit Log
+                    cur.execute("""
+                        INSERT INTO audit_logs (actor_type, actor_id, action_type, target_entity, target_id, description, session_id)
+                        VALUES ('system', 'SYSTEM', 'REVOKE_ALLOCATION', 'allocation', %s, 'Auto-revoked due to missed hostel fee deadline', %s)
+                    """, (str(alloc_id), session_id))
+                
+                conn.commit()
+                logger.info("AUTO-REVOKE: Successfully auto-revoked %d allocations.", len(expired_allocations))
 
     except Exception as e:
         logger.error("AUTO-REVOKE failed: %s", e, exc_info=True)

@@ -18,7 +18,8 @@ import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from config import SMTP_EMAIL, SMTP_APP_PASSWORD, HMS_APP_URL
+import requests
+from config import SMTP_EMAIL, SMTP_APP_PASSWORD, HMS_APP_URL, RESEND_API_KEY, GOOGLE_SCRIPT_URL
 
 logger = logging.getLogger(__name__)
 
@@ -27,19 +28,31 @@ SENDER_NAME = "Rita from HMS"
 # ── Shared HTML wrapper ──────────────────────────────────────────────────────
 
 def _wrap_html(title, body_html):
-    """Wraps email body in a branded HMS HTML template."""
+    """Wraps email body in a branded HMS HTML template matching the Headspace aesthetic."""
     return f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
-        <div style="background-color: #0f3d24; padding: 30px 20px; text-align: center;">
-            <h2 style="color: #ecfccb; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">HMS PORTAL</h2>
-            <p style="color: rgba(236, 252, 203, 0.6); margin: 4px 0 0 0; font-size: 12px; font-weight: 600;">{title}</p>
-        </div>
-        <div style="padding: 30px 24px; color: #374151; line-height: 1.7;">
+    <div style="background-color: #f8f8f8; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+        <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+            
+            <!-- Logo Area -->
+            <div style="margin-bottom: 30px;">
+                <span style="display: inline-block; width: 24px; height: 24px; background-color: #f97316; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>
+                <span style="color: #111827; font-size: 22px; font-weight: 800; vertical-align: middle; letter-spacing: -0.5px;">hms portal</span>
+            </div>
+
+            <!-- Dynamic Content (Hero, Heading, Body, Button) -->
             {body_html}
-        </div>
-        <div style="background-color: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
-            <p style="margin: 0; font-size: 12px; color: #9ca3af;">This is an automated message from {SENDER_NAME}. Please do not reply directly.</p>
-            <p style="margin: 4px 0 0 0; font-size: 11px; color: #d1d5db;">Hostel Management System &bull; Student Affairs Unit</p>
+
+            <!-- Footer Area -->
+            <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #f3f4f6;">
+                <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin: 0 0 20px 0;">
+                    If you have any questions, please visit our <a href="{HMS_APP_URL}/docs" style="color: #f97316; text-decoration: none; font-weight: bold;">Docs</a> or email us at <a href="mailto:khalidyekini80@gmail.com" style="color: #f97316; text-decoration: none; font-weight: bold;">khalidyekini80@gmail.com</a>. Our team can answer questions about your account or help you with your hostel allocation.
+                </p>
+                <p style="font-size: 11px; color: #9ca3af; margin: 0;">
+                    You have received this email as a registered user of HMS®<br>
+                    Hostel Management System, Student Affairs Unit.<br>
+                    © 2026 HMS Inc. All rights reserved.
+                </p>
+            </div>
         </div>
     </div>
     """
@@ -108,33 +121,70 @@ def _log_email(
 def _send(to_email, subject, html, email_type="general",
           recipient_name=None, recipient_matric=None, recipient_user_id=None,
           session_id=None, extra_metadata=None):
-    """Send an email via Gmail SMTP and log it. Never raises — logs errors."""
-    if not SMTP_EMAIL or not SMTP_APP_PASSWORD:
-        logger.warning("SMTP not configured (SMTP_EMAIL / SMTP_APP_PASSWORD missing). Email to %s skipped.", to_email)
+    """Send an email via Resend (HTTP), Google Apps Script (HTTP), or Gmail SMTP and log it. Never raises — logs errors."""
+    if not GOOGLE_SCRIPT_URL and not RESEND_API_KEY and (not SMTP_EMAIL or not SMTP_APP_PASSWORD):
+        logger.warning("Email not configured (No Google Script, Resend, or SMTP). Email to %s skipped.", to_email)
         return None
 
     status = "sent"
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"{SENDER_NAME} <{SMTP_EMAIL}>"
-        msg["To"] = to_email
+        if GOOGLE_SCRIPT_URL:
+            # Send via Google Apps Script Webhook (bypasses Render SMTP blocking, 100% free)
+            data = {
+                "to": to_email,
+                "subject": subject,
+                "html": html,
+                "senderName": SENDER_NAME
+            }
+            # Add a timeout so it doesn't hang forever
+            res = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=15)
+            # The GAS script should return 200/302. Handle errors:
+            if res.status_code >= 400:
+                raise Exception(f"Google Apps Script error: {res.text}")
+            logger.info("Email sent to %s via Google Apps Script. Subject: %s", to_email, subject)
+            
+        elif RESEND_API_KEY:
+            # Send via Resend HTTP API (bypasses Render SMTP blocking)
+            headers = {
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "from": "HMS Portal <onboarding@resend.dev>",
+                "to": [to_email],
+                "subject": subject,
+                "html": html
+            }
+            res = requests.post("https://api.resend.com/emails", headers=headers, json=data)
+            if res.status_code >= 400:
+                raise Exception(f"Resend API error: {res.text}")
+            logger.info("Email sent to %s via Resend. Subject: %s", to_email, subject)
+            
+        else:
+            # Send via Gmail SMTP
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{SENDER_NAME} <{SMTP_EMAIL}>"
+            msg["To"] = to_email
 
-        # Plain text fallback
-        plain_text = f"This email requires an HTML-capable client. Visit {HMS_APP_URL} for more information."
-        msg.attach(MIMEText(plain_text, "plain"))
-        msg.attach(MIMEText(html, "html"))
+            plain_text = f"This email requires an HTML-capable client. Visit {HMS_APP_URL} for more information."
+            msg.attach(MIMEText(plain_text, "plain"))
+            msg.attach(MIMEText(html, "html"))
 
-        # Connect to Gmail SMTP with TLS
-        context = ssl.create_default_context()
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
-
-        logger.info("Email sent to %s. Subject: %s", to_email, subject)
+            context = ssl.create_default_context()
+            try:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+                    server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
+                    server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+            except Exception as e:
+                logger.warning(f"SMTP_SSL on 465 failed, trying 587: {e}")
+                with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                    server.ehlo()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
+                    server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+            logger.info("Email sent to %s via SMTP. Subject: %s", to_email, subject)
     except Exception as e:
         logger.error("Failed to send email to %s: %s", to_email, str(e))
         status = "failed"
@@ -162,17 +212,14 @@ def send_registration_email(to_email: str, first_name: str, matric_number: str,
                             user_id: int = None, session_id: int = None):
     """Welcome email on student registration."""
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Registration Successful</h3>
-        <p>Dear {first_name},</p>
-        <p>This is Rita from HMS. Your account has been successfully created on the Hostel Management System for the current academic session.</p>
-        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0f3d24;">
-            <p style="margin: 0;"><strong>Matriculation Number:</strong> {matric_number}</p>
-        </div>
-        <p>You can now log in to your dashboard to begin your hostel application.</p>
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{HMS_APP_URL}/login" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">Log In to Your Dashboard</a>
-        </div>
-        <p style="font-size: 14px; color: #6b7280;">If you experience any issues, please reach out to the Student Affairs Unit.</p>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Registration<br>Successful</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            You're so close to starting your HMS journey, <strong>{first_name}</strong>. Your account has been created for the current academic session with matric number <strong>{matric_number}</strong>.
+        </p>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 35px 0;">
+            To finish setting up, just click the button below to log in and begin your hostel application.
+        </p>
+        <a href="{HMS_APP_URL}/login" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">Log in to my dashboard</a>
     """
     return _send(
         to_email, "Welcome to HMS Portal — Registration Successful",
@@ -192,28 +239,24 @@ def send_application_submitted_email(to_email: str, first_name: str, matric_numb
     """Sent when a student submits their hostel application."""
     if has_special_needs:
         status_msg = """
-            <div style="background-color: #FEF3C7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #92400E;">
-                <p style="margin: 0; color: #92400E; font-weight: 600;">Your medical documentation is now under administrative review. You will be notified within 3–5 working days.</p>
-            </div>
+            <p style="color: #92400E; background-color: #FEF3C7; padding: 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; margin: 0 0 35px 0;">
+                <strong>Note:</strong> Your medical documentation is now under administrative review. You will be notified within 3–5 working days.
+            </p>
         """
     else:
         status_msg = """
-            <div style="background-color: #DCFCE7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #166534;">
-                <p style="margin: 0; color: #166534; font-weight: 600;">Your application is cleared and ready for the allocation process. You may now proceed to the compatibility quiz.</p>
-            </div>
+            <p style="color: #166534; background-color: #DCFCE7; padding: 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; margin: 0 0 35px 0;">
+                <strong>Cleared!</strong> Your application is ready for the allocation process. You may now proceed to the compatibility quiz.
+            </p>
         """
 
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Application Received</h3>
-        <p>Dear {first_name},</p>
-        <p>This is Rita from HMS. Your hostel application has been received successfully.</p>
-        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0f3d24;">
-            <p style="margin: 0;"><strong>Matric Number:</strong> {matric_number}</p>
-        </div>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Application<br>Received</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Great news, <strong>{first_name}</strong>. Your hostel application has been received successfully and is safely in our system.
+        </p>
         {status_msg}
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{HMS_APP_URL}/" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">View Your Dashboard</a>
-        </div>
+        <a href="{HMS_APP_URL}/" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my dashboard</a>
     """
     return _send(
         to_email, "HMS — Application Received",
@@ -234,30 +277,31 @@ def send_medical_review_email(to_email: str, first_name: str, status: str, notes
     if status == "approved":
         subject = "HMS — Medical Documentation Approved ✓"
         status_block = """
-            <div style="background-color: #DCFCE7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #166534;">
-                <p style="margin: 0; color: #166534; font-weight: 600;">Great news! Your medical documentation has been approved. You are now cleared for hostel allocation.</p>
-            </div>
+            <p style="color: #166534; background-color: #DCFCE7; padding: 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; margin: 0 0 35px 0;">
+                <strong>Approved!</strong> Your medical documentation is verified and you are now cleared for hostel allocation.
+            </p>
         """
+        title = "Review<br>Approved"
     else:
-        notes_html = f'<p style="margin: 8px 0 0 0; color: #92400E;"><strong>Admin notes:</strong> {notes}</p>' if notes else ""
-        attempts_html = f'<p style="margin: 4px 0 0 0; color: #92400E; font-size: 13px;">You have <strong>{attempts_remaining}</strong> re-upload attempt(s) remaining.</p>' if attempts_remaining > 0 else '<p style="margin: 4px 0 0 0; color: #991B1B; font-size: 13px; font-weight: 600;">You have exhausted all upload attempts. Please contact the Student Affairs Unit.</p>'
+        notes_html = f'<p style="margin: 10px 0 0 0; color: #991B1B;"><strong>Note:</strong> {notes}</p>' if notes else ""
+        attempts_html = f'<p style="margin: 10px 0 0 0; color: #991B1B; font-size: 14px;">You have <strong>{attempts_remaining}</strong> attempt(s) remaining.</p>' if attempts_remaining > 0 else '<p style="margin: 10px 0 0 0; color: #991B1B; font-weight: bold;">You have exhausted all attempts. Please contact Admin.</p>'
         subject = "HMS — Medical Documentation Review Update"
         status_block = f"""
-            <div style="background-color: #FEE2E2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #991B1B;">
-                <p style="margin: 0; color: #991B1B; font-weight: 600;">Unfortunately, your documentation could not be verified.</p>
+            <div style="color: #991B1B; background-color: #FEE2E2; padding: 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; margin: 0 0 35px 0; text-align: left;">
+                <strong>Action required:</strong> Unfortunately, your documentation could not be verified.
                 {notes_html}
                 {attempts_html}
             </div>
         """
+        title = "Review<br>Update"
 
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Medical Review Update</h3>
-        <p>Dear {first_name},</p>
-        <p>This is Rita from HMS with an update on your medical documentation review.</p>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">{title}</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Hi <strong>{first_name}</strong>, we have an update regarding your recent medical documentation submission.
+        </p>
         {status_block}
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{HMS_APP_URL}/apply" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">View Application Status</a>
-        </div>
+        <a href="{HMS_APP_URL}/apply" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">Check my status</a>
     """
     return _send(
         to_email, subject,
@@ -275,20 +319,19 @@ def send_allocation_success_email(to_email: str, first_name: str, hostel: str, r
                                   matric: str = None, user_id: int = None, session_id: int = None):
     """Sent after a student is successfully allocated a bed space."""
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Bed Space Secured! 🎉</h3>
-        <p>Dear {first_name},</p>
-        <p>Congratulations! A bed space has been secured for you.</p>
-        <div style="background-color: #DCFCE7; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #BBF7D0;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Hostel</td><td style="padding: 6px 0; text-align: right; font-weight: 700; color: #111827;">{hostel}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Room</td><td style="padding: 6px 0; text-align: right; font-weight: 700; color: #111827;">{room}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Bed</td><td style="padding: 6px 0; text-align: right; font-weight: 700; color: #111827;">Bed {bed}</td></tr>
-            </table>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Bed Space<br>Secured! 🎉</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Congratulations, <strong>{first_name}</strong>! We've successfully reserved a spot just for you.
+        </p>
+        <div style="background-color: #f9f9f9; padding: 24px; border-radius: 16px; margin: 0 0 35px 0;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Your Placement</p>
+            <p style="margin: 0; font-size: 20px; font-weight: 800; color: #111827;">{hostel}</p>
+            <p style="margin: 5px 0 0 0; font-size: 16px; color: #4b5563;">{room} • Bed {bed}</p>
         </div>
-        <p>Please log in to view your invoice and complete payment.</p>
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{HMS_APP_URL}/payment" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">View Invoice &amp; Pay</a>
-        </div>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 35px 0;">
+            The final step is to log in, view your invoice, and complete your payment to finalize the reservation.
+        </p>
+        <a href="{HMS_APP_URL}/payment" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my invoice</a>
     """
     return _send(
         to_email, "HMS — Bed Space Allocated!",
@@ -307,23 +350,48 @@ def send_invoice_generated_email(to_email: str, first_name: str, total_naira: fl
                                  matric: str = None, user_id: int = None, session_id: int = None):
     """Sent when a payment invoice is ready for the student."""
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Invoice Ready</h3>
-        <p>Dear {first_name},</p>
-        <p>This is Rita from HMS. Your hostel accommodation invoice is now ready.</p>
-        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center;">
-            <p style="margin: 0; font-size: 14px; color: #6b7280;">Total Amount</p>
-            <p style="margin: 4px 0 0 0; font-size: 32px; font-weight: 900; color: #0f3d24;">₦{total_naira:,.2f}</p>
-            <p style="margin: 8px 0 0 0; font-size: 12px; color: #9ca3af;">Reference: {hms_ref}</p>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Invoice<br>Ready</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Hi <strong>{first_name}</strong>, your hostel accommodation invoice has been generated.
+        </p>
+        <div style="background-color: #f9f9f9; padding: 30px; border-radius: 16px; margin: 0 0 35px 0;">
+            <p style="margin: 0 0 5px 0; font-size: 14px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Total Due</p>
+            <p style="margin: 0; font-size: 40px; font-weight: 900; color: #111827; letter-spacing: -1px;">₦{total_naira:,.2f}</p>
+            <p style="margin: 10px 0 0 0; font-size: 13px; color: #6b7280;">Ref: {hms_ref}</p>
         </div>
-        <p>Please log in to review the itemized breakdown and complete payment.</p>
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{HMS_APP_URL}/payment" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">Review &amp; Pay</a>
-        </div>
+        <a href="{HMS_APP_URL}/payment" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">Pay my invoice</a>
     """
     return _send(
         to_email, f"HMS — Invoice Ready (₦{total_naira:,.0f})",
         _wrap_html("Invoice", body),
         email_type="invoice",
+        recipient_name=first_name,
+        recipient_matric=matric,
+        recipient_user_id=user_id,
+        session_id=session_id,
+    )
+
+
+def send_payment_receipt_email(to_email: str, first_name: str, total_naira: float, hms_ref: str,
+                               fee_type: str, matric: str = None, user_id: int = None, session_id: int = None):
+    """Sent when a payment is successful."""
+    fee_name = "Hostel Fee" if fee_type == "hostel" else "Application Fee"
+    body = f"""
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Payment<br>Received</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Hi <strong>{first_name}</strong>, your {fee_name} payment was successful.
+        </p>
+        <div style="background-color: #f9f9f9; padding: 30px; border-radius: 16px; margin: 0 0 35px 0;">
+            <p style="margin: 0 0 5px 0; font-size: 14px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Amount Paid</p>
+            <p style="margin: 0; font-size: 40px; font-weight: 900; color: #111827; letter-spacing: -1px;">₦{total_naira:,.2f}</p>
+            <p style="margin: 10px 0 0 0; font-size: 13px; color: #6b7280;">Ref: {hms_ref}</p>
+        </div>
+        <a href="{HMS_APP_URL}/receipt" style="background-color: #166534; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my receipt</a>
+    """
+    return _send(
+        to_email, f"HMS — Payment Receipt (₦{total_naira:,.0f})",
+        _wrap_html("Payment Receipt", body),
+        email_type="payment_receipt",
         recipient_name=first_name,
         recipient_matric=matric,
         recipient_user_id=user_id,
@@ -338,18 +406,14 @@ def send_password_reset_email(to_email: str, first_name: str, reset_token: str):
     reset_url = f"{HMS_APP_URL}/reset-password?token={reset_token}"
 
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Password Reset Request</h3>
-        <p>Dear {first_name},</p>
-        <p>This is Rita from HMS. We received a request to reset your password on the Hostel Management System.</p>
-        <p>Click the button below to set a new password. This link will <strong>expire in 15 minutes</strong>.</p>
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{reset_url}" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">Reset My Password</a>
-        </div>
-        <div style="background-color: #FEF3C7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #92400E;">
-            <p style="margin: 0; color: #92400E; font-weight: 600; font-size: 13px;">If you did not request this reset, please ignore this email. Your password will remain unchanged.</p>
-        </div>
-        <p style="font-size: 13px; color: #6b7280;">If the button doesn't work, copy and paste this link into your browser:</p>
-        <p style="font-size: 12px; color: #9ca3af; word-break: break-all;">{reset_url}</p>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Reset your<br>password</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 35px 0;">
+            Hi <strong>{first_name}</strong>, we received a request to reset the password for your HMS account. Click the button below to create a new one. This link will expire in 15 minutes.
+        </p>
+        <a href="{reset_url}" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px; margin-bottom: 35px;">Reset my password</a>
+        <p style="color: #9ca3af; font-size: 14px; line-height: 1.5; margin: 0;">
+            If you didn't ask to reset your password, you can safely ignore this email.
+        </p>
     """
     return _send(
         to_email, "HMS — Password Reset Request",
@@ -381,31 +445,18 @@ def send_status_change_email(to_email: str, first_name: str, matric: str,
     note_html = ""
     if admin_note:
         note_html = f"""
-            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #6b7280;">
-                <p style="margin: 0; font-size: 13px; color: #374151;"><strong>Admin Note:</strong> {admin_note}</p>
+            <div style="background-color: #f9f9f9; padding: 16px; border-radius: 12px; margin: 0 0 35px 0; text-align: left;">
+                <p style="margin: 0; font-size: 14px; color: #4b5563;"><strong>Note:</strong> {admin_note}</p>
             </div>
         """
 
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Application Status Updated</h3>
-        <p>Dear {first_name},</p>
-        <p>This is Rita from HMS. Your hostel application status has been updated by an administrator.</p>
-        <div style="background-color: #EFF6FF; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #BFDBFE;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Previous Status</td>
-                    <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #6b7280;">{old_label}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 6px 0; color: #1D4ED8; font-size: 13px; font-weight: 600;">New Status</td>
-                    <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #1D4ED8;">{new_label}</td>
-                </tr>
-            </table>
-        </div>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Status<br>Updated</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Hi <strong>{first_name}</strong>, your application status has been changed from <em>{old_label}</em> to <strong>{new_label}</strong>.
+        </p>
         {note_html}
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{HMS_APP_URL}/" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">View Your Dashboard</a>
-        </div>
+        <a href="{HMS_APP_URL}/" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my dashboard</a>
     """
     return _send(
         to_email, f"HMS — Application Status Updated to {new_label}",
@@ -442,27 +493,24 @@ def send_allocation_revoked_email(to_email: str, first_name: str, matric: str,
     notes_html = ""
     if notes:
         notes_html = f"""
-            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #6b7280;">
-                <p style="margin: 0; font-size: 13px; color: #374151;"><strong>Details:</strong> {notes}</p>
-            </div>
+            <p style="margin: 10px 0 0 0; font-size: 14px; color: #991B1B;"><strong>Details:</strong> {notes}</p>
         """
 
     body = f"""
-        <h3 style="color: #111827; margin-top: 0;">Allocation Revoked</h3>
-        <p>Dear {first_name},</p>
-        <p>This is Rita from HMS. We regret to inform you that your hostel bed allocation has been revoked.</p>
-        <div style="background-color: #FEE2E2; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #FECACA;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Hostel</td><td style="padding: 6px 0; text-align: right; font-weight: 700; color: #111827;">{hostel}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Room / Bed</td><td style="padding: 6px 0; text-align: right; font-weight: 700; color: #111827;">{room} / Bed {bed}</td></tr>
-                <tr><td style="padding: 6px 0; color: #991B1B; font-size: 13px; font-weight: 600;">Reason</td><td style="padding: 6px 0; text-align: right; font-weight: 700; color: #991B1B;">{reason_label}</td></tr>
-            </table>
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Allocation<br>Revoked</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Hi <strong>{first_name}</strong>, we regret to inform you that your hostel bed allocation has been revoked.
+        </p>
+        <div style="background-color: #FEE2E2; padding: 24px; border-radius: 16px; margin: 0 0 35px 0; text-align: left;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #991B1B; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">{reason_label}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: 800; color: #991B1B;">{hostel}</p>
+            <p style="margin: 5px 0 0 0; font-size: 15px; color: #991B1B;">{room} • Bed {bed}</p>
+            {notes_html}
         </div>
-        {notes_html}
-        <p style="font-size: 14px; color: #6b7280;">If you believe this is an error, please contact the Student Affairs Unit immediately.</p>
-        <div style="text-align: center; margin: 35px 0;">
-            <a href="{HMS_APP_URL}/" style="background-color: #84cc16; color: #0f3d24; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block;">View Your Dashboard</a>
-        </div>
+        <p style="color: #4b5563; font-size: 15px; line-height: 1.6; margin: 0 0 35px 0;">
+            If you believe this is an error, please reach out to the Student Affairs Unit immediately.
+        </p>
+        <a href="{HMS_APP_URL}/" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my dashboard</a>
     """
     return _send(
         to_email, "HMS — Allocation Revoked",

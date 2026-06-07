@@ -102,10 +102,11 @@ export default function Dashboard() {
 
     const steps = [
         { key: 'registered', label: 'Registered', desc: 'Account created', icon: UserCheck, done: progress.registered, link: null },
+        { key: 'app_fee', label: 'Application Fee', desc: 'Application fee paid', icon: CreditCard, done: progress.app_fee_paid, link: '/payment?type=application', sublabel: progress.app_payment_status },
         { key: 'applied', label: 'Applied', desc: 'Hostel application submitted', icon: FileText, done: progress.applied, link: '/apply', sublabel: progress.application_status },
-        { key: 'paid', label: 'Paid', desc: 'Payment confirmed', icon: CreditCard, done: progress.paid, link: '/payment', sublabel: progress.payment_status },
         { key: 'quiz', label: 'Quiz Completed', desc: 'Compatibility quiz taken', icon: ClipboardCheck, done: progress.quiz_completed, link: '/quiz' },
         { key: 'allocated', label: 'Allocated', desc: 'Bed space assigned', icon: BedDouble, done: progress.allocated, link: '/my-allocation' },
+        { key: 'hostel_fee', label: 'Hostel Fee', desc: 'Hostel fee paid', icon: CreditCard, done: progress.hostel_fee_paid, link: '/payment?type=hostel', sublabel: progress.hostel_payment_status },
     ];
 
     const currentStepIdx = steps.findIndex(s => !s.done);
@@ -113,9 +114,10 @@ export default function Dashboard() {
 
     const ctaMap = {
         'Applied': { label: 'Submit Application', link: '/apply' },
-        'Paid': { label: 'Make Payment', link: '/payment' },
+        'Application Fee': { label: 'Pay Application Fee', link: '/payment?type=application' },
         'Quiz Completed': { label: 'Take Compatibility Quiz', link: '/quiz' },
         'Allocated': { label: 'View Allocation', link: '/my-allocation' },
+        'Hostel Fee': { label: 'Pay Hostel Fee', link: '/payment?type=hostel' },
     };
 
     const currentStep = currentStepIdx >= 0 ? steps[currentStepIdx] : null;

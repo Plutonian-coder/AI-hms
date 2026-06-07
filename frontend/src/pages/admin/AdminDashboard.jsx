@@ -6,6 +6,7 @@ import {
     DoorOpen, TrendingUp, Activity
 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
+import { Clock, Save } from 'lucide-react';
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
@@ -13,6 +14,8 @@ export default function AdminDashboard() {
     const [hostels, setHostels] = useState([]);
     const [loading, setLoading] = useState(true);
     const [togglingPortal, setTogglingPortal] = useState(null);
+    const [deadlines, setDeadlines] = useState({ application: '', hostel: '' });
+    const [updatingDeadlines, setUpdatingDeadlines] = useState(false);
     const toast = useToast();
 
     useEffect(() => {
@@ -25,6 +28,11 @@ export default function AdminDashboard() {
                 setStats(statsRes.data);
                 setSession(sessionRes.data);
                 setHostels(hostelsRes.data);
+                const s = sessionRes.data;
+                setDeadlines({
+                    application: s.application_fee_deadline ? new Date(s.application_fee_deadline).toISOString().slice(0, 16) : '',
+                    hostel: s.hostel_fee_deadline ? new Date(s.hostel_fee_deadline).toISOString().slice(0, 16) : '',
+                });
             })
             .catch(() => toast.error('Failed to load dashboard data.'))
             .finally(() => setLoading(false));
@@ -41,6 +49,21 @@ export default function AdminDashboard() {
             toast.error(err.response?.data?.detail || 'Failed to toggle portal');
         } finally {
             setTogglingPortal(null);
+        }
+    };
+
+    const handleUpdateDeadlines = async () => {
+        setUpdatingDeadlines(true);
+        try {
+            const payload = {};
+            if (deadlines.application) payload.application_fee_deadline = new Date(deadlines.application).toISOString();
+            if (deadlines.hostel) payload.hostel_fee_deadline = new Date(deadlines.hostel).toISOString();
+            const res = await apiClient.patch('/admin/session/deadlines', payload);
+            toast.success(res.data.message);
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to update deadlines');
+        } finally {
+            setUpdatingDeadlines(false);
         }
     };
 
@@ -118,6 +141,43 @@ export default function AdminDashboard() {
                                 </div>
                             );
                         })}
+                    </div>
+
+                    {/* Hostel Fee Deadline Editor */}
+                    <div className="border-t border-black/5 p-4 bg-surface/30">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Clock className="w-4 h-4 text-forest" />
+                            <h4 className="text-sm font-bold text-heading">Payment Deadlines</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="glass-input rounded-xl p-3">
+                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Application Fee Deadline</label>
+                                <input
+                                    type="datetime-local"
+                                    value={deadlines.application}
+                                    onChange={e => setDeadlines(d => ({ ...d, application: e.target.value }))}
+                                    className="bg-transparent text-sm font-medium text-heading focus:outline-none w-full"
+                                />
+                            </div>
+                            <div className="glass-input rounded-xl p-3">
+                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Hostel Fee Deadline</label>
+                                <input
+                                    type="datetime-local"
+                                    value={deadlines.hostel}
+                                    onChange={e => setDeadlines(d => ({ ...d, hostel: e.target.value }))}
+                                    className="bg-transparent text-sm font-medium text-heading focus:outline-none w-full"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                            <button
+                                onClick={handleUpdateDeadlines}
+                                disabled={updatingDeadlines}
+                                className={`flex items-center gap-2 bg-lime text-forest px-4 py-2 rounded-lg font-bold text-sm hover:bg-lime-hover transition-colors shadow-sm ${updatingDeadlines ? 'opacity-60' : ''}`}
+                            >
+                                <Save className="w-4 h-4" /> {updatingDeadlines ? 'Saving...' : 'Save Deadlines'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             ) : (

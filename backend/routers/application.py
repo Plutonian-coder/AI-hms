@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api/v1/application", tags=["application"])
 
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-MAX_UPLOAD_ATTEMPTS = 3
+MAX_UPLOAD_ATTEMPTS = 4
 UPLOAD_BASE = UPLOAD_DIR
 
 
@@ -354,6 +354,17 @@ def submit_application(student=Depends(get_current_student)):
         if app_status not in ("draft",):
             raise HTTPException(status_code=409, detail=f"Application already submitted (status: {app_status})")
 
+        # Must have paid the application fee
+        cur.execute("""
+            SELECT cp.id FROM confirmed_payments cp
+            JOIN payment_component_log pcl ON pcl.payment_id = cp.id
+            JOIN fee_components fc ON fc.id = pcl.component_id
+            WHERE cp.student_id = %s AND cp.session_id = %s AND cp.status = 'confirmed'
+              AND fc.fee_type = 'application'
+        """, (student["user_id"], session_id))
+        if not cur.fetchone():
+            raise HTTPException(status_code=403, detail="You must pay the Application Fee before you can submit your application.")
+
         # Determine target status
         if has_special_needs:
             new_status = "pending_verification"
@@ -451,8 +462,8 @@ def get_application_status(student=Depends(get_current_student)):
 # ── Fee Summary (kept for backward compat but not used in wizard) ────────────
 
 @router.get("/fee-summary")
-def get_fee_summary(student=Depends(get_current_student)):
-    """Return the itemised fee breakdown for the student's study type."""
+def get_fee_summary(fee_type: str = "hostel", student=Depends(get_current_student)):
+    """Return the itemised fee breakdown for the student's study type and fee_type."""
     with get_cursor() as cur:
         session = _get_active_session(cur)
         if not session:
@@ -478,9 +489,9 @@ def get_fee_summary(student=Depends(get_current_student)):
         cur.execute(
             f"""SELECT id, name, {amount_col} as amount, applies_to, is_mandatory, sort_order
                 FROM fee_components
-                WHERE session_id = %s
+                WHERE session_id = %s AND fee_type = %s
                 ORDER BY sort_order, id""",
-            (session[0],),
+            (session[0], fee_type),
         )
         components = cur.fetchall()
 

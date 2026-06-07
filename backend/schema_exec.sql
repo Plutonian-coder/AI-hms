@@ -73,6 +73,8 @@ CREATE TABLE academic_sessions (
     payment_portal_open BOOLEAN DEFAULT FALSE,
     allocation_portal_open BOOLEAN DEFAULT FALSE,
     register_import_open BOOLEAN DEFAULT FALSE,
+    application_fee_deadline TIMESTAMPTZ,
+    hostel_fee_deadline TIMESTAMPTZ,
     session_ended BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -115,7 +117,9 @@ CREATE TABLE rooms (
     id SERIAL PRIMARY KEY,
     block_id INT REFERENCES blocks(id) ON DELETE CASCADE,
     room_number VARCHAR(20) NOT NULL,
-    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'maintenance'))
+    status VARCHAR(20) DEFAULT 'active', -- active, maintenance
+    disability_reserved BOOLEAN DEFAULT FALSE,
+    UNIQUE(block_id, room_number)
 );
 
 -- ── Beds ────────────────────────────────────────────────────────────────────
@@ -134,8 +138,10 @@ CREATE TABLE fee_components (
     amount_fulltime INT NOT NULL DEFAULT 0,          -- amount in kobo for full-time
     amount_parttime INT NOT NULL DEFAULT 0,          -- amount in kobo for part-time
     amount_sandwich INT NOT NULL DEFAULT 0,          -- amount in kobo for sandwich
-    applies_to VARCHAR(20) DEFAULT 'all' CHECK (applies_to IN ('all', 'fulltime_only', 'parttime_only', 'sandwich_only', 'freshers_only')),
+    amount_codfel INT NOT NULL,  -- In kobo
+    applies_to VARCHAR(50) NOT NULL, -- e.g., 'all', '100', '200'
     is_mandatory BOOLEAN DEFAULT TRUE,
+    fee_type VARCHAR(20) DEFAULT 'hostel', -- 'application' or 'hostel'
     sort_order INT DEFAULT 0
 );
 

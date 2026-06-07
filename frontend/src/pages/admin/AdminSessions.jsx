@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { CalendarDays, Plus, DoorOpen, FileText, CreditCard, Upload, Loader2, X, RotateCcw } from 'lucide-react';
 import { useToast } from '../../components/Toast';
+import { Clock, Save } from 'lucide-react';
 
 const PORTAL_CONFIG = [
     { key: 'application',     label: 'Application',     icon: FileText,  field: 'application_portal_open' },
@@ -9,6 +10,35 @@ const PORTAL_CONFIG = [
     { key: 'allocation',      label: 'Allocation',      icon: DoorOpen,  field: 'allocation_portal_open' },
     { key: 'register_import', label: 'Register Import', icon: Upload,    field: 'register_import_open' },
 ];
+
+function useCountdown(targetDate) {
+    const [timeLeft, setTimeLeft] = useState('');
+
+    useEffect(() => {
+        if (!targetDate) return setTimeLeft('No deadline set');
+        
+        const interval = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = new Date(targetDate).getTime() - now;
+            
+            if (distance < 0) {
+                setTimeLeft('Expired');
+                clearInterval(interval);
+                return;
+            }
+            
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            
+            setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+        }, 1000);
+        
+        return () => clearInterval(interval);
+    }, [targetDate]);
+
+    return timeLeft;
+}
 
 export default function AdminSessions() {
     const [sessions, setSessions] = useState([]);
@@ -18,11 +48,22 @@ export default function AdminSessions() {
     const [submitting, setSubmitting] = useState(false);
     const [togglingPortal, setTogglingPortal] = useState(null);
     const [reactivatingId, setReactivatingId] = useState(null);
+    const [deadlines, setDeadlines] = useState({ application: '', hostel: '' });
+    const [updatingDeadlines, setUpdatingDeadlines] = useState(false);
     const toast = useToast();
 
     const fetchSessions = () => {
         apiClient.get('/admin/sessions')
-            .then(res => setSessions(res.data))
+            .then(res => {
+                setSessions(res.data);
+                const active = res.data.find(s => s.is_active);
+                if (active) {
+                    setDeadlines({
+                        application: active.application_fee_deadline ? new Date(active.application_fee_deadline).toISOString().slice(0, 16) : '',
+                        hostel: active.hostel_fee_deadline ? new Date(active.hostel_fee_deadline).toISOString().slice(0, 16) : ''
+                    });
+                }
+            })
             .catch(() => {})
             .finally(() => setLoading(false));
     };
@@ -59,6 +100,26 @@ export default function AdminSessions() {
     };
 
     const activeSession = sessions.find(s => s.is_active);
+    
+    const appCountdown = useCountdown(activeSession?.application_fee_deadline);
+    const hostelCountdown = useCountdown(activeSession?.hostel_fee_deadline);
+
+    const handleUpdateDeadlines = async () => {
+        setUpdatingDeadlines(true);
+        try {
+            const payload = {};
+            if (deadlines.application) payload.application_fee_deadline = new Date(deadlines.application).toISOString();
+            if (deadlines.hostel) payload.hostel_fee_deadline = new Date(deadlines.hostel).toISOString();
+            
+            const res = await apiClient.patch('/admin/session/deadlines', payload);
+            toast.success(res.data.message);
+            fetchSessions();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to update deadlines');
+        } finally {
+            setUpdatingDeadlines(false);
+        }
+    };
 
     const reactivateSession = async (sessionId, sessionName) => {
         if (!window.confirm(`Reactivate "${sessionName}"? The current active session will be paused.`)) return;
@@ -164,6 +225,56 @@ export default function AdminSessions() {
                                 </div>
                             );
                         })}
+                    </div>
+                    
+                    {/* Deadlines Section */}
+                    <div className="border-t border-black/5 p-4 bg-surface/30">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Clock className="w-4 h-4 text-forest" />
+                            <h4 className="text-sm font-bold text-heading">Payment Deadlines</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Application Fee Deadline */}
+                            <div className="glass-input rounded-xl p-4">
+                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Application Fee Deadline</label>
+                                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
+                                    <input 
+                                        type="datetime-local" 
+                                        value={deadlines.application}
+                                        onChange={e => setDeadlines(d => ({ ...d, application: e.target.value }))}
+                                        className="bg-transparent text-sm font-medium text-heading focus:outline-none"
+                                    />
+                                    <span className={`text-xs font-bold px-2 py-1 rounded-md ${appCountdown === 'Expired' ? 'bg-red-100 text-red-600' : appCountdown === 'No deadline set' ? 'text-muted' : 'bg-lime-100 text-forest'}`}>
+                                        {appCountdown}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            {/* Hostel Fee Deadline */}
+                            <div className="glass-input rounded-xl p-4">
+                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Hostel Fee Deadline</label>
+                                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
+                                    <input 
+                                        type="datetime-local" 
+                                        value={deadlines.hostel}
+                                        onChange={e => setDeadlines(d => ({ ...d, hostel: e.target.value }))}
+                                        className="bg-transparent text-sm font-medium text-heading focus:outline-none"
+                                    />
+                                    <span className={`text-xs font-bold px-2 py-1 rounded-md ${hostelCountdown === 'Expired' ? 'bg-red-100 text-red-600' : hostelCountdown === 'No deadline set' ? 'text-muted' : 'bg-lime-100 text-forest'}`}>
+                                        {hostelCountdown}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-4 flex justify-end">
+                            <button 
+                                onClick={handleUpdateDeadlines}
+                                disabled={updatingDeadlines}
+                                className={`flex items-center gap-2 bg-lime text-forest px-4 py-2 rounded-lg font-bold text-sm hover:bg-lime-hover transition-colors shadow-sm ${updatingDeadlines ? 'opacity-60' : ''}`}
+                            >
+                                <Save className="w-4 h-4" /> {updatingDeadlines ? 'Saving...' : 'Save Deadlines'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

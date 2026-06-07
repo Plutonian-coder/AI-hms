@@ -9,19 +9,27 @@ export default function Payment() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
 
-    const [paymentStatus, setPaymentStatus] = useState(null); // null | { status, hms_reference, amount }
+    const [paymentStatus, setPaymentStatus] = useState(null);
     const [feeSummary, setFeeSummary] = useState(null);
     const [noApplication, setNoApplication] = useState(false);
     const [allocated, setAllocated] = useState(false);
+    const [quizCompleted, setQuizCompleted] = useState(false);
+    
+    // Determine fee type from URL
+    const searchParams = new URLSearchParams(window.location.search);
+    const feeType = searchParams.get('type') || 'hostel';
 
     useEffect(() => {
         const init = async () => {
             try {
                 // Check payment status first
-                const payRes = await apiClient.get('/payment/status');
+                const payRes = await apiClient.get(`/payment/status?fee_type=${feeType}`);
                 if (payRes.data.has_payment) {
                     setPaymentStatus(payRes.data);
                     if (payRes.data.status === 'confirmed') {
+                        // Still need quiz status to show right CTA
+                        const dashRes = await apiClient.get('/allocation/dashboard').catch(() => null);
+                        if (dashRes) setQuizCompleted(dashRes.data.progress?.quiz_completed ?? false);
                         setLoading(false);
                         return;
                     }
@@ -29,21 +37,22 @@ export default function Payment() {
 
                 // Check if already allocated
                 const dashRes = await apiClient.get('/allocation/dashboard');
-                if (dashRes.data.progress?.allocated) {
+                setQuizCompleted(dashRes.data.progress?.quiz_completed ?? false);
+                if (dashRes.data.progress?.allocated && feeType === 'application') {
                     setAllocated(true);
                     setLoading(false);
                     return;
                 }
 
                 // Check application exists
-                if (!dashRes.data.progress?.applied) {
+                if (!dashRes.data.progress?.applied && feeType === 'application') {
                     setNoApplication(true);
                     setLoading(false);
                     return;
                 }
 
                 // Get fee summary
-                const feeRes = await apiClient.get('/application/fee-summary');
+                const feeRes = await apiClient.get(`/application/fee-summary?fee_type=${feeType}`);
                 setFeeSummary(feeRes.data);
             } catch {
                 setError('Failed to load payment data.');
@@ -58,7 +67,7 @@ export default function Payment() {
         setError('');
         setSubmitting(true);
         try {
-            const res = await apiClient.post('/payment/initialize');
+            const res = await apiClient.post('/payment/initialize', { fee_type: feeType });
             window.location.href = res.data.authorization_url;
         } catch (err) {
             setError(err.response?.data?.detail || 'Failed to initialize payment.');
@@ -141,10 +150,10 @@ export default function Payment() {
                             View Receipt
                         </button>
                         <button
-                            onClick={() => navigate('/quiz')}
+                            onClick={() => navigate(feeType === 'application' && !quizCompleted ? '/quiz' : '/')}
                             className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
                         >
-                            Take Compatibility Quiz <ChevronRight className="w-4 h-4" />
+                            {feeType === 'application' && !quizCompleted ? 'Take Compatibility Quiz' : 'Go to Dashboard'} <ChevronRight className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
@@ -162,7 +171,7 @@ export default function Payment() {
                 // Reset state so the fresh payment form loads
                 setPaymentStatus(null);
                 // Re-fetch fee summary
-                const feeRes = await apiClient.get('/application/fee-summary');
+                const feeRes = await apiClient.get(`/application/fee-summary?fee_type=${feeType}`);
                 setFeeSummary(feeRes.data);
             } catch (err) {
                 setError(err.response?.data?.detail || 'Failed to cancel pending payment.');
@@ -237,7 +246,7 @@ export default function Payment() {
             <div>
                 <h1 className="text-3xl font-extrabold text-heading tracking-tight flex items-center gap-3">
                     <CreditCard className="w-8 h-8 text-forest" />
-                    Hostel Fee Payment
+                    {feeType === 'application' ? 'Application Fee Payment' : 'Hostel Fee Payment'}
                 </h1>
                 <p className="text-muted mt-2 font-medium">Review your fee breakdown and pay securely via Paystack.</p>
             </div>
@@ -261,7 +270,7 @@ export default function Payment() {
                                 </div>
                             ))}
                             <div className="border-t border-white/10 pt-3 flex items-center justify-between">
-                                <span className="text-white/80 font-bold text-sm">Total Hostel Fee</span>
+                                <span className="text-white/80 font-bold text-sm">Total {feeType === 'application' ? 'Application' : 'Hostel'} Fee</span>
                                 <span className="text-3xl font-black text-lime">{'\u20A6'}{feeSummary.total?.toLocaleString()}</span>
                             </div>
                             <p className="text-white/30 text-xs font-medium">Study type: {feeSummary.study_type}</p>

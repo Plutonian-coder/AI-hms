@@ -57,8 +57,8 @@ export default function AdminApplicationTracker() {
         return s || { label: status, color: 'bg-gray-100 text-gray-600' };
     };
 
-    const PipelineViz = ({ status, hasSpecialNeeds }) => {
-        const stages = ['draft', hasSpecialNeeds ? 'pending_verification' : null, 'ready_for_allocation', 'allocated', 'paid'].filter(Boolean);
+    const PipelineViz = ({ status, hasDisability }) => {
+        const stages = ['draft', hasDisability ? 'pending_verification' : null, 'ready_for_allocation', 'allocated', 'paid'].filter(Boolean);
         const currentIdx = stages.indexOf(status);
         return (
             <div className="flex items-center gap-1">
@@ -121,7 +121,7 @@ export default function AdminApplicationTracker() {
                                         <p className="font-bold text-heading text-sm truncate">{item.full_name}</p>
                                         <p className="text-[10px] text-muted font-mono">{item.identifier}</p>
                                     </div>
-                                    <div className="hidden sm:block"><PipelineViz status={item.status} hasSpecialNeeds={item.has_special_needs} /></div>
+                                    <div className="hidden sm:block"><PipelineViz status={item.status} hasDisability={item.has_special_needs} /></div>
                                     <div className="hidden md:block text-right">
                                         <p className="text-xs text-muted">Stage {item.stage_completed}/3</p>
                                     </div>
@@ -136,7 +136,7 @@ export default function AdminApplicationTracker() {
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                             {[
                                                 ['Department', item.department], ['Level', item.level], ['Gender', item.gender],
-                                                ['Special Needs', item.has_special_needs ? 'Yes' : 'No'],
+                                                ['Disability', item.has_special_needs ? 'Yes' : 'No'],
                                                 ['Submitted', item.submitted_at ? new Date(item.submitted_at).toLocaleDateString() : '—'],
                                                 ['Created', item.created_at ? new Date(item.created_at).toLocaleDateString() : '—'],
                                                 ['Med. Review', item.medical_reviewed_at ? new Date(item.medical_reviewed_at).toLocaleDateString() : '—'],

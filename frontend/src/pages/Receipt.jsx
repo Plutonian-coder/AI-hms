@@ -57,8 +57,8 @@ export default function Receipt() {
             <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
                     <p className="text-red-700 font-bold">{error || 'No receipt found'}</p>
-                    <button onClick={() => navigate('/payment')} className="mt-3 text-sm font-bold text-forest underline">
-                        Back to Payment
+                    <button onClick={() => navigate('/')} className="mt-3 text-sm font-bold text-forest underline">
+                        Return to Dashboard
                     </button>
                 </div>
             </div>

@@ -277,7 +277,7 @@ function ContentSections() {
                         { icon: BedDouble, title: 'AI Roommate Matching', desc: 'An 8-dimensional weighted cosine similarity algorithm pairs students based on lifestyle compatibility, replacing random bed assignment entirely.' },
                         { icon: ShieldCheck, title: 'Immutable Audit Trail', desc: '22 categories of admin actions are permanently recorded with actor, timestamp, and metadata. Records cannot be modified or deleted.' },
                         { icon: BarChart3, title: 'Report Builder', desc: 'Admins build cross-domain reports from student, payment, and allocation data with live preview and CSV export.' },
-                        { icon: Search, title: 'AI Natural Language Query', desc: 'Admins query the live database in plain English. Google Gemini generates read-only SQL that is validated before execution.' },
+                        { icon: Search, title: 'AI Natural Language Query', desc: 'Admins query the live database in plain English. Groq AI generates read-only SQL that is validated before execution.' },
                     ].map((c, i) => {
                         const Icon = c.icon;
                         return (
@@ -439,7 +439,7 @@ function ContentSections() {
                 <StepList steps={[
                     'Review the Fee Summary panel on the right — it shows every fee component applicable to your study type, with individual amounts and the total in Naira.',
                     'Select your 1st, 2nd, and 3rd hostel preferences from the dropdowns. Only hostels matching your gender are shown.',
-                    'Optionally add special notes (e.g., disability accommodations or welfare requests) in the provided text field.',
+                    'Optionally add disability notes or welfare requests in the provided text field.',
                     'Click Submit Application. The application is saved and the Payment step becomes available.',
                 ]} />
                 <Callout type="info">
@@ -549,7 +549,7 @@ function ContentSections() {
                         'If no suitable bed is found in your first-choice hostel, the algorithm falls back to your second choice, then third.',
                         'The selected bed is locked using PostgreSQL\'s SELECT FOR UPDATE SKIP LOCKED mechanism — preventing double-booking even if multiple students submit simultaneously.',
                         'Your allocation record is created and the compatibility score is recorded.',
-                        'Google Gemini generates a human-readable explanation of your matching result.',
+                        'Groq AI generates a human-readable explanation of your matching result.',
                     ].map((step, i) => (
                         <li key={i} className="flex gap-4 items-start">
                             <span className="w-6 h-6 rounded-full bg-forest text-lime font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
@@ -946,7 +946,7 @@ function ContentSections() {
                     ))}
                 </div>
                 <Callout type="info">
-                    The AI Query module uses Google Gemini to generate SQL from your question. The
+                    The AI Query module uses Groq AI to generate SQL from your question. The
                     generated query is strictly validated as a SELECT-only statement before execution —
                     it cannot modify, insert, or delete any data. Query results are read-only.
                 </Callout>

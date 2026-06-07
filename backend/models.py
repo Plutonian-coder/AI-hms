@@ -67,6 +67,7 @@ class FeeComponentCreate(BaseModel):
     amount_parttime: int = 0
     amount_codfel: int = 0
     applies_to: str = Field(default="all", pattern="^(all|fulltime_only|parttime_only|codfel_only|freshers_only)$")
+    fee_type: str = Field(default="hostel", pattern="^(application|hostel)$")
     is_mandatory: bool = True
     sort_order: int = 0
 
@@ -77,6 +78,7 @@ class FeeComponentUpdate(BaseModel):
     amount_parttime: Optional[int] = None
     amount_codfel: Optional[int] = None
     applies_to: Optional[str] = None
+    fee_type: Optional[str] = None
     is_mandatory: Optional[bool] = None
     sort_order: Optional[int] = None
 

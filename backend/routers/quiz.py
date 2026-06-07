@@ -185,16 +185,19 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
             yield _sse_error(1, "Saving Preferences", "Allocation portal is currently closed.")
             return
 
-        # Check confirmed payment exists
+        # Check confirmed application payment exists
         with get_cursor() as cur:
-            cur.execute(
-                "SELECT id FROM confirmed_payments WHERE student_id = %s AND session_id = %s AND status = 'confirmed'",
-                (student_id, session_id),
-            )
+            cur.execute("""
+                SELECT cp.id FROM confirmed_payments cp
+                JOIN payment_component_log pcl ON pcl.payment_id = cp.id
+                JOIN fee_components fc ON fc.id = pcl.component_id
+                WHERE cp.student_id = %s AND cp.session_id = %s AND cp.status = 'confirmed'
+                  AND fc.fee_type = 'application'
+            """, (student_id, session_id))
             payment = cur.fetchone()
 
         if not payment:
-            yield _sse_error(1, "Saving Preferences", "You need to complete payment first.")
+            yield _sse_error(1, "Saving Preferences", "You need to complete the application fee payment first.")
             return
 
         payment_id = payment[0]
@@ -242,7 +245,7 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
         # Get hostel choices from application
         with get_cursor() as cur:
             cur.execute(
-                "SELECT choice_1_id, choice_2_id, choice_3_id FROM hostel_applications WHERE student_id = %s AND session_id = %s",
+                "SELECT choice_1_id, choice_2_id, choice_3_id, has_special_needs FROM hostel_applications WHERE student_id = %s AND session_id = %s",
                 (student_id, session_id),
             )
             choices_row = cur.fetchone()
@@ -251,6 +254,8 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
             yield _sse_error(2, "Computing Compatibility", "No hostel application found.")
             return
 
+        has_special_needs = choices_row[3]
+
         # Get student gender for hostel matching
         gender = student["gender"]
 
@@ -258,13 +263,16 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
         best_score = -1.0
         matched_preference = 0
 
-        for pref_idx, hostel_id in enumerate(choices_row, start=1):
+        for pref_idx, hostel_id in enumerate(choices_row[:3], start=1):
             if not hostel_id:
                 continue
 
             # Get all rooms with vacant beds in this hostel
             with get_cursor() as cur:
-                cur.execute("""
+                where_clause = "" if has_special_needs else "AND r.disability_reserved = FALSE"
+                order_clause = "ORDER BY r.disability_reserved DESC, r.room_number, b.bed_number" if has_special_needs else "ORDER BY r.room_number, b.bed_number"
+
+                cur.execute(f"""
                     SELECT b.id as bed_id, r.id as room_id
                     FROM beds b
                     JOIN rooms r ON b.room_id = r.id
@@ -275,7 +283,8 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
                       AND r.status = 'active'
                       AND bl.status = 'active'
                       AND h.status = 'active'
-                    ORDER BY r.room_number, b.bed_number
+                      {where_clause}
+                    {order_clause}
                 """, (hostel_id,))
                 vacant_beds = cur.fetchall()
 
@@ -400,9 +409,7 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
             session_id=session_id,
         )
 
-        yield _sse_step(4, "complete", "Finalizing", "Allocation complete!")
-
-        # Return allocation details
+        # Fetch location details for email and result
         with get_cursor() as cur:
             cur.execute("""
                 SELECT h.name, bl.name, r.room_number, b.bed_number
@@ -413,6 +420,29 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
                 WHERE b.id = %s
             """, (best_bed_id,))
             loc = cur.fetchone()
+
+        try:
+            from services.email import send_allocation_success_email
+            # Fetch student email and name for the email
+            with get_cursor() as cur:
+                cur.execute("SELECT email, first_name, identifier FROM users WHERE id = %s", (student_id,))
+                user_info = cur.fetchone()
+                if user_info:
+                    send_allocation_success_email(
+                        to_email=user_info[0],
+                        first_name=user_info[1],
+                        matric=user_info[2],
+                        hostel=loc[0],
+                        room=loc[2],
+                        bed=loc[3],
+                        user_id=student_id,
+                        session_id=session_id
+                    )
+        except Exception as e:
+            # Non-blocking if email fails
+            print(f"Error sending allocation email: {e}")
+
+        yield _sse_step(4, "complete", "Finalizing", "Allocation complete!")
 
         yield _sse_result({
             "allocation_id": allocation_id,
