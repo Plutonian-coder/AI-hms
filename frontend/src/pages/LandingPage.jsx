@@ -36,7 +36,7 @@ export default function LandingPage() {
 
             {/* ─── NAVBAR ─── */}
             <nav className="sticky top-0 z-50 bg-cream/80 backdrop-blur-md border-b border-black/5">
-                <div className="max-w-6xl mx-auto px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div className="max-w-7xl mx-auto px-6 lg:px-12 h-16 flex items-center justify-between">
                     <Link to="/" className="text-xl font-black text-heading tracking-tight">
                         HMS
                     </Link>
@@ -61,8 +61,8 @@ export default function LandingPage() {
             </nav>
 
             {/* ─── HERO ─── */}
-            <section className="max-w-6xl mx-auto px-6 lg:px-8 pt-16 pb-24 lg:pt-24 lg:pb-32">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+            <section className="max-w-7xl mx-auto px-6 lg:px-12 min-h-[calc(100vh-4rem)] flex items-center py-12 lg:py-0">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center w-full">
 
                     {/* Left — Copy */}
                     <div className="space-y-8">
@@ -258,7 +258,7 @@ export default function LandingPage() {
 
             {/* ─── HOW IT WORKS ─── */}
             <section id="how-it-works" className="bg-white border-y border-black/5">
-                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28">
+                <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20 lg:py-28">
                     <div className="text-center mb-16">
                         <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">Student Journey</p>
                         <h2 className="text-4xl sm:text-5xl font-black text-heading tracking-tight mt-3">
@@ -289,7 +289,7 @@ export default function LandingPage() {
 
             {/* ─── FEATURES ─── */}
             <section id="features" className="bg-forest">
-                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28">
+                <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20 lg:py-28">
                     <div className="text-center mb-16">
                         <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">Platform Capabilities</p>
                         <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tight mt-3">
@@ -368,7 +368,7 @@ export default function LandingPage() {
 
             {/* ─── METRICS ─── */}
             <section id="metrics" className="bg-cream">
-                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28">
+                <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20 lg:py-28">
                     <div className="text-center mb-16">
                         <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">System Scope</p>
                         <h2 className="text-4xl sm:text-5xl font-black text-heading tracking-tight mt-3">
@@ -400,7 +400,7 @@ export default function LandingPage() {
 
             {/* ─── FINAL CTA ─── */}
             <section className="bg-forest">
-                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28 text-center">
+                <div className="max-w-7xl mx-auto px-6 lg:px-12 py-20 lg:py-28 text-center">
                     <p className="text-[11px] font-bold text-lime uppercase tracking-[0.25em]">Get Started</p>
                     <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[0.95] mt-4">
                         Ready for a Smarter<br />Hostel Experience<span className="text-lime">?</span>
@@ -435,7 +435,7 @@ export default function LandingPage() {
 
             {/* ─── FOOTER ─── */}
             <footer className="bg-forest border-t border-white/10">
-                <div className="max-w-6xl mx-auto px-6 lg:px-8 py-12">
+                <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                         <div>
                             <span className="text-lg font-black text-white tracking-tight">HMS</span>
