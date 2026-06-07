@@ -1922,7 +1922,7 @@ def list_email_logs(
 
 
 # ════════════════════════════════════════════════════════════
-# NATURAL LANGUAGE QUERY (Gemini AI)
+# NATURAL LANGUAGE QUERY (Groq AI)
 # ════════════════════════════════════════════════════════════
 
 class NLQueryRequest(BaseModel):
@@ -1931,11 +1931,11 @@ class NLQueryRequest(BaseModel):
 
 @router.post("/nl-query")
 def natural_language_query(data: NLQueryRequest, admin=Depends(get_current_admin)):
-    """Convert plain English to SQL via Gemini, validate, and execute."""
+    """Convert plain English to SQL via Groq, validate, and execute."""
     if not data.query or len(data.query.strip()) < 3:
         raise HTTPException(status_code=400, detail="Query too short")
 
-    # Generate SQL from Gemini
+    # Generate SQL from Groq
     result = generate_sql(data.query.strip())
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
