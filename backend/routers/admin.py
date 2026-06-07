@@ -1,8 +1,10 @@
 """
 Admin Router — Session management, hostel infrastructure, fee components,
-               student management, allocations, and audit trail.
+               student management, allocations, medical review, and audit trail.
 """
+import os
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from models import (
     HostelCreate, HostelStatusUpdate,
@@ -13,9 +15,13 @@ from models import (
 from database import get_cursor, get_connection
 from dependencies import get_current_admin
 from services.audit_logger import (
-    log_event, SESSION_CREATED, PORTAL_TOGGLED, SESSION_ENDED,
+    log_event, SESSION_CREATED, SESSION_ACTIVATED, PORTAL_TOGGLED, SESSION_ENDED,
     FEE_COMPONENT_ADDED, FEE_COMPONENT_UPDATED, HOSTEL_CREATED, HOSTEL_DELETED,
     ALLOCATION_REVOKED, ADMIN_NL_QUERY,
+    MEDICAL_REVIEW_APPROVED, MEDICAL_REVIEW_REJECTED, ADMIN_STATUS_UPDATE,
+)
+from services.email import (
+    send_medical_review_email, send_status_change_email, send_allocation_revoked_email,
 )
 from services.gemini_query import generate_sql, validate_sql
 from typing import Optional
@@ -166,6 +172,79 @@ def end_session(admin=Depends(get_current_admin)):
     return {"message": f"Session '{session[1]}' ended. {expired} allocation(s) expired."}
 
 
+@router.post("/sessions/{session_id}/reactivate")
+def reactivate_session(session_id: int, admin=Depends(get_current_admin)):
+    """Reactivate a past session — pauses the current active session (does NOT expire its allocations)."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # 1. Verify target session exists and is not already active
+            cur.execute("SELECT id, session_name, is_active FROM academic_sessions WHERE id = %s", (session_id,))
+            target = cur.fetchone()
+            if not target:
+                raise HTTPException(status_code=404, detail="Session not found")
+            if target[2]:
+                raise HTTPException(status_code=409, detail="This session is already active")
+
+            # 2. Pause current active session (close portals but don't expire allocations or mark ended)
+            cur.execute("SELECT id, session_name FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+            current = cur.fetchone()
+            if current:
+                cur.execute(
+                    """UPDATE academic_sessions
+                       SET is_active = FALSE,
+                           application_portal_open = FALSE, payment_portal_open = FALSE,
+                           allocation_portal_open = FALSE, register_import_open = FALSE
+                       WHERE id = %s""",
+                    (current[0],),
+                )
+                # Set the beds occupied by the paused session's active allocations to 'vacant'
+                cur.execute(
+                    """UPDATE beds
+                       SET status = 'vacant'
+                       WHERE id IN (
+                           SELECT bed_id FROM allocations
+                           WHERE session_id = %s AND status = 'active'
+                       )""",
+                    (current[0],),
+                )
+
+            # 3. Activate target session
+            cur.execute(
+                "UPDATE academic_sessions SET is_active = TRUE, session_ended = FALSE WHERE id = %s",
+                (session_id,),
+            )
+            # Restore expired allocations of the reactivated session to active
+            cur.execute(
+                """UPDATE allocations
+                   SET status = 'active'
+                   WHERE session_id = %s AND status = 'expired'""",
+                (session_id,),
+            )
+            # Set the beds of the reactivated session's active allocations to 'occupied'
+            cur.execute(
+                """UPDATE beds
+                   SET status = 'occupied'
+                   WHERE id IN (
+                       SELECT bed_id FROM allocations
+                       WHERE session_id = %s AND status = 'active'
+                   )""",
+                (session_id,),
+            )
+            conn.commit()
+
+    log_event(
+        SESSION_ACTIVATED, "admin", admin["identifier"],
+        f"Reactivated session '{target[1]}'" + (f" (paused '{current[1]}')" if current else ""),
+        target_entity="session", target_id=str(session_id),
+        session_id=session_id,
+    )
+
+    msg = f"Session '{target[1]}' is now active."
+    if current:
+        msg += f" '{current[1]}' has been paused."
+    return {"message": msg}
+
+
 @router.get("/session/status")
 def get_session_status(admin=Depends(get_current_admin)):
     with get_cursor() as cur:
@@ -209,7 +288,7 @@ def list_fee_components(admin=Depends(get_current_admin)):
             return []
 
         cur.execute(
-            """SELECT id, name, amount_fulltime, amount_parttime, amount_sandwich,
+            """SELECT id, name, amount_fulltime, amount_parttime, amount_codfel,
                       applies_to, is_mandatory, sort_order
                FROM fee_components WHERE session_id = %s ORDER BY sort_order, id""",
             (session[0],),
@@ -219,7 +298,7 @@ def list_fee_components(admin=Depends(get_current_admin)):
     return [
         {
             "id": r[0], "name": r[1],
-            "amount_fulltime": r[2], "amount_parttime": r[3], "amount_sandwich": r[4],
+            "amount_fulltime": r[2], "amount_parttime": r[3], "amount_codfel": r[4],
             "applies_to": r[5], "is_mandatory": r[6], "sort_order": r[7],
         }
         for r in rows
@@ -236,11 +315,11 @@ def create_fee_component(data: FeeComponentCreate, admin=Depends(get_current_adm
 
         cur.execute(
             """INSERT INTO fee_components
-               (session_id, name, amount_fulltime, amount_parttime, amount_sandwich,
+               (session_id, name, amount_fulltime, amount_parttime, amount_codfel,
                 applies_to, is_mandatory, sort_order)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (session[0], data.name, data.amount_fulltime, data.amount_parttime,
-             data.amount_sandwich, data.applies_to, data.is_mandatory, data.sort_order),
+             data.amount_codfel, data.applies_to, data.is_mandatory, data.sort_order),
         )
         comp_id = cur.fetchone()[0]
 
@@ -257,7 +336,7 @@ def create_fee_component(data: FeeComponentCreate, admin=Depends(get_current_adm
 def update_fee_component(comp_id: int, data: FeeComponentUpdate, admin=Depends(get_current_admin)):
     updates = []
     params = []
-    for field in ["name", "amount_fulltime", "amount_parttime", "amount_sandwich",
+    for field in ["name", "amount_fulltime", "amount_parttime", "amount_codfel",
                    "applies_to", "is_mandatory", "sort_order"]:
         val = getattr(data, field, None)
         if val is not None:
@@ -352,13 +431,26 @@ def update_hostel_status(hostel_id: int, data: HostelStatusUpdate, admin=Depends
 @router.delete("/hostels/{hostel_id}")
 def delete_hostel(hostel_id: int, admin=Depends(get_current_admin)):
     with get_cursor() as cur:
-        cur.execute("SELECT name, occupied FROM (SELECT h.name, COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) AS occupied FROM hostels h LEFT JOIN blocks bl ON bl.hostel_id = h.id LEFT JOIN rooms r ON r.block_id = bl.id LEFT JOIN beds b ON b.room_id = r.id WHERE h.id = %s GROUP BY h.name) sub", (hostel_id,))
+        cur.execute(
+            "SELECT name, occupied FROM ("
+            "  SELECT h.name, COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) AS occupied"
+            "  FROM hostels h"
+            "  LEFT JOIN blocks bl ON bl.hostel_id = h.id"
+            "  LEFT JOIN rooms r ON r.block_id = bl.id"
+            "  LEFT JOIN beds b ON b.room_id = r.id"
+            "  WHERE h.id = %s GROUP BY h.name"
+            ") sub",
+            (hostel_id,),
+        )
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Hostel not found")
         name, occupied = row
         if occupied and int(occupied) > 0:
-            raise HTTPException(status_code=409, detail=f"Cannot delete '{name}': {occupied} bed(s) are currently occupied. Revoke all allocations first.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot delete '{name}': {occupied} bed(s) are currently occupied. Revoke all allocations first.",
+            )
         cur.execute("DELETE FROM hostels WHERE id = %s", (hostel_id,))
 
     log_event(
@@ -367,6 +459,72 @@ def delete_hostel(hostel_id: int, admin=Depends(get_current_admin)):
         target_entity="hostel", target_id=str(hostel_id),
     )
     return {"message": f"Hostel '{name}' deleted successfully"}
+
+
+# ── Hostel Prices ────────────────────────────────────────────────────────────
+
+class HostelPriceItem(BaseModel):
+    program_type: str
+    amount: int
+
+
+class HostelPriceListBody(BaseModel):
+    prices: list[HostelPriceItem]
+
+
+@router.get("/hostels/{hostel_id}/prices")
+def get_hostel_prices(hostel_id: int, admin=Depends(get_current_admin)):
+    """Return per-program-type pricing overrides for a specific hostel."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM hostels WHERE id = %s", (hostel_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Hostel not found")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS hostel_prices (
+                    id SERIAL PRIMARY KEY,
+                    hostel_id INT NOT NULL REFERENCES hostels(id) ON DELETE CASCADE,
+                    program_type VARCHAR(20) NOT NULL,
+                    amount INT NOT NULL DEFAULT 0,
+                    UNIQUE(hostel_id, program_type)
+                )
+            """)
+            conn.commit()
+            cur.execute(
+                "SELECT program_type, amount FROM hostel_prices WHERE hostel_id = %s ORDER BY program_type",
+                (hostel_id,),
+            )
+            rows = cur.fetchall()
+    return [{"program_type": r[0], "amount": r[1]} for r in rows]
+
+
+@router.put("/hostels/{hostel_id}/prices")
+def update_hostel_prices(hostel_id: int, data: HostelPriceListBody, admin=Depends(get_current_admin)):
+    """Upsert per-program-type pricing overrides for a hostel."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT name FROM hostels WHERE id = %s", (hostel_id,))
+            hostel = cur.fetchone()
+            if not hostel:
+                raise HTTPException(status_code=404, detail="Hostel not found")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS hostel_prices (
+                    id SERIAL PRIMARY KEY,
+                    hostel_id INT NOT NULL REFERENCES hostels(id) ON DELETE CASCADE,
+                    program_type VARCHAR(20) NOT NULL,
+                    amount INT NOT NULL DEFAULT 0,
+                    UNIQUE(hostel_id, program_type)
+                )
+            """)
+            for p in data.prices:
+                cur.execute(
+                    """INSERT INTO hostel_prices (hostel_id, program_type, amount)
+                       VALUES (%s, %s, %s)
+                       ON CONFLICT (hostel_id, program_type) DO UPDATE SET amount = EXCLUDED.amount""",
+                    (hostel_id, p.program_type, p.amount),
+                )
+            conn.commit()
+    return {"message": f"Prices updated for {hostel[0]}"}
 
 
 # ════════════════════════════════════════════════════════════
@@ -640,6 +798,22 @@ def get_admin_stats(admin=Depends(get_current_admin)):
         # Students who have created portal accounts (regardless of session)
         portal_registered = total_students  # already queried above
 
+        # Pipeline stats
+        pending_reviews = 0
+        medical_approved_count = 0
+        medical_rejected_count = 0
+        status_breakdown = {}
+        if session_id:
+            cur.execute("SELECT COUNT(*) FROM hostel_applications WHERE session_id = %s AND status = 'pending_verification'", (session_id,))
+            pending_reviews = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM hostel_applications WHERE session_id = %s AND status = 'medical_approved'", (session_id,))
+            medical_approved_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM hostel_applications WHERE session_id = %s AND status = 'medical_rejected'", (session_id,))
+            medical_rejected_count = cur.fetchone()[0]
+            cur.execute("SELECT status, COUNT(*) FROM hostel_applications WHERE session_id = %s GROUP BY status", (session_id,))
+            for row in cur.fetchall():
+                status_breakdown[row[0]] = row[1]
+
     return {
         "total_students": total_students,
         "eligible_count": eligible_count,
@@ -652,6 +826,356 @@ def get_admin_stats(admin=Depends(get_current_admin)):
         "revenue_kobo": revenue,
         "revenue_naira": revenue // 100,
         "unallocated_eligible": unallocated,
+        "pending_reviews": pending_reviews,
+        "medical_approved": medical_approved_count,
+        "medical_rejected": medical_rejected_count,
+        "status_breakdown": status_breakdown,
+    }
+
+
+# ════════════════════════════════════════════════════════════
+# MEDICAL REVIEW QUEUE
+# ════════════════════════════════════════════════════════════
+
+@router.get("/review-queue")
+def get_review_queue(status_filter: Optional[str] = None, admin=Depends(get_current_admin)):
+    """All applications requiring medical document review."""
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        session = cur.fetchone()
+        if not session:
+            return []
+
+        conditions = ["ha.session_id = %s"]
+        params = [session[0]]
+
+        if status_filter == "pending":
+            conditions.append("ha.status = 'pending_verification'")
+        elif status_filter == "approved":
+            conditions.append("ha.status IN ('medical_approved', 'ready_for_allocation', 'allocated', 'paid')")
+        elif status_filter == "rejected":
+            conditions.append("ha.status = 'medical_rejected'")
+        else:
+            conditions.append("ha.has_special_needs = TRUE")
+
+        where = " AND ".join(conditions)
+
+        cur.execute(f"""
+            SELECT ha.id, u.identifier, u.surname || ' ' || u.first_name,
+                   ha.special_needs_type, ha.medical_doc_original_name,
+                   ha.submitted_at, ha.upload_attempt, ha.status,
+                   ha.medical_review_notes, ha.medical_reviewed_at,
+                   u.id as user_id, u.department, u.level, u.gender
+            FROM hostel_applications ha
+            JOIN users u ON u.id = ha.student_id
+            WHERE {where}
+            ORDER BY ha.submitted_at DESC NULLS LAST
+        """, params)
+        rows = cur.fetchall()
+
+    return [
+        {
+            "application_id": r[0],
+            "identifier": r[1],
+            "full_name": r[2],
+            "special_needs_type": r[3],
+            "medical_doc_name": r[4],
+            "submitted_at": r[5].isoformat() if r[5] else None,
+            "upload_attempt": r[6],
+            "status": r[7],
+            "review_notes": r[8],
+            "reviewed_at": r[9].isoformat() if r[9] else None,
+            "student_id": r[10],
+            "department": r[11],
+            "level": r[12],
+            "gender": r[13],
+        }
+        for r in rows
+    ]
+
+
+@router.get("/medical-doc/{application_id}")
+def get_medical_doc(application_id: int, admin=Depends(get_current_admin)):
+    """Serve the uploaded medical document for inline viewing or download."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT medical_doc_path, medical_doc_original_name FROM hostel_applications WHERE id = %s",
+            (application_id,),
+        )
+        row = cur.fetchone()
+
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="No medical document found for this application")
+
+    file_path = row[0]
+    original_name = row[1] or "document"
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Medical document file not found on server")
+
+    ext = os.path.splitext(file_path)[1].lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=original_name,
+    )
+
+
+class ReviewActionBody(BaseModel):
+    action: str  # 'approve' or 'reject'
+    notes: str = ""
+
+
+@router.post("/review/{application_id}")
+def review_medical_doc(application_id: int, data: ReviewActionBody, admin=Depends(get_current_admin)):
+    """Approve or reject a student's medical documentation."""
+    if data.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
+
+    with get_cursor() as cur:
+        cur.execute(
+            """SELECT ha.id, ha.status, ha.has_special_needs, ha.upload_attempt,
+                      u.email, u.first_name, u.identifier, u.id
+               FROM hostel_applications ha
+               JOIN users u ON u.id = ha.student_id
+               WHERE ha.id = %s""",
+            (application_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        app_id, app_status, has_special_needs, upload_attempt, email, first_name, matric, student_id = row
+
+        if not has_special_needs:
+            raise HTTPException(status_code=400, detail="This application does not have special needs")
+
+        if app_status != "pending_verification":
+            raise HTTPException(status_code=409, detail=f"Application is not pending review (status: {app_status})")
+
+        if data.action == "approve":
+            new_status = "ready_for_allocation"
+            cur.execute(
+                """UPDATE hostel_applications
+                   SET status = %s,
+                       medical_reviewed_by = (SELECT id FROM users WHERE identifier = %s AND role = 'admin' LIMIT 1),
+                       medical_reviewed_at = NOW(),
+                       medical_review_notes = %s
+                   WHERE id = %s""",
+                (new_status, admin["identifier"], data.notes or "Approved", app_id),
+            )
+            log_event(
+                MEDICAL_REVIEW_APPROVED, "admin", admin["identifier"],
+                f"Approved medical docs for {matric}",
+                target_entity="hostel_application", target_id=str(app_id),
+                metadata={"notes": data.notes},
+            )
+        else:
+            new_status = "medical_rejected"
+            if not data.notes:
+                raise HTTPException(status_code=400, detail="Rejection notes are required")
+            cur.execute(
+                """UPDATE hostel_applications
+                   SET status = %s,
+                       medical_reviewed_by = (SELECT id FROM users WHERE identifier = %s AND role = 'admin' LIMIT 1),
+                       medical_reviewed_at = NOW(),
+                       medical_review_notes = %s
+                   WHERE id = %s""",
+                (new_status, admin["identifier"], data.notes, app_id),
+            )
+            log_event(
+                MEDICAL_REVIEW_REJECTED, "admin", admin["identifier"],
+                f"Rejected medical docs for {matric}",
+                target_entity="hostel_application", target_id=str(app_id),
+                metadata={"notes": data.notes, "upload_attempt": upload_attempt},
+            )
+
+    # Send email notification
+    if email:
+        try:
+            attempts_remaining = max(0, 3 - (upload_attempt or 0))
+            send_medical_review_email(
+                to_email=email,
+                first_name=first_name or "Student",
+                status="approved" if data.action == "approve" else "rejected",
+                notes=data.notes,
+                attempts_remaining=attempts_remaining,
+            )
+        except Exception:
+            pass
+
+    return {
+        "message": f"Application {data.action}d successfully",
+        "application_id": app_id,
+        "new_status": new_status,
+    }
+
+
+# ════════════════════════════════════════════════════════════
+# APPLICATION TRACKER
+# ════════════════════════════════════════════════════════════
+
+@router.get("/application-tracker")
+def get_application_tracker(
+    status_filter: Optional[str] = None,
+    search: Optional[str] = None,
+    admin=Depends(get_current_admin),
+):
+    """List all applications for the active session with full pipeline state."""
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        session = cur.fetchone()
+        if not session:
+            return []
+
+        conditions = ["ha.session_id = %s"]
+        params = [session[0]]
+
+        if status_filter:
+            conditions.append("ha.status = %s")
+            params.append(status_filter)
+
+        if search:
+            conditions.append("(UPPER(u.identifier) LIKE UPPER(%s) OR UPPER(u.surname || ' ' || u.first_name) LIKE UPPER(%s))")
+            params.extend([f"%{search}%", f"%{search}%"])
+
+        where = " AND ".join(conditions)
+
+        cur.execute(f"""
+            SELECT ha.id, u.identifier, u.surname || ' ' || u.first_name,
+                   ha.status, ha.stage_completed, ha.has_special_needs,
+                   ha.submitted_at, ha.admin_status_note, ha.admin_status_updated_at,
+                   ha.medical_reviewed_at, ha.medical_review_notes,
+                   u.department, u.level, u.gender, ha.submitted_at
+            FROM hostel_applications ha
+            JOIN users u ON u.id = ha.student_id
+            WHERE {where}
+            ORDER BY ha.submitted_at DESC NULLS LAST
+        """, params)
+        rows = cur.fetchall()
+
+    return [
+        {
+            "application_id": r[0],
+            "identifier": r[1],
+            "full_name": r[2],
+            "status": r[3],
+            "stage_completed": r[4],
+            "has_special_needs": r[5],
+            "submitted_at": r[6].isoformat() if r[6] else None,
+            "admin_status_note": r[7],
+            "admin_status_updated_at": r[8].isoformat() if r[8] else None,
+            "medical_reviewed_at": r[9].isoformat() if r[9] else None,
+            "medical_review_notes": r[10],
+            "department": r[11],
+            "level": r[12],
+            "gender": r[13],
+            "created_at": r[14].isoformat() if r[14] else None,  # maps to submitted_at
+        }
+        for r in rows
+    ]
+
+
+class AdminStatusUpdateBody(BaseModel):
+    note: str
+    status: Optional[str] = None
+
+
+VALID_FORWARD_TRANSITIONS = {
+    "draft": ["submitted", "pending_verification", "ready_for_allocation"],
+    "submitted": ["pending_verification", "ready_for_allocation"],
+    "pending_verification": ["medical_approved", "medical_rejected", "ready_for_allocation"],
+    "medical_approved": ["ready_for_allocation"],
+    "medical_rejected": ["pending_verification", "draft"],
+    "ready_for_allocation": ["allocated"],
+    "allocated": ["paid"],
+    "paid": [],
+    "cancelled": [],
+}
+
+
+@router.post("/application/{application_id}/update-status")
+def update_application_status(application_id: int, data: AdminStatusUpdateBody, admin=Depends(get_current_admin)):
+    """Admin commits a status note and optionally advances status."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id, status, student_id, session_id FROM hostel_applications WHERE id = %s",
+            (application_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        app_id, current_status, student_id, app_session_id = row
+
+        update_fields = [
+            "admin_status_note = %s",
+            "admin_status_updated_at = NOW()",
+            "admin_status_updated_by = (SELECT id FROM users WHERE identifier = %s AND role = 'admin' LIMIT 1)",
+        ]
+        params = [data.note, admin["identifier"]]
+
+        if data.status and data.status != current_status:
+            valid = VALID_FORWARD_TRANSITIONS.get(current_status, [])
+            if data.status not in valid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot transition from '{current_status}' to '{data.status}'. Valid: {valid}",
+                )
+            update_fields.append("status = %s")
+            params.append(data.status)
+
+        params.append(app_id)
+        cur.execute(
+            f"UPDATE hostel_applications SET {', '.join(update_fields)} WHERE id = %s",
+            params,
+        )
+
+    log_event(
+        ADMIN_STATUS_UPDATE, "admin", admin["identifier"],
+        f"Updated application #{app_id}: {data.note}",
+        target_entity="hostel_application", target_id=str(app_id),
+        metadata={"note": data.note, "new_status": data.status},
+    )
+
+    # Send email notification to the student about the status change
+    email_sent = False
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT identifier, first_name, email FROM users WHERE id = %s",
+                (student_id,),
+            )
+            stu = cur.fetchone()
+
+        if stu and stu[2]:  # has email
+            send_status_change_email(
+                to_email=stu[2],
+                first_name=stu[1],
+                matric=stu[0],
+                old_status=current_status,
+                new_status=data.status or current_status,
+                admin_note=data.note or "",
+                user_id=student_id,
+                session_id=app_session_id,
+            )
+            email_sent = True
+    except Exception:
+        pass  # Email failure must not block the status update
+
+    return {
+        "message": "Application status updated",
+        "application_id": app_id,
+        "new_status": data.status or current_status,
+        "email_sent": email_sent,
     }
 
 
@@ -660,11 +1184,12 @@ def get_admin_stats(admin=Depends(get_current_admin)):
 # ════════════════════════════════════════════════════════════
 
 @router.get("/students")
-def list_students(admin=Depends(get_current_admin)):
+def list_students(session_id: Optional[int] = None, admin=Depends(get_current_admin)):
     with get_cursor() as cur:
-        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
-        session = cur.fetchone()
-        session_id = session[0] if session else None
+        if session_id is None:
+            cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+            session = cur.fetchone()
+            session_id = session[0] if session else None
 
         if session_id:
             # Show all students in the session register + their portal/payment/allocation status
@@ -682,7 +1207,8 @@ def list_students(admin=Depends(get_current_admin)):
                     u.next_of_kin_phone,
                     (u.id IS NOT NULL)                                  AS has_portal_access,
                     (cp.id IS NOT NULL)                                 AS has_paid,
-                    (a.id  IS NOT NULL)                                 AS is_allocated
+                    (a.id  IS NOT NULL)                                 AS is_allocated,
+                    u.is_active
                 FROM session_register sr
                 LEFT JOIN users u
                     ON UPPER(u.identifier) = UPPER(sr.matric_number)
@@ -699,7 +1225,8 @@ def list_students(admin=Depends(get_current_admin)):
                 SELECT u.identifier, u.surname, u.first_name, u.gender,
                        u.department, u.level, u.study_type,
                        u.id, u.phone, u.next_of_kin_phone,
-                       TRUE AS has_portal_access, FALSE AS has_paid, FALSE AS is_allocated
+                       TRUE AS has_portal_access, FALSE AS has_paid, FALSE AS is_allocated,
+                       u.is_active
                 FROM users u
                 WHERE u.role = 'student'
                 ORDER BY u.surname, u.first_name
@@ -707,20 +1234,213 @@ def list_students(admin=Depends(get_current_admin)):
 
         rows = cur.fetchall()
 
-    return [
-        {
+    result = []
+    for r in rows:
+        level = r[5] or ""
+        is_active = r[13] if r[13] is not None else True
+        if r[7] is None:  # no portal account
+            account_status = "not_registered"
+        elif not is_active:
+            account_status = "suspended"
+        elif level in ("400L", "500L"):
+            account_status = "graduate"
+        else:
+            account_status = "active"
+
+        result.append({
             "identifier":        r[0],
             "full_name":         f"{r[1]} {r[2]}",
             "gender":            r[3],
             "department":        r[4],
             "level":             r[5],
             "study_type":        r[6],
-            "id":                r[7],   # user_id — None if no portal account yet
+            "id":                r[7],
             "phone":             r[8],
             "next_of_kin_phone": r[9],
             "has_portal_access": bool(r[10]),
             "has_paid":          bool(r[11]),
             "is_allocated":      bool(r[12]),
+            "is_active":         is_active,
+            "account_status":    account_status,
+        })
+    return result
+
+
+# ════════════════════════════════════════════════════════════
+# STUDENT ACTIONS (Suspend / Reactivate / Profile)
+# ════════════════════════════════════════════════════════════
+
+@router.post("/students/{student_id}/suspend")
+def suspend_student(student_id: int, admin=Depends(get_current_admin)):
+    """Soft-suspend a student — sets is_active=FALSE, preserving account for reference."""
+    with get_cursor() as cur:
+        cur.execute("SELECT id, identifier, surname, first_name, is_active FROM users WHERE id = %s AND role = 'student'", (student_id,))
+        user = cur.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Student not found")
+        if not user[4]:
+            raise HTTPException(status_code=409, detail="Student is already suspended")
+        cur.execute("UPDATE users SET is_active = FALSE WHERE id = %s", (student_id,))
+    log_event(
+        ADMIN_STATUS_UPDATE, "admin", admin["identifier"],
+        f"Suspended student {user[1]} ({user[2]} {user[3]})",
+        target_entity="user", target_id=str(student_id),
+    )
+    return {"message": f"Student {user[1]} has been suspended. Their account is preserved for reference."}
+
+
+@router.post("/students/{student_id}/reactivate")
+def reactivate_student(student_id: int, admin=Depends(get_current_admin)):
+    """Reactivate a suspended student account."""
+    with get_cursor() as cur:
+        cur.execute("SELECT id, identifier, surname, first_name, is_active FROM users WHERE id = %s AND role = 'student'", (student_id,))
+        user = cur.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Student not found")
+        if user[4]:
+            raise HTTPException(status_code=409, detail="Student is already active")
+        cur.execute("UPDATE users SET is_active = TRUE WHERE id = %s", (student_id,))
+    log_event(
+        ADMIN_STATUS_UPDATE, "admin", admin["identifier"],
+        f"Reactivated student {user[1]} ({user[2]} {user[3]})",
+        target_entity="user", target_id=str(student_id),
+    )
+    return {"message": f"Student {user[1]} has been reactivated."}
+
+
+@router.get("/students/{student_id}/profile")
+def get_student_profile(student_id: int, admin=Depends(get_current_admin)):
+    """Full student profile with application, payment, and allocation details."""
+    with get_cursor() as cur:
+        cur.execute(
+            """SELECT id, identifier, surname, first_name, email, phone, gender,
+                      department, level, study_type, is_active,
+                      next_of_kin_name, next_of_kin_phone, created_at
+               FROM users WHERE id = %s AND role = 'student'""",
+            (student_id,),
+        )
+        user = cur.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        profile = {
+            "id": user[0], "identifier": user[1],
+            "surname": user[2], "first_name": user[3],
+            "email": user[4], "phone": user[5], "gender": user[6],
+            "department": user[7], "level": user[8], "study_type": user[9],
+            "is_active": user[10],
+            "next_of_kin_name": user[11], "next_of_kin_phone": user[12],
+            "created_at": user[13].isoformat() if user[13] else None,
+        }
+
+        # Derive account status
+        level = user[8] or ""
+        if not user[10]:
+            profile["account_status"] = "suspended"
+        elif level in ("400L", "500L"):
+            profile["account_status"] = "graduate"
+        else:
+            profile["account_status"] = "active"
+
+        # Application status for active session
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        sess = cur.fetchone()
+        session_id = sess[0] if sess else None
+
+        profile["application"] = None
+        profile["payment"] = None
+        profile["allocation"] = None
+
+        if session_id:
+            cur.execute(
+                """SELECT id, status, stage_completed, has_special_needs, submitted_at
+                   FROM hostel_applications WHERE student_id = %s AND session_id = %s""",
+                (student_id, session_id),
+            )
+            app = cur.fetchone()
+            if app:
+                profile["application"] = {
+                    "id": app[0], "status": app[1], "stage_completed": app[2],
+                    "has_special_needs": app[3],
+                    "submitted_at": app[4].isoformat() if app[4] else None,
+                }
+
+            cur.execute(
+                """SELECT id, hms_reference, total_amount_kobo, status, payment_channel, confirmed_at
+                   FROM confirmed_payments WHERE student_id = %s AND session_id = %s ORDER BY id DESC LIMIT 1""",
+                (student_id, session_id),
+            )
+            pay = cur.fetchone()
+            if pay:
+                profile["payment"] = {
+                    "id": pay[0], "hms_reference": pay[1],
+                    "amount_naira": pay[2] // 100 if pay[2] else 0,
+                    "status": pay[3], "channel": pay[4],
+                    "confirmed_at": pay[5].isoformat() if pay[5] else None,
+                }
+
+            cur.execute(
+                """SELECT a.id, h.name, bl.name, r.room_number, b.bed_number, a.allocated_at, a.status
+                   FROM allocations a
+                   JOIN beds b ON b.id = a.bed_id
+                   JOIN rooms r ON r.id = b.room_id
+                   JOIN blocks bl ON bl.id = r.block_id
+                   JOIN hostels h ON h.id = bl.hostel_id
+                   WHERE a.student_id = %s AND a.session_id = %s
+                   ORDER BY a.id DESC LIMIT 1""",
+                (student_id, session_id),
+            )
+            alloc = cur.fetchone()
+            if alloc:
+                profile["allocation"] = {
+                    "id": alloc[0], "hostel": alloc[1], "block": alloc[2],
+                    "room": alloc[3], "bed": alloc[4],
+                    "allocated_at": alloc[5].isoformat() if alloc[5] else None,
+                    "status": alloc[6],
+                }
+
+    return profile
+
+
+@router.get("/students/{student_id}/documents")
+def get_student_documents(student_id: int, admin=Depends(get_current_admin)):
+    """Get eligibility documents for a specific student."""
+    with get_cursor() as cur:
+        # Verify student exists
+        cur.execute("SELECT id FROM users WHERE id = %s AND role = 'student'", (student_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        # Get active session
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        sess = cur.fetchone()
+        session_id = sess[0] if sess else None
+
+        if not session_id:
+            return []
+
+        # Get uploaded documents
+        cur.execute(
+            """SELECT document_type, ai_verdict, rejection_reason, uploaded_at, verified_at, file_path, extracted_identifier, extracted_rrr, extracted_name
+               FROM eligibility_documents
+               WHERE student_id = %s AND session_id = %s""",
+            (student_id, session_id),
+        )
+        rows = cur.fetchall()
+
+    from .eligibility import DOC_LABELS
+    return [
+        {
+            "document_type": r[0],
+            "label": DOC_LABELS.get(r[0], r[0]),
+            "ai_verdict": r[1],
+            "rejection_reason": r[2],
+            "uploaded_at": r[3].isoformat() if r[3] else None,
+            "verified_at": r[4].isoformat() if r[4] else None,
+            "file_name": os.path.basename(r[5]) if r[5] else None,
+            "extracted_identifier": r[6],
+            "extracted_rrr": r[7],
+            "extracted_name": r[8],
         }
         for r in rows
     ]
@@ -736,7 +1456,12 @@ def list_allocations(admin=Depends(get_current_admin)):
         cur.execute("""
             SELECT a.id, a.student_id, u.identifier, u.surname || ' ' || u.first_name,
                    h.name, bl.name, r.room_number, b.bed_number,
-                   a.matched_from_preference, a.avg_compatibility_score, a.allocated_at
+                   a.matched_from_preference, a.avg_compatibility_score, a.allocated_at,
+                   EXISTS(
+                       SELECT 1 FROM confirmed_payments cp 
+                       WHERE cp.student_id = a.student_id AND cp.session_id = a.session_id AND cp.status = 'confirmed'
+                   ) AS has_paid,
+                   u.level
             FROM allocations a
             JOIN users u ON u.id = a.student_id
             JOIN beds b ON b.id = a.bed_id
@@ -756,43 +1481,144 @@ def list_allocations(admin=Depends(get_current_admin)):
             "matched_from_preference": r[8],
             "compatibility_score": float(r[9]) if r[9] else None,
             "allocated_at": r[10].isoformat() if r[10] else None,
+            "has_paid": r[11],
+            "level": r[12],
         }
         for r in rows
     ]
 
 
+VALID_REVOCATION_REASONS = {
+    "leaving_school", "suspension", "disciplinary", "medical", "transfer",
+    "admin_override", "other",
+}
+
+
+class RevokeAllocationBody(BaseModel):
+    reason: str = ""
+    notes: str = ""
+
+
 @router.delete("/allocations/{allocation_id}")
-def revoke_allocation(allocation_id: int, admin=Depends(get_current_admin)):
-    """Revoke a student's allocation and free the bed."""
+def revoke_allocation(allocation_id: int, body: RevokeAllocationBody = None, admin=Depends(get_current_admin)):
+    """
+    Revoke a student's allocation and free the bed.
+    If the student has paid, a valid reason is required.
+    Updates hostel_applications.status back to ready_for_allocation for instant App Tracker sync.
+    Sends email notification to student.
+    """
+    if body is None:
+        body = RevokeAllocationBody()
+
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Fetch allocation details
             cur.execute(
-                "SELECT student_id, bed_id, session_id FROM allocations WHERE id = %s AND status = 'active'",
+                """SELECT a.student_id, a.bed_id, a.session_id, a.payment_id,
+                          h.name, r.room_number, b.bed_number
+                   FROM allocations a
+                   JOIN beds b ON b.id = a.bed_id
+                   JOIN rooms r ON r.id = b.room_id
+                   JOIN blocks bl ON bl.id = r.block_id
+                   JOIN hostels h ON h.id = bl.hostel_id
+                   WHERE a.id = %s AND a.status = 'active'""",
                 (allocation_id,),
             )
             row = cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Active allocation not found")
 
-            student_id, bed_id, session_id = row
+            student_id, bed_id, session_id, payment_id, hostel_name, room_number, bed_number = row
 
+            # Check if student has paid — enforce criteria
+            has_paid = False
+            if payment_id:
+                cur.execute(
+                    "SELECT status FROM confirmed_payments WHERE id = %s",
+                    (payment_id,),
+                )
+                pay_row = cur.fetchone()
+                has_paid = pay_row and pay_row[0] == "confirmed"
+
+            reason = body.reason.strip().lower() if body.reason else ""
+
+            if has_paid:
+                if not reason:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot revoke allocation of a student who has paid. "
+                               "Provide a valid reason: leaving_school, suspension, disciplinary, medical, transfer, admin_override, other.",
+                    )
+                if reason not in VALID_REVOCATION_REASONS:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid revocation reason '{reason}'. "
+                               f"Valid reasons: {', '.join(sorted(VALID_REVOCATION_REASONS))}",
+                    )
+
+            revocation_reason = reason or "admin_override"
+
+            # Revoke the allocation
             cur.execute(
                 """UPDATE allocations
-                   SET status = 'revoked', revocation_reason = 'Admin revocation',
+                   SET status = 'revoked', revocation_reason = %s,
                        revoked_by = %s, revoked_at = NOW()
                    WHERE id = %s""",
-                (admin["identifier"], allocation_id),
+                (revocation_reason, admin["identifier"], allocation_id),
             )
             cur.execute("UPDATE beds SET status = 'vacant' WHERE id = %s", (bed_id,))
+
+            # Update hostel_applications.status back to ready_for_allocation
+            # so App Tracker reflects the change instantly
+            cur.execute(
+                """UPDATE hostel_applications
+                   SET status = 'ready_for_allocation'
+                   WHERE student_id = %s AND session_id = %s AND status = 'allocated'""",
+                (student_id, session_id),
+            )
+
             conn.commit()
 
     log_event(
         ALLOCATION_REVOKED, "admin", admin["identifier"],
-        f"Revoked allocation #{allocation_id}",
+        f"Revoked allocation #{allocation_id} (reason: {revocation_reason})",
         target_entity="allocation", target_id=str(allocation_id),
+        metadata={"reason": revocation_reason, "notes": body.notes, "has_paid": has_paid},
         session_id=session_id,
     )
-    return {"message": "Allocation revoked. Bed freed."}
+
+    # Send email notification to the student
+    email_sent = False
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT identifier, first_name, email FROM users WHERE id = %s",
+                (student_id,),
+            )
+            stu = cur.fetchone()
+
+        if stu and stu[2]:  # has email
+            send_allocation_revoked_email(
+                to_email=stu[2],
+                first_name=stu[1],
+                matric=stu[0],
+                hostel=hostel_name,
+                room=room_number,
+                bed=bed_number,
+                reason=revocation_reason,
+                notes=body.notes or "",
+                user_id=student_id,
+                session_id=session_id,
+            )
+            email_sent = True
+    except Exception:
+        pass  # Email failure must not block the revocation
+
+    return {
+        "message": "Allocation revoked. Bed freed.",
+        "email_sent": email_sent,
+        "reason": revocation_reason,
+    }
 
 
 @router.post("/students/{student_id}/manual-pay")
@@ -1021,6 +1847,74 @@ def list_audit_logs(
                 "description": r[7],
                 "metadata": r[8] if r[8] else {},
                 "session_id": r[9],
+            }
+            for r in rows
+        ],
+    }
+
+
+# ════════════════════════════════════════════════════════════
+# EMAIL LOGS
+# ════════════════════════════════════════════════════════════
+
+@router.get("/email-logs")
+def list_email_logs(
+    page: int = 1,
+    limit: int = 50,
+    email_type: Optional[str] = None,
+    recipient: Optional[str] = None,
+    status: Optional[str] = None,
+    admin=Depends(get_current_admin),
+):
+    """Paginated email log query with filters."""
+    offset = (page - 1) * limit
+    conditions = []
+    params = []
+
+    if email_type:
+        conditions.append("email_type = %s")
+        params.append(email_type)
+    if recipient:
+        conditions.append("(recipient_email ILIKE %s OR recipient_matric ILIKE %s)")
+        params.extend([f"%{recipient}%", f"%{recipient}%"])
+    if status:
+        conditions.append("status = %s")
+        params.append(status)
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    with get_cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM email_logs {where}", params)
+        total = cur.fetchone()[0]
+
+        cur.execute(
+            f"""SELECT id, recipient_email, recipient_name, recipient_matric,
+                       subject, body_preview, email_type, status, sent_at,
+                       session_id, metadata
+                FROM email_logs {where}
+                ORDER BY sent_at DESC
+                LIMIT %s OFFSET %s""",
+            params + [limit, offset],
+        )
+        rows = cur.fetchall()
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "logs": [
+            {
+                "id": r[0],
+                "recipient_email": r[1],
+                "recipient_name": r[2],
+                "recipient_matric": r[3],
+                "subject": r[4],
+                "body_preview": r[5],
+                "email_type": r[6],
+                "status": r[7],
+                "sent_at": r[8].isoformat() if r[8] else None,
+                "session_id": r[9],
+                "metadata": r[10] if r[10] else {},
             }
             for r in rows
         ],

@@ -47,10 +47,6 @@ export default function LandingPage() {
                         <a href="#how-it-works" className="hidden sm:block text-sm font-semibold text-muted hover:text-heading transition-colors">
                             How It Works
                         </a>
-                        <Link to="/docs" className="hidden sm:flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-heading transition-colors">
-                            <BookOpen className="w-3.5 h-3.5" />
-                            Docs
-                        </Link>
                         <Link to="/login" className="text-sm font-bold text-heading hover:text-forest transition-colors">
                             Sign In
                         </Link>

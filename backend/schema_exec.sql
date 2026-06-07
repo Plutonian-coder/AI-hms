@@ -146,12 +146,34 @@ CREATE TABLE hostel_applications (
     session_id INT NOT NULL REFERENCES academic_sessions(id) ON DELETE CASCADE,
     choice_1_id INT REFERENCES hostels(id),
     choice_2_id INT REFERENCES hostels(id),
-    choice_3_id INT REFERENCES hostels(id),
+    choice_3_id INT REFERENCES hostels(id),               -- kept for backward compat, nullable
     special_notes TEXT,
-    status VARCHAR(20) DEFAULT 'submitted' CHECK (status IN ('submitted', 'paid', 'allocated', 'cancelled')),
+    status VARCHAR(30) DEFAULT 'draft' CHECK (status IN (
+        'draft', 'submitted', 'pending_verification',
+        'medical_approved', 'medical_rejected',
+        'ready_for_allocation', 'allocated', 'paid', 'cancelled'
+    )),
+    -- Special accommodations pipeline
+    has_special_needs BOOLEAN DEFAULT FALSE,
+    special_needs_type VARCHAR(100),
+    medical_doc_path TEXT,
+    medical_doc_original_name VARCHAR(255),
+    medical_reviewed_by INT REFERENCES users(id),
+    medical_reviewed_at TIMESTAMPTZ,
+    medical_review_notes TEXT,
+    upload_attempt INT DEFAULT 0,
+    -- Stage tracking (1=eligibility, 2=accommodations, 3=preferences)
+    stage_completed INT DEFAULT 0,
+    -- Admin status tracking
+    admin_status_note TEXT,
+    admin_status_updated_at TIMESTAMPTZ,
+    admin_status_updated_by INT REFERENCES users(id),
     submitted_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(student_id, session_id)
 );
+
+CREATE INDEX idx_applications_status ON hostel_applications(status);
+CREATE INDEX idx_applications_session_status ON hostel_applications(session_id, status);
 
 -- ── Confirmed Payments ──────────────────────────────────────────────────────
 CREATE TABLE confirmed_payments (

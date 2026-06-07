@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, CreditCard, ClipboardCheck, BedDouble, LogOut, X, Building2 } from 'lucide-react';
+import { LayoutDashboard, FileText, CreditCard, ClipboardCheck, BedDouble, LogOut, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 const NAV_ITEMS = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/apply', label: 'Apply', icon: FileText },
-    { to: '/payment', label: 'Payment', icon: CreditCard },
+    { to: '/payment', label: 'Make Payment', icon: CreditCard },
     { to: '/quiz', label: 'Compatibility Quiz', icon: ClipboardCheck },
     { to: '/my-allocation', label: 'My Allocation', icon: BedDouble },
 ];
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, hiddenRoutes = [] }) {
     const navigate = useNavigate();
     const { pathname } = useLocation();
 
@@ -27,7 +27,9 @@ export default function Sidebar({ isOpen, onClose }) {
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 group relative ${
+                    collapsed ? 'justify-center px-2' : ''
+                } ${
                     isActive
                         ? 'bg-lime-soft text-forest border border-lime-border'
                         : 'text-muted hover:text-heading hover:bg-surface-2'
@@ -37,7 +39,13 @@ export default function Sidebar({ isOpen, onClose }) {
             {({ isActive }) => (
                 <>
                     <item.icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-forest' : 'text-muted-light'}`} />
-                    {item.label}
+                    {!collapsed && <span>{item.label}</span>}
+                    {/* Tooltip for collapsed mode */}
+                    {collapsed && (
+                        <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-heading text-white text-xs font-semibold rounded-lg shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                            {item.label}
+                        </span>
+                    )}
                 </>
             )}
         </NavLink>
@@ -46,46 +54,83 @@ export default function Sidebar({ isOpen, onClose }) {
     const SidebarContent = ({ showClose }) => (
         <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="px-5 py-5 border-b border-sidebar-border flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-forest flex items-center justify-center shadow-sm">
-                        <Building2 className="w-5 h-5 text-lime" />
+            <div className={`px-4 py-4 border-b border-sidebar-border flex items-center shrink-0 ${collapsed ? 'justify-center' : 'justify-between'}`}>
+                {!collapsed && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-2xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+                        <div className="border-l border-sidebar-border pl-2">
+                            <p className="text-[10px] text-muted font-bold uppercase tracking-wider">Student</p>
+                            <p className="text-[10px] text-muted font-bold uppercase tracking-wider -mt-1">Portal</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-sm font-black text-heading tracking-tight leading-none">HMS</p>
-                        <p className="text-[10px] text-muted font-medium mt-0.5">Student Portal</p>
-                    </div>
-                </div>
-                {showClose && (
+                )}
+                {collapsed && (
+                    <span className="text-xl font-serif font-black text-forest tracking-tighter italic">H</span>
+                )}
+
+                {showClose ? (
                     <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-heading hover:bg-surface-2 transition-colors">
                         <X className="w-4 h-4" />
                     </button>
+                ) : (
+                    !collapsed && (
+                        <button
+                            onClick={onToggleCollapse}
+                            className="p-1.5 rounded-lg text-muted hover:text-heading hover:bg-surface-2 transition-colors"
+                            title="Collapse sidebar"
+                        >
+                            <PanelLeftClose className="w-4 h-4" />
+                        </button>
+                    )
                 )}
             </div>
 
+            {/* Collapsed expand button */}
+            {collapsed && !showClose && (
+                <div className="px-2 pt-3 pb-1 flex justify-center">
+                    <button
+                        onClick={onToggleCollapse}
+                        className="p-1.5 rounded-lg text-muted hover:text-heading hover:bg-surface-2 transition-colors"
+                        title="Expand sidebar"
+                    >
+                        <PanelLeftOpen className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             {/* Nav */}
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
-                <p className="text-[10px] font-bold text-muted-light uppercase tracking-[0.15em] px-3 mb-2">Main</p>
-                {NAV_ITEMS.map(item => <NavItem key={item.to} item={item} />)}
+                {!collapsed && (
+                    <p className="text-[10px] font-bold text-muted-light uppercase tracking-[0.15em] px-3 mb-2">Main</p>
+                )}
+                {collapsed && <div className="border-t border-sidebar-border mb-2 mx-1" />}
+                {NAV_ITEMS.filter(item => !hiddenRoutes.includes(item.to)).map(item => <NavItem key={item.to} item={item} />)}
             </nav>
 
             {/* Sign out */}
             <div className="px-3 py-4 border-t border-sidebar-border shrink-0">
                 <button
                     onClick={handleSignOut}
-                    className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-semibold text-muted hover:text-danger hover:bg-danger-bg transition-all duration-150"
+                    className={`flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-semibold text-muted hover:text-danger hover:bg-danger-bg transition-all duration-150 group relative ${collapsed ? 'justify-center px-2' : ''}`}
                 >
                     <LogOut className="w-4.5 h-4.5 shrink-0" />
-                    Sign Out
+                    {!collapsed && <span>Sign Out</span>}
+                    {collapsed && (
+                        <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-heading text-red-400 text-xs font-semibold rounded-lg shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                            Sign Out
+                        </span>
+                    )}
                 </button>
             </div>
         </div>
     );
 
+    const desktopWidth = collapsed ? 'w-16' : 'w-64';
+
     return (
         <>
             {/* Desktop — always visible */}
-            <div className="hidden lg:flex w-64 flex-shrink-0 glass-sidebar h-full flex-col">
+            <div className={`hidden lg:flex ${desktopWidth} flex-shrink-0 glass-sidebar h-full flex-col transition-all duration-300 ease-out`}>
                 <SidebarContent showClose={false} />
             </div>
 

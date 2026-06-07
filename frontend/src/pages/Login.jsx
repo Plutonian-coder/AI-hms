@@ -43,8 +43,8 @@ export default function Login() {
                 <div className="glass-elevated rounded-3xl p-8 sm:p-10">
                     {/* Logo */}
                     <div className="flex flex-col items-center mb-8">
-                        <div className="w-14 h-14 rounded-2xl bg-forest flex items-center justify-center shadow-lg mb-4">
-                            <Building2 className="w-7 h-7 text-lime" />
+                        <div className="mb-2">
+                            <span className="text-5xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
                         </div>
                         <h1 className="text-2xl font-black text-heading tracking-tight">Hostel Management</h1>
                         <p className="text-sm text-muted font-medium mt-1">Sign in to your portal</p>
@@ -121,9 +121,6 @@ export default function Login() {
                     </p>
                 </div>
 
-                <p className="text-center text-[11px] text-muted/70 font-medium mt-5">
-                    AI-Driven Hostel Management System · For Nigerian Tertiary Institutions
-                </p>
             </div>
         </div>
     );

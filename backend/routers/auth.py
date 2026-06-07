@@ -21,7 +21,7 @@ from database import get_cursor
 from models import TokenResponse, UserLogin, UserRegister
 from dependencies import get_current_user
 from services.audit_logger import log_event, STUDENT_REGISTERED, PASSWORD_CHANGED
-from services.email import send_registration_email
+from services.email import send_registration_email, send_password_reset_email
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -56,7 +56,7 @@ def verify_matric(matric: str = Query(...)):
     with get_cursor() as cur:
         cur.execute(
             """SELECT sr.surname, sr.first_name, sr.gender, sr.department,
-                      sr.level, sr.study_type, sr.faculty
+                      sr.level, sr.study_type, sr.faculty, sr.email
                FROM session_register sr
                JOIN academic_sessions s ON s.id = sr.session_id AND s.is_active = TRUE
                WHERE sr.matric_number = %s
@@ -88,6 +88,7 @@ def verify_matric(matric: str = Query(...)):
         "level": row[4],
         "study_type": row[5],
         "faculty": row[6],
+        "email": row[7] or "",
     }
 
 
@@ -101,7 +102,7 @@ def register(data: UserRegister, background_tasks: BackgroundTasks):
         # 1. Check session register
         cur.execute(
             """SELECT sr.surname, sr.first_name, sr.gender, sr.department,
-                      sr.level, sr.study_type, sr.faculty, sr.session_id
+                      sr.level, sr.study_type, sr.faculty, sr.session_id, sr.email
                FROM session_register sr
                JOIN academic_sessions s ON s.id = sr.session_id AND s.is_active = TRUE
                WHERE sr.matric_number = %s
@@ -116,7 +117,17 @@ def register(data: UserRegister, background_tasks: BackgroundTasks):
                 detail="Your matric number was not found in the current session register. Please contact the Student Affairs Unit.",
             )
 
-        surname, first_name, gender, department, level, study_type, faculty, session_id = reg_row
+        surname, first_name, gender, department, level, study_type, faculty, session_id, reg_email = reg_row
+
+        # Use email from registration form; fall back to session_register email
+        student_email = data.email.strip() or (reg_email or "").strip()
+
+        # Validate Gmail-only email
+        if not student_email or not student_email.lower().endswith("@gmail.com"):
+            raise HTTPException(
+                status_code=422,
+                detail="Only @gmail.com email addresses are accepted. Please provide a valid Gmail address.",
+            )
 
         # 2. Duplicate check
         cur.execute("SELECT id FROM users WHERE identifier = %s", (identifier,))
@@ -138,7 +149,7 @@ def register(data: UserRegister, background_tasks: BackgroundTasks):
                 first_name,
                 gender,
                 pw_hash,
-                data.email.strip() or None,
+                student_email or None,
                 data.phone.strip() or None,
                 department,
                 level,
@@ -156,9 +167,12 @@ def register(data: UserRegister, background_tasks: BackgroundTasks):
         session_id=session_id,
     )
 
-    # Trigger the background email task
-    if data.email:
-        background_tasks.add_task(send_registration_email, data.email.strip(), first_name, identifier)
+    # Trigger the background email task — email is always required
+    if student_email:
+        background_tasks.add_task(
+            send_registration_email, student_email, first_name, identifier,
+            user_id=user_id, session_id=session_id,
+        )
 
     token = _create_token({
         "sub": str(user_id),
@@ -279,3 +293,95 @@ def change_password(
     )
 
     return {"message": "Password changed successfully."}
+
+
+# ── Forgot Password ──────────────────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+def _create_reset_token(user_id: int, identifier: str) -> str:
+    """Create a short-lived JWT token for password reset (15 minutes)."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    return jwt.encode(
+        {"sub": str(user_id), "identifier": identifier, "purpose": "password_reset", "exp": expire},
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM,
+    )
+
+
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPasswordRequest):
+    """
+    Send a password reset email if the email exists in the system.
+    Always returns success to prevent email enumeration attacks.
+    """
+    email = data.email.strip().lower()
+
+    if not email:
+        return {"message": "If an account exists with that email, we've sent reset instructions."}
+
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT id, identifier, first_name, email FROM users WHERE LOWER(email) = %s LIMIT 1",
+            (email,),
+        )
+        row = cur.fetchone()
+
+    if row:
+        user_id, identifier, first_name, user_email = row
+        reset_token = _create_reset_token(user_id, identifier)
+        result = send_password_reset_email(user_email, first_name or "Student", reset_token)
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to send reset email. Please try again later.")
+
+    # Always return same response to prevent email enumeration
+    return {"message": "If an account exists with that email, we've sent reset instructions."}
+
+
+@router.post("/reset-password")
+def reset_password(data: ResetPasswordRequest):
+    """
+    Reset password using a token from the reset email.
+    """
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+
+    try:
+        payload = jwt.decode(data.token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+    except jwt.JWTError:
+        raise HTTPException(status_code=400, detail="Invalid reset link. Please request a new one.")
+
+    if payload.get("purpose") != "password_reset":
+        raise HTTPException(status_code=400, detail="Invalid token type.")
+
+    user_id = int(payload["sub"])
+    identifier = payload.get("identifier", "")
+
+    new_hash = _hash_password(data.new_password)
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
+            (new_hash, user_id),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User account not found.")
+
+    log_event(
+        PASSWORD_CHANGED,
+        actor_type="student",
+        actor_id=identifier,
+        description=f"Password reset via email for {identifier}",
+        target_entity="user",
+        target_id=str(user_id),
+    )
+
+    return {"message": "Password has been reset successfully. You can now log in."}

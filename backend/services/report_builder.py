@@ -66,6 +66,19 @@ COLUMN_CATALOGUE = {
             "s.session_name": "Session",
         },
     },
+    "email": {
+        "label": "Email Communications",
+        "columns": {
+            "el.recipient_email": "Recipient Email",
+            "el.recipient_matric": "Recipient Matric",
+            "el.recipient_name": "Recipient Name",
+            "el.subject": "Subject",
+            "el.body_preview": "Mail Body (Preview)",
+            "el.email_type": "Email Type",
+            "el.status": "Delivery Status",
+            "el.sent_at": "Sent Date",
+        },
+    },
 }
 
 # ══════════════════════════════════════════════════════════════
@@ -76,7 +89,7 @@ FILTER_CATALOGUE = {
     "session_time": {
         "label": "Session & Time",
         "filters": {
-            "session_id": {"type": "select", "label": "Academic Session", "column": "s.id"},
+            "session_id": {"type": "select", "label": "Academic Session", "column": "s.session_name"},
             "allocated_after": {"type": "date", "label": "Allocated After", "column": "a.allocated_at", "op": ">="},
             "allocated_before": {"type": "date", "label": "Allocated Before", "column": "a.allocated_at", "op": "<="},
             "paid_after": {"type": "date", "label": "Paid After", "column": "cp.confirmed_at", "op": ">="},
@@ -89,7 +102,7 @@ FILTER_CATALOGUE = {
             "gender": {"type": "select", "label": "Gender", "column": "u.gender", "options": ["male", "female"]},
             "department": {"type": "text", "label": "Department", "column": "u.department", "op": "ILIKE"},
             "level": {"type": "select", "label": "Level", "column": "u.level", "options": ["100L", "200L", "300L", "400L", "500L"]},
-            "study_type": {"type": "select", "label": "Study Type", "column": "u.study_type", "options": ["Full-time", "Part-time", "Sandwich"]},
+            "study_type": {"type": "select", "label": "Study Type", "column": "u.study_type", "options": ["Full-time", "Part-time", "CODFEL"]},
         },
     },
     "status": {
@@ -120,6 +133,20 @@ FILTER_CATALOGUE = {
             "max_compatibility": {"type": "number", "label": "Max Compatibility (%)", "column": "a.avg_compatibility_score", "op": "<="},
         },
     },
+    "email_filters": {
+        "label": "Email Communications",
+        "filters": {
+            "email_type": {"type": "select", "label": "Email Type", "column": "el.email_type",
+                           "options": ["registration", "application_submitted", "status_change",
+                                       "medical_review", "allocation_success", "allocation_revoked",
+                                       "invoice", "password_reset"]},
+            "email_recipient": {"type": "text", "label": "Recipient Email", "column": "el.recipient_email", "op": "ILIKE"},
+            "email_sent_after": {"type": "date", "label": "Sent After", "column": "el.sent_at", "op": ">="},
+            "email_sent_before": {"type": "date", "label": "Sent Before", "column": "el.sent_at", "op": "<="},
+            "email_status": {"type": "select", "label": "Delivery Status", "column": "el.status",
+                             "options": ["sent", "failed"]},
+        },
+    },
 }
 
 # All valid column expressions (for whitelist validation)
@@ -135,6 +162,24 @@ for cat in FILTER_CATALOGUE.values():
 
 def get_catalogue():
     """Return the full filter and column catalogue for the frontend."""
+    sessions = []
+    try:
+        from database import get_cursor
+        with get_cursor() as cur:
+            cur.execute("SELECT session_name FROM academic_sessions ORDER BY id DESC")
+            sessions = [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        print(f"Error fetching sessions for catalogue: {e}")
+        sessions = []
+
+    # Clone FILTER_CATALOGUE and inject dynamic session options
+    import copy
+    local_filter_catalogue = copy.deepcopy(FILTER_CATALOGUE)
+    if sessions:
+        local_filter_catalogue["session_time"]["filters"]["session_id"]["options"] = sessions
+    else:
+        local_filter_catalogue["session_time"]["filters"]["session_id"]["options"] = ["2025/2026"]
+
     return {
         "filters": {
             k: {
@@ -144,7 +189,7 @@ def get_catalogue():
                     for fk, fv in v["filters"].items()
                 },
             }
-            for k, v in FILTER_CATALOGUE.items()
+            for k, v in local_filter_catalogue.items()
         },
         "columns": {
             k: {"label": v["label"], "columns": v["columns"]}
@@ -176,16 +221,21 @@ def _determine_joins(selected_columns: list[str], selected_filters: dict) -> set
         joins.add("accommodation")
     if "sv." in all_refs:
         joins.add("vectors")
+    if "el." in all_refs:
+        joins.add("email_logs")
 
     return joins
 
 
-def _build_join_clause(joins: set) -> str:
+def _build_join_clause(joins: set, session_name: Optional[str] = None) -> str:
     """Build SQL JOIN clauses."""
     parts = ["FROM users u"]
 
-    if "sessions" in joins or "payments" in joins or "allocations" in joins:
-        parts.append("LEFT JOIN academic_sessions s ON s.is_active = TRUE")
+    if any(k in joins for k in ("sessions", "payments", "allocations", "vectors", "email_logs")):
+        if session_name:
+            parts.append(f"LEFT JOIN academic_sessions s ON s.session_name = '{session_name}'")
+        else:
+            parts.append("LEFT JOIN academic_sessions s ON s.is_active = TRUE")
 
     if "payments" in joins:
         parts.append("LEFT JOIN confirmed_payments cp ON cp.student_id = u.id AND cp.session_id = s.id")
@@ -201,6 +251,9 @@ def _build_join_clause(joins: set) -> str:
 
     if "vectors" in joins:
         parts.append("LEFT JOIN student_vectors sv ON sv.student_id = u.id AND sv.session_id = s.id")
+
+    if "email_logs" in joins:
+        parts.append("LEFT JOIN email_logs el ON el.recipient_user_id = u.id AND el.session_id = s.id")
 
     return "\n".join(parts)
 
@@ -249,9 +302,22 @@ def build_report(selected_columns: list[str], filters: dict, limit: Optional[int
                     params.append(filter_value)
                 break
 
+    # Validate and extract session_name from filters to prevent SQL injection
+    session_name = None
+    if "session_id" in filters and filters["session_id"]:
+        try:
+            from database import get_cursor
+            with get_cursor() as cur:
+                cur.execute("SELECT session_name FROM academic_sessions")
+                valid_sessions = {r[0] for r in cur.fetchall()}
+                if filters["session_id"] in valid_sessions:
+                    session_name = filters["session_id"]
+        except Exception as e:
+            print(f"Error validating session name in build_report: {e}")
+
     # Determine joins
     joins = _determine_joins(valid_cols, filters)
-    join_clause = _build_join_clause(joins)
+    join_clause = _build_join_clause(joins, session_name=session_name)
 
     # Build SELECT
     select_parts = [f"{c} AS col_{i}" for i, c in enumerate(valid_cols)]

@@ -37,6 +37,7 @@ export default function Register() {
             }
 
             setStudentInfo(data);
+            setFormData(prev => ({ ...prev, email: data.email || '' }));
             setStep('form');
         } catch (err) {
             setVerifyError(err.response?.data?.detail || 'Matric number not found in session register. Contact Student Affairs.');
@@ -48,12 +49,24 @@ export default function Register() {
     const handleRegister = async (e) => {
         e.preventDefault();
         setError('');
+
+        const emailVal = (formData.email || '').trim();
+        if (!emailVal) {
+            setError('Email is required.');
+            return;
+        }
+        const emailRegex = /^[^\s@]+@gmail\.com$/i;
+        if (!emailRegex.test(emailVal)) {
+            setError('Only @gmail.com email addresses are accepted.');
+            return;
+        }
+
         setLoading(true);
         try {
             const res = await apiClient.post('/auth/register', {
                 identifier: matric.trim(),
                 password: formData.password,
-                email: formData.email || undefined,
+                email: emailVal,
                 phone: formData.phone || undefined,
                 next_of_kin_name: formData.next_of_kin_name || undefined,
                 next_of_kin_phone: formData.next_of_kin_phone || undefined,
@@ -84,8 +97,8 @@ export default function Register() {
                 <div className="glass-elevated rounded-3xl p-8 sm:p-10">
                     {/* Logo */}
                     <div className="flex flex-col items-center mb-7">
-                        <div className="w-13 h-13 rounded-2xl bg-forest flex items-center justify-center shadow-lg mb-3">
-                            <Building2 className="w-6 h-6 text-lime" />
+                        <div className="mb-2">
+                            <span className="text-5xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
                         </div>
                         <h1 className="text-2xl font-black text-heading tracking-tight">Student Registration</h1>
                         <p className="text-sm text-muted font-medium mt-1">
@@ -170,7 +183,15 @@ export default function Register() {
                                 <p className="text-[10px] font-bold text-muted uppercase tracking-[0.15em]">Your Details</p>
 
                                 <div className="grid grid-cols-2 gap-3">
-                                    <FormField label="Email" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="student@email.com" />
+                                    <div className="space-y-1.5">
+                                        <label className="block text-xs font-bold text-muted uppercase tracking-widest">Email</label>
+                                        <input
+                                            name="email" type="email" required
+                                            value={formData.email} onChange={handleChange} placeholder="student@gmail.com"
+                                            className="glass-input w-full rounded-xl px-4 py-3 text-sm font-medium text-heading placeholder:text-muted-light"
+                                        />
+                                        <p className="text-[10px] text-muted font-medium mt-0.5">Must be a @gmail.com address. All system notifications go here.</p>
+                                    </div>
                                     <FormField label="Phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} placeholder="08012345678" />
                                 </div>
 
@@ -213,9 +234,6 @@ export default function Register() {
                     </p>
                 </div>
 
-                <p className="text-center text-[11px] text-muted/70 font-medium mt-5">
-                    AI-Driven Hostel Management System · For Nigerian Tertiary Institutions
-                </p>
             </div>
         </div>
     );

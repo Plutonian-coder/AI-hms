@@ -1,0 +1,55 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# HMS — Docker Compose (Factor X: Dev/Prod Parity)
+#
+# Usage:
+#   docker compose up --build          # Start full stack
+#   docker compose up -d               # Start detached
+#   docker compose exec backend python scripts/create_admin.py  # Admin task (Factor XII)
+#   docker compose down                # Stop all services
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ── Backend (FastAPI + Gunicorn) ─────────────────────────────────────────
+  backend:
+    build: ./backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file: ./backend/.env
+    environment:
+      - PORT=8000
+      - UPLOAD_DIR=/tmp/uploads
+    volumes:
+      - upload_data:/tmp/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── Frontend (Vite build → Nginx) ───────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Scheduled Tasks (Factor VI: separate process) ───────────────────────
+  # Runs the expired allocation revocation as a one-off task.
+  # For production, use pg_cron or an external scheduler instead.
+  # Uncomment to run manually:
+  # revoke-expired:
+  #   build: ./backend
+  #   env_file: ./backend/.env
+  #   command: python tasks.py
+  #   profiles: ["tasks"]
+
+volumes:
+  upload_data:

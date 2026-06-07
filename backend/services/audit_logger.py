@@ -1,12 +1,17 @@
 """
 Audit Logger — Fire-and-forget INSERT into audit_logs.
 
-Centralised logging for all 22 categories of system events.
+Centralised logging for all system events.
 Never raises exceptions — logging failures must not block the main operation.
+
+12-Factor Compliant:
+  - Factor XI: Uses structured logging instead of traceback.print_exc()
 """
 import json
-import traceback
+import logging
 from database import get_cursor
+
+logger = logging.getLogger(__name__)
 
 # ── Action Type Constants ────────────────────────────────────────────────────
 STUDENT_REGISTERED    = "STUDENT_REGISTERED"
@@ -32,6 +37,14 @@ HOSTEL_CREATED        = "HOSTEL_CREATED"
 HOSTEL_DELETED        = "HOSTEL_DELETED"
 REPORT_GENERATED      = "REPORT_GENERATED"
 ADMIN_NL_QUERY        = "ADMIN_NL_QUERY"
+
+# Pipeline-specific constants
+MEDICAL_DOC_UPLOADED       = "MEDICAL_DOC_UPLOADED"
+MEDICAL_REVIEW_APPROVED    = "MEDICAL_REVIEW_APPROVED"
+MEDICAL_REVIEW_REJECTED    = "MEDICAL_REVIEW_REJECTED"
+APPLICATION_STAGE_ADVANCED = "APPLICATION_STAGE_ADVANCED"
+ADMIN_STATUS_UPDATE        = "ADMIN_STATUS_UPDATE"
+EMAIL_SENT                 = "EMAIL_SENT"
 
 
 def log_event(
@@ -76,5 +89,5 @@ def log_event(
                 ),
             )
     except Exception:
-        # Never crash the calling code — just print for server logs
-        traceback.print_exc()
+        # Never crash the calling code — log to stdout for container capture
+        logger.error("Failed to write audit log: action=%s actor=%s", action_type, actor_id, exc_info=True)

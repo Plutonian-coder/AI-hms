@@ -1,3 +1,5 @@
+# HMS Backend — Pinned Dependencies (Factor II)
+# All versions pinned for deterministic builds.
 fastapi==0.115.0
 uvicorn[standard]==0.30.0
 gunicorn==23.0.0
@@ -7,7 +9,10 @@ python-dotenv==1.0.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
-httpx>=0.27.0
-numpy>=1.26.0
-openai>=1.0.0
-resend
+httpx==0.27.2
+numpy==1.26.4
+openai==1.58.0
+resend>=2.4.0
+google-generativeai==0.8.3
+Pillow==10.4.0
+reportlab==4.4.4

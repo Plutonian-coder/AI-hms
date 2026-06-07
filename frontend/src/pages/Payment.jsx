@@ -76,7 +76,7 @@ export default function Payment() {
 
     if (allocated) {
         return (
-            <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-lime/10 border border-lime/30 rounded-2xl p-6 flex items-start gap-4">
                     <ShieldCheck className="w-6 h-6 text-lime shrink-0 mt-0.5" />
                     <div>
@@ -93,7 +93,7 @@ export default function Payment() {
 
     if (noApplication) {
         return (
-            <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
                     <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
                     <div>
@@ -111,7 +111,7 @@ export default function Payment() {
     // Already paid and confirmed
     if (paymentStatus?.status === 'confirmed') {
         return (
-            <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div>
                     <h1 className="text-3xl font-extrabold text-heading tracking-tight flex items-center gap-3">
                         <CreditCard className="w-8 h-8 text-forest" />
@@ -152,10 +152,27 @@ export default function Payment() {
         );
     }
 
-    // Pending payment — allow re-verify
+    // Pending payment — allow re-verify or cancel
     if (paymentStatus?.status === 'pending') {
+        const handleCancel = async () => {
+            setError('');
+            setSubmitting(true);
+            try {
+                await apiClient.post('/payment/cancel-pending');
+                // Reset state so the fresh payment form loads
+                setPaymentStatus(null);
+                // Re-fetch fee summary
+                const feeRes = await apiClient.get('/application/fee-summary');
+                setFeeSummary(feeRes.data);
+            } catch (err) {
+                setError(err.response?.data?.detail || 'Failed to cancel pending payment.');
+            } finally {
+                setSubmitting(false);
+            }
+        };
+
         return (
-            <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div>
                     <h1 className="text-3xl font-extrabold text-heading tracking-tight flex items-center gap-3">
                         <CreditCard className="w-8 h-8 text-forest" />
@@ -188,10 +205,27 @@ export default function Payment() {
 
                     <button
                         onClick={() => navigate(`/payment/callback?reference=${paymentStatus.reference}`)}
-                        className="w-full flex justify-center items-center py-3.5 px-4 rounded-full shadow-lg shadow-lime/25 text-base font-black text-forest bg-lime hover:bg-lime-hover transition-all hover:scale-[1.02]"
+                        disabled={submitting}
+                        className="w-full flex justify-center items-center py-3.5 px-4 rounded-full shadow-lg shadow-lime/25 text-base font-black text-forest bg-lime hover:bg-lime-hover transition-all hover:scale-[1.02] disabled:opacity-50"
                     >
                         Verify Payment <ChevronRight className="w-5 h-5 ml-2" />
                     </button>
+
+                    <button
+                        onClick={handleCancel}
+                        disabled={submitting}
+                        className="w-full flex justify-center items-center py-3 px-4 mt-3 rounded-full text-sm font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-all disabled:opacity-50"
+                    >
+                        {submitting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            'Cancel & Start Over'
+                        )}
+                    </button>
+
+                    <p className="text-xs text-muted text-center mt-3">
+                        If you never completed this payment, cancel it and try again.
+                    </p>
                 </div>
             </div>
         );
@@ -199,7 +233,7 @@ export default function Payment() {
 
     // Fresh payment — show fee breakdown and pay button
     return (
-        <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+        <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
             <div>
                 <h1 className="text-3xl font-extrabold text-heading tracking-tight flex items-center gap-3">
                     <CreditCard className="w-8 h-8 text-forest" />

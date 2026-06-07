@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
-import { Menu, LogOut, ChevronDown, Building2, Settings as SettingsIcon, BookOpen } from 'lucide-react';
+import { Menu, LogOut, ChevronDown, Settings as SettingsIcon, BookOpen } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AdminSidebar from './components/AdminSidebar';
 import LandingPage from './pages/LandingPage';
@@ -14,6 +14,7 @@ import MyAllocation from './pages/MyAllocation';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminHostels from './pages/admin/AdminHostels';
 import AdminBlocks from './pages/admin/AdminBlocks';
@@ -29,6 +30,8 @@ import AdminRegisterImport from './pages/admin/AdminRegisterImport';
 import AdminFeeComponents from './pages/admin/AdminFeeComponents';
 import Settings from './pages/Settings';
 import Docs from './pages/Docs';
+import AdminReviewQueue from './pages/admin/AdminReviewQueue';
+import AdminApplicationTracker from './pages/admin/AdminApplicationTracker';
 
 function getUser() {
   try {
@@ -130,11 +133,37 @@ const StudentLayout = ({ children }) => {
   const user = getUser();
   const initial = user?.full_name?.charAt(0) || 'S';
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('student_sidebar_collapsed') === 'true';
+  });
+  const [hiddenRoutes, setHiddenRoutes] = useState([]);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const toggleCollapse = useCallback(() => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('student_sidebar_collapsed', String(next));
+      return next;
+    });
+  }, []);
+
+  // Check payment status to conditionally hide Payment nav
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+    import('./api/client').then(({ default: apiClient }) => {
+      apiClient.get('/payment/status')
+        .then(res => {
+          if (res.data?.has_payment && res.data?.status === 'confirmed') {
+            setHiddenRoutes(prev => prev.includes('/payment') ? prev : [...prev, '/payment']);
+          }
+        })
+        .catch(() => { /* silently ignore */ });
+    });
+  }, []);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden app-bg">
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} hiddenRoutes={hiddenRoutes} />
       <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         {/* Header */}
         <header className="glass-header sticky top-0 z-10 px-5 py-3 flex items-center justify-between shrink-0">
@@ -146,17 +175,14 @@ const StudentLayout = ({ children }) => {
               <Menu className="w-5 h-5" />
             </button>
             <div className="lg:hidden flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-forest flex items-center justify-center">
-                <Building2 className="w-4 h-4 text-lime" />
-              </div>
-              <span className="text-sm font-black text-heading">HMS</span>
+              <span className="text-xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
             </div>
             <span className="hidden lg:block text-xs font-bold text-muted uppercase tracking-widest">Student Portal</span>
           </div>
           <ProfileDropdown user={user} initial={initial} />
         </header>
         {/* Page content */}
-        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full max-w-7xl mx-auto overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full mx-auto overflow-x-hidden">
           {children}
         </main>
       </div>
@@ -195,17 +221,15 @@ const AdminLayout = ({ children }) => {
               <Menu className="w-5 h-5" />
             </button>
             <div className="lg:hidden flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-forest flex items-center justify-center">
-                <Building2 className="w-4 h-4 text-lime" />
-              </div>
-              <span className="text-sm font-black text-heading">HMS Admin</span>
+              <span className="text-xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+              <span className="text-[10px] font-bold text-muted uppercase tracking-wider ml-1">Admin</span>
             </div>
             <span className="hidden lg:block text-xs font-bold text-muted uppercase tracking-widest">Admin Portal</span>
           </div>
           <ProfileDropdown user={user} initial={initial} />
         </header>
         {/* Page content */}
-        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full max-w-7xl mx-auto overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full mx-auto overflow-x-hidden">
           {children}
         </main>
       </div>
@@ -241,6 +265,7 @@ export default function App() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/docs" element={<Docs />} />
 
       {/* Smart root */}
@@ -282,6 +307,8 @@ export default function App() {
       <Route path="/admin/audit-logs" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminAuditLogs /></AdminLayout></ProtectedRoute>} />
       <Route path="/admin/reports" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminReports /></AdminLayout></ProtectedRoute>} />
       <Route path="/admin/register-import" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminRegisterImport /></AdminLayout></ProtectedRoute>} />
+      <Route path="/admin/review-queue" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminReviewQueue /></AdminLayout></ProtectedRoute>} />
+      <Route path="/admin/application-tracker" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminApplicationTracker /></AdminLayout></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

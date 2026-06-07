@@ -1,18 +1,34 @@
 """
-Eligibility OCR Service — AI-powered document verification using Gemini Vision.
+Eligibility Verification Service — AI-powered document verification using Gemini.
 
 Verifies eligibility documents (acceptance fee, e-screening, school fees)
 and extracts the student's matric/application number, RRR, and name for
 identity matching and payment validation.
+
+12-Factor Compliant:
+  - Factor IV:  Lazy Gemini initialization treats it as an attached resource
+  - Factor XI:  Structured logging to stdout
 """
 import re
 import json
-import google.generativeai as genai
-from PIL import Image
-from config import GEMINI_API_KEY
+import logging
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
+logger = logging.getLogger(__name__)
+
+# ── Lazy Gemini initialization (Factor IV) ───────────────────────────────────
+_model = None
+
+
+def _get_model():
+    """Lazy-init Gemini model — only created on first use."""
+    global _model
+    if _model is None:
+        import google.generativeai as genai
+        from config import GEMINI_API_KEY
+        genai.configure(api_key=GEMINI_API_KEY)
+        _model = genai.GenerativeModel("gemini-2.5-flash")
+        logger.info("Gemini model initialized for eligibility verification")
+    return _model
 
 
 PROMPTS = {
@@ -102,7 +118,7 @@ Rules:
 
 def verify_eligibility_document(image_path: str, document_type: str) -> dict:
     """
-    Use Gemini Vision to verify an eligibility document and extract
+    Use Gemini to verify an eligibility document and extract
     the student identifier, RRR, and student name.
 
     Returns:
@@ -124,6 +140,8 @@ def verify_eligibility_document(image_path: str, document_type: str) -> dict:
         }
 
     try:
+        from PIL import Image
+        model = _get_model()
         img = Image.open(image_path)
         response = model.generate_content([PROMPTS[document_type], img])
         text = response.text.strip()
@@ -149,7 +167,7 @@ def verify_eligibility_document(image_path: str, document_type: str) -> dict:
         }
 
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"Eligibility OCR parse error: {e} — raw: {text}")
+        logger.error("Eligibility verification parse error: %s — raw: %s", e, text)
         return {
             "is_authentic": False,
             "extracted_identifier": None,
@@ -158,7 +176,7 @@ def verify_eligibility_document(image_path: str, document_type: str) -> dict:
             "rejection_reason": "AI could not process this document. Please upload a clearer image.",
         }
     except Exception as e:
-        print(f"Eligibility OCR error: {e}")
+        logger.error("Eligibility verification error: %s", e, exc_info=True)
         return {
             "is_authentic": False,
             "extracted_identifier": None,

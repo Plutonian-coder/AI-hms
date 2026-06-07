@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { CalendarDays, Plus, DoorOpen, FileText, CreditCard, Upload, Loader2, X } from 'lucide-react';
+import { CalendarDays, Plus, DoorOpen, FileText, CreditCard, Upload, Loader2, X, RotateCcw } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
 const PORTAL_CONFIG = [
@@ -17,6 +17,7 @@ export default function AdminSessions() {
     const [sessionName, setSessionName] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [togglingPortal, setTogglingPortal] = useState(null);
+    const [reactivatingId, setReactivatingId] = useState(null);
     const toast = useToast();
 
     const fetchSessions = () => {
@@ -58,6 +59,20 @@ export default function AdminSessions() {
     };
 
     const activeSession = sessions.find(s => s.is_active);
+
+    const reactivateSession = async (sessionId, sessionName) => {
+        if (!window.confirm(`Reactivate "${sessionName}"? The current active session will be paused.`)) return;
+        setReactivatingId(sessionId);
+        try {
+            const res = await apiClient.post(`/admin/sessions/${sessionId}/reactivate`);
+            toast.success(res.data.message);
+            fetchSessions();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to reactivate session');
+        } finally {
+            setReactivatingId(null);
+        }
+    };
 
     if (loading) return (
         <div className="flex items-center gap-3 p-8 text-muted font-medium">
@@ -191,6 +206,21 @@ export default function AdminSessions() {
                             </div>
 
                             <span className="text-xs font-bold text-muted/50 shrink-0">#{session.id}</span>
+
+                            {!session.is_active && (
+                                <button
+                                    onClick={() => reactivateSession(session.id, session.session_name)}
+                                    disabled={reactivatingId === session.id}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                                        reactivatingId === session.id
+                                            ? 'opacity-50 bg-surface text-muted'
+                                            : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                                    }`}
+                                >
+                                    <RotateCcw className={`w-3 h-3 ${reactivatingId === session.id ? 'animate-spin' : ''}`} />
+                                    {reactivatingId === session.id ? 'Reactivating...' : 'Reactivate'}
+                                </button>
+                            )}
                         </div>
                     ))}
                 </div>

@@ -120,6 +120,20 @@ body {
     background: rgba(255,255,255,0.95);
   }
 
+  /* Hide native browser password reveal icons */
+  .glass-input::-ms-reveal,
+  .glass-input::-ms-clear {
+    display: none;
+  }
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
+  input[type="password"]::-webkit-contacts-auto-fill-button,
+  input[type="password"]::-webkit-credentials-auto-fill-button {
+    display: none !important;
+  }
+
   /* ── Status badge utilities ──────────────────────────────────────────────── */
   .badge-success { background:#DCFCE7; color:#166534; border:1px solid #BBF7D0; }
   .badge-warning { background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; }
@@ -327,3 +341,17 @@ html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
 html.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(82, 183, 136, 0.30);
 }
+
+/* ── Dashboard: Dark mode emerald overrides ──────────────────────────────── */
+html.dark .bg-emerald-50\/80 { background-color: rgba(16, 45, 30, 0.6); }
+html.dark .bg-emerald-100 { background-color: rgba(52, 120, 80, 0.2); }
+html.dark .border-emerald-200\/60 { border-color: rgba(82, 183, 136, 0.2); }
+html.dark .border-emerald-200 { border-color: rgba(82, 183, 136, 0.25); }
+html.dark .text-emerald-600 { color: #52B788; }
+html.dark .text-emerald-700 { color: #6BCF99; }
+html.dark .text-emerald-800 { color: #A5DFBF; }
+html.dark .text-emerald-600\/70 { color: rgba(82, 183, 136, 0.7); }
+html.dark .bg-emerald-200\/50 { background-color: rgba(82, 183, 136, 0.15); }
+html.dark .bg-gray-100 { background-color: rgba(255, 255, 255, 0.06); }
+html.dark .border-gray-200 { border-color: rgba(255, 255, 255, 0.1); }
+html.dark .text-gray-400 { color: #6B8A76; }

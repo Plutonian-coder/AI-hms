@@ -208,7 +208,7 @@ export default function AdminReports() {
                 <div className="flex-1 min-w-0 space-y-4">
 
                     {/* Column chips bar */}
-                    <div className="glass rounded-2xl p-4">
+                    <div className="glass rounded-2xl p-4 relative z-10">
                         <div className="flex items-center gap-2 mb-3">
                             <span className="text-xs font-bold text-heading uppercase tracking-widest">Columns</span>
                             {selectedColumns.length > 0 && (

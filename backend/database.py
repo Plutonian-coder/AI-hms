@@ -1,22 +1,45 @@
+"""
+Database Connection Pool — 12-Factor Compliant (Factors IV, VIII, IX).
+
+- Pool sizing is driven by environment variables (Factor III)
+- Lazy initialization treats DB as an attached resource (Factor IV)
+- Pool sizing accounts for multi-worker concurrency (Factor VIII)
+- Explicit closeall() supports graceful shutdown (Factor IX)
+"""
+import logging
 import psycopg2
 from psycopg2 import pool
 from contextlib import contextmanager
-from config import DATABASE_URL
+from config import DATABASE_URL, DB_POOL_MIN, DB_POOL_MAX
+
+logger = logging.getLogger(__name__)
 
 _pool = None
+
 
 def get_pool():
     global _pool
     if _pool is None:
         if not DATABASE_URL:
-            raise ValueError("DATABASE_URL is missing or empty. Check your .env file and config.py.")
+            raise ValueError("DATABASE_URL is missing or empty. Check your environment variables.")
         _pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=2,
-            maxconn=10,
+            minconn=DB_POOL_MIN,
+            maxconn=DB_POOL_MAX,
             dsn=DATABASE_URL,
             sslmode="require"
         )
+        logger.info("Database connection pool created (min=%d, max=%d)", DB_POOL_MIN, DB_POOL_MAX)
     return _pool
+
+
+def close_pool():
+    """Close all connections in the pool. Called during graceful shutdown."""
+    global _pool
+    if _pool is not None:
+        _pool.closeall()
+        _pool = None
+        logger.info("Database connection pool closed")
+
 
 @contextmanager
 def get_connection():
@@ -45,6 +68,7 @@ def get_connection():
         raise
     finally:
         p.putconn(conn)
+
 
 @contextmanager
 def get_cursor():

@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, Building2, BedDouble, CalendarDays, Users, ClipboardList,
     Receipt, Shield, FileBarChart, Upload, LogOut, X, PanelLeftClose,
-    PanelLeftOpen, DollarSign, Building
+    PanelLeftOpen, DollarSign, Building, ShieldCheck, Activity
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -32,6 +32,8 @@ const NAV_SECTIONS = [
         label: 'Students',
         items: [
             { to: '/admin/students', label: 'Students', icon: Users },
+            { to: '/admin/review-queue', label: 'Review Queue', icon: ShieldCheck },
+            { to: '/admin/application-tracker', label: 'App Tracker', icon: Activity },
             { to: '/admin/allocations', label: 'Allocations', icon: ClipboardList },
             { to: '/admin/transactions', label: 'Transactions', icon: Receipt },
         ],
@@ -91,20 +93,16 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
             {/* Logo */}
             <div className={`px-4 py-4 border-b border-sidebar-border flex items-center shrink-0 ${collapsed ? 'justify-center' : 'justify-between'}`}>
                 {!collapsed && (
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-forest flex items-center justify-center shadow-sm">
-                            <Building2 className="w-5 h-5 text-lime" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-black text-heading tracking-tight leading-none">HMS Admin</p>
-                            <p className="text-[10px] text-muted font-medium mt-0.5">Management Portal</p>
+                    <div className="flex items-center gap-2">
+                        <span className="text-2xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+                        <div className="border-l border-sidebar-border pl-2">
+                            <p className="text-[10px] text-muted font-bold uppercase tracking-wider">Admin</p>
+                            <p className="text-[10px] text-muted font-bold uppercase tracking-wider -mt-1">Portal</p>
                         </div>
                     </div>
                 )}
                 {collapsed && (
-                    <div className="w-9 h-9 rounded-xl bg-forest flex items-center justify-center shadow-sm">
-                        <Building2 className="w-5 h-5 text-lime" />
-                    </div>
+                    <span className="text-xl font-serif font-black text-forest tracking-tighter italic">H</span>
                 )}
 
                 {showClose ? (

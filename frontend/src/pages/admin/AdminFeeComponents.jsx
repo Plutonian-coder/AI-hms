@@ -7,7 +7,7 @@ const APPLIES_TO_OPTIONS = [
     { value: 'all',           label: 'All Students' },
     { value: 'fulltime_only', label: 'Full-time Only' },
     { value: 'parttime_only', label: 'Part-time Only' },
-    { value: 'sandwich_only', label: 'Sandwich Only' },
+    { value: 'codfel_only', label: 'CODFEL Only' },
     { value: 'freshers_only', label: 'Freshers (100L) Only' },
 ];
 
@@ -15,7 +15,7 @@ const EMPTY_FORM = {
     name: '',
     amount_fulltime: '',
     amount_parttime: '',
-    amount_sandwich: '',
+    amount_codfel: '',
     applies_to: 'all',
     is_mandatory: true,
     sort_order: 0,
@@ -56,14 +56,14 @@ export default function AdminFeeComponents() {
     useEffect(() => { fetchData(); }, []);
 
     const totalFulltime = components
-        .filter(c => c.applies_to !== 'parttime_only' && c.applies_to !== 'sandwich_only')
+        .filter(c => c.applies_to !== 'parttime_only' && c.applies_to !== 'codfel_only')
         .reduce((s, c) => s + (c.amount_fulltime || 0), 0);
     const totalParttime = components
-        .filter(c => c.applies_to !== 'fulltime_only' && c.applies_to !== 'sandwich_only')
+        .filter(c => c.applies_to !== 'fulltime_only' && c.applies_to !== 'codfel_only')
         .reduce((s, c) => s + (c.amount_parttime || 0), 0);
-    const totalSandwich = components
+    const totalCodfel = components
         .filter(c => c.applies_to !== 'fulltime_only' && c.applies_to !== 'parttime_only')
-        .reduce((s, c) => s + (c.amount_sandwich || 0), 0);
+        .reduce((s, c) => s + (c.amount_codfel || 0), 0);
 
     const openCreate = () => {
         setEditingId(null);
@@ -77,7 +77,7 @@ export default function AdminFeeComponents() {
             name: comp.name,
             amount_fulltime: (comp.amount_fulltime / 100).toString(),
             amount_parttime: (comp.amount_parttime / 100).toString(),
-            amount_sandwich: (comp.amount_sandwich / 100).toString(),
+            amount_codfel: (comp.amount_codfel / 100).toString(),
             applies_to: comp.applies_to,
             is_mandatory: comp.is_mandatory,
             sort_order: comp.sort_order,
@@ -93,7 +93,7 @@ export default function AdminFeeComponents() {
             name: form.name.trim(),
             amount_fulltime: nairaToKobo(form.amount_fulltime),
             amount_parttime: nairaToKobo(form.amount_parttime),
-            amount_sandwich: nairaToKobo(form.amount_sandwich),
+            amount_codfel: nairaToKobo(form.amount_codfel),
             applies_to: form.applies_to,
             is_mandatory: form.is_mandatory,
             sort_order: parseInt(form.sort_order) || 0,
@@ -206,7 +206,7 @@ export default function AdminFeeComponents() {
                             {[
                                 { label: 'Full-time Amount (₦)', key: 'amount_fulltime', required: true },
                                 { label: 'Part-time Amount (₦)', key: 'amount_parttime', required: false },
-                                { label: 'Sandwich Amount (₦)',  key: 'amount_sandwich', required: false },
+                                { label: 'CODFEL Amount (₦)',  key: 'amount_codfel', required: false },
                             ].map(f => (
                                 <div key={f.key}>
                                     <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">
@@ -316,7 +316,7 @@ export default function AdminFeeComponents() {
                                         <th className="px-5 py-3 text-left text-[10px] font-bold text-muted uppercase tracking-widest">Description / Charge</th>
                                         <th className="px-5 py-3 text-right text-[10px] font-bold text-muted uppercase tracking-widest">Full-time</th>
                                         <th className="px-5 py-3 text-right text-[10px] font-bold text-muted uppercase tracking-widest">Part-time</th>
-                                        <th className="px-5 py-3 text-right text-[10px] font-bold text-muted uppercase tracking-widest">Sandwich</th>
+                                        <th className="px-5 py-3 text-right text-[10px] font-bold text-muted uppercase tracking-widest">CODFEL</th>
                                         <th className="px-5 py-3 text-center text-[10px] font-bold text-muted uppercase tracking-widest">Applies To</th>
                                         <th className="px-5 py-3 text-center text-[10px] font-bold text-muted uppercase tracking-widest">Type</th>
                                         <th className="px-5 py-3"></th>
@@ -331,7 +331,7 @@ export default function AdminFeeComponents() {
                                             </td>
                                             <td className="px-5 py-3.5 text-right font-bold text-heading">₦{koboToNaira(c.amount_fulltime)}</td>
                                             <td className="px-5 py-3.5 text-right font-medium text-body">₦{koboToNaira(c.amount_parttime)}</td>
-                                            <td className="px-5 py-3.5 text-right font-medium text-body">₦{koboToNaira(c.amount_sandwich)}</td>
+                                            <td className="px-5 py-3.5 text-right font-medium text-body">₦{koboToNaira(c.amount_codfel)}</td>
                                             <td className="px-5 py-3.5 text-center">
                                                 <span className="text-[10px] font-bold bg-forest/8 text-forest px-2.5 py-1 rounded-full">
                                                     {APPLIES_TO_OPTIONS.find(o => o.value === c.applies_to)?.label || c.applies_to}
@@ -374,8 +374,8 @@ export default function AdminFeeComponents() {
                                             <p className="text-[10px] font-bold text-muted uppercase tracking-widest">Part-time</p>
                                         </td>
                                         <td className="px-5 py-4 text-right">
-                                            <p className="text-lg font-black text-heading">₦{koboToNaira(totalSandwich)}</p>
-                                            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">Sandwich</p>
+                                            <p className="text-lg font-black text-heading">₦{koboToNaira(totalCodfel)}</p>
+                                            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">CODFEL</p>
                                         </td>
                                         <td colSpan={3}></td>
                                     </tr>
@@ -417,7 +417,7 @@ export default function AdminFeeComponents() {
                                         {[
                                             { label: 'Full-time', val: c.amount_fulltime },
                                             { label: 'Part-time', val: c.amount_parttime },
-                                            { label: 'Sandwich',  val: c.amount_sandwich },
+                                            { label: 'CODFEL',  val: c.amount_codfel },
                                         ].map(r => (
                                             <div key={r.label} className="bg-surface rounded-xl p-2.5 text-center">
                                                 <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{r.label}</p>
@@ -435,7 +435,7 @@ export default function AdminFeeComponents() {
                                     {[
                                         { label: 'Full-time', val: totalFulltime },
                                         { label: 'Part-time', val: totalParttime },
-                                        { label: 'Sandwich',  val: totalSandwich },
+                                        { label: 'CODFEL',  val: totalCodfel },
                                     ].map(r => (
                                         <div key={r.label} className="bg-white/70 rounded-xl p-3 text-center">
                                             <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{r.label}</p>

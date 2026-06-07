@@ -1,3 +1,5 @@
+# HMS — Render Deployment (Factor V: Build, Release, Run)
+# Env vars are aligned with config.py's _require() pattern.
 services:
   - type: web
     name: hms-backend
@@ -5,15 +7,7 @@ services:
     rootDir: backend
     dockerfilePath: ./Dockerfile
     envVars:
-      - key: DATABASE_HOST
-        sync: false
-      - key: DATABASE_PORT
-        sync: false
-      - key: DATABASE_NAME
-        sync: false
-      - key: DATABASE_USER
-        sync: false
-      - key: DATABASE_PASSWORD
+      - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
         sync: false
@@ -21,15 +15,27 @@ services:
         sync: false
       - key: JWT_EXPIRY_MINUTES
         sync: false
-      - key: UPLOAD_DIR
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: CORS_ORIGINS
-        sync: false
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
         sync: false
       - key: PAYSTACK_CALLBACK_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: HMS_APP_URL
+        sync: false
+      - key: UPLOAD_DIR
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DB_POOL_MIN
+        sync: false
+      - key: DB_POOL_MAX
         sync: false

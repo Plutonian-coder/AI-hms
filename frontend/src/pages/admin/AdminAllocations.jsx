@@ -18,7 +18,16 @@ export default function AdminAllocations() {
     const [searchQuery, setSearchQuery] = useState('');
     const [revoking, setRevoking] = useState(null);
     const [confirmRevoke, setConfirmRevoke] = useState(null);
+    const [selectedReason, setSelectedReason] = useState('');
+    const [revocationNotes, setRevocationNotes] = useState('');
     const toast = useToast();
+
+    useEffect(() => {
+        if (confirmRevoke) {
+            setSelectedReason(confirmRevoke.has_paid ? '' : 'admin_override');
+            setRevocationNotes('');
+        }
+    }, [confirmRevoke]);
 
     // Expandable document rows
     const [expandedRow, setExpandedRow] = useState(null);
@@ -45,10 +54,12 @@ export default function AdminAllocations() {
 
     useEffect(() => { fetchData(); }, []);
 
-    const handleRevoke = async (id) => {
+    const handleRevoke = async (id, reason = '', notes = '') => {
         setRevoking(id);
         try {
-            const res = await apiClient.delete(`/admin/allocations/${id}`);
+            const res = await apiClient.delete(`/admin/allocations/${id}`, {
+                data: { reason, notes }
+            });
             toast.success(res.data.message);
             setConfirmRevoke(null);
             fetchData();
@@ -116,34 +127,131 @@ export default function AdminAllocations() {
 
             {/* Revoke Modal */}
             {confirmRevoke && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4 animate-in zoom-in-95 duration-300">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full mx-4 border border-black/5 animate-in zoom-in-95 duration-300">
+                        {/* Header */}
+                        <div className="flex items-start gap-4 mb-6">
+                            <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
                                 <AlertTriangle className="w-6 h-6 text-red-600" />
                             </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-heading">Revoke Allocation</h3>
-                                <p className="text-sm text-muted">This action cannot be undone</p>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-xl font-black text-heading tracking-tight">Revoke Bed Allocation</h3>
+                                <p className="text-xs text-muted font-semibold uppercase tracking-wider mt-0.5">Hostel & Housing Services</p>
                             </div>
                         </div>
-                        <p className="text-sm text-body font-medium mb-2">
-                            Are you sure you want to revoke <span className="font-bold text-heading">{confirmRevoke.full_name}</span>'s allocation?
-                        </p>
-                        <p className="text-xs text-muted font-medium mb-6">
-                            {confirmRevoke.hostel_name} — Room {confirmRevoke.room_number}, Bed {confirmRevoke.bed_number}
-                        </p>
+
+                        {/* Student Details Card */}
+                        <div className="p-4 rounded-2xl bg-surface-2 border border-black/5 space-y-2 mb-6">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-muted uppercase tracking-widest">Student</span>
+                                <span className="font-mono text-xs font-bold text-heading">{confirmRevoke.identifier}</span>
+                            </div>
+                            <p className="text-base font-black text-heading">{confirmRevoke.full_name}</p>
+                            
+                            <div className="h-px bg-black/5 my-2" />
+                            
+                            <div className="flex justify-between text-xs font-semibold text-body">
+                                <span>Hostel / Room:</span>
+                                <span className="text-heading font-bold">{confirmRevoke.hostel_name} &bull; Room {confirmRevoke.room_number}</span>
+                            </div>
+                            <div className="flex justify-between text-xs font-semibold text-body">
+                                <span>Bed Space:</span>
+                                <span className="text-heading font-bold">Bed {confirmRevoke.bed_number}</span>
+                            </div>
+                        </div>
+
+                        {/* Payment Status Info */}
+                        <div className={`p-4 rounded-2xl border mb-6 flex items-start gap-3 ${
+                            confirmRevoke.has_paid
+                                ? 'bg-red-50/50 border-red-200 text-red-700'
+                                : 'bg-lime-soft border-lime-border text-forest'
+                        }`}>
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs uppercase ${
+                                confirmRevoke.has_paid ? 'bg-red-100 text-red-700' : 'bg-lime/20 text-forest'
+                            }`}>
+                                {confirmRevoke.has_paid ? 'Paid' : 'Unpaid'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold uppercase tracking-wider">
+                                    {confirmRevoke.has_paid ? 'Enforced Revocation Criteria' : 'No Payment Confirmed'}
+                                </p>
+                                <p className="text-xs font-medium mt-1 leading-relaxed text-black/60">
+                                    {confirmRevoke.has_paid
+                                        ? 'This student has completed payment. Institutional criteria must be met, and a formal explanation and notification will be sent automatically via email.'
+                                        : 'Student has not paid. Allocation can be revoked immediately. An email notification will still be dispatched.'
+                                    }
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Inputs */}
+                        <div className="space-y-4 mb-6">
+                            {/* Reason Selector */}
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-bold text-muted uppercase tracking-widest">
+                                    Revocation Reason {confirmRevoke.has_paid && <span className="text-red-500">*</span>}
+                                </label>
+                                <select
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold text-heading bg-transparent focus:outline-none focus:ring-2 focus:ring-forest/20 focus:border-forest transition-all"
+                                    value={selectedReason}
+                                    onChange={e => setSelectedReason(e.target.value)}
+                                    required={confirmRevoke.has_paid}
+                                >
+                                    <option value="" disabled={confirmRevoke.has_paid}>
+                                        {confirmRevoke.has_paid ? '-- Select Required Reason --' : '-- Optional Reason (Default: Admin Override) --'}
+                                    </option>
+                                    <option value="leaving_school">Student Leaving the School / Graduating</option>
+                                    <option value="suspension">Academic / Disciplinary Suspension</option>
+                                    <option value="disciplinary">Disciplinary Action</option>
+                                    <option value="medical">Medical Reasons</option>
+                                    <option value="transfer">Transfer to Another Campus / School</option>
+                                    <option value="admin_override">Administrative Override / Correction</option>
+                                    <option value="other">Other / Custom</option>
+                                </select>
+                            </div>
+
+                            {/* Notes Textarea */}
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-bold text-muted uppercase tracking-widest">
+                                    Detailed Notes / Explanation {confirmRevoke.has_paid && <span className="text-red-500">*</span>}
+                                </label>
+                                <textarea
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-medium text-heading bg-transparent focus:outline-none focus:ring-2 focus:ring-forest/20 focus:border-forest transition-all min-h-[90px]"
+                                    placeholder={confirmRevoke.has_paid ? "Explain why this allocation is being revoked. Must be at least 10 characters." : "Optional administrative notes..."}
+                                    value={revocationNotes}
+                                    onChange={e => setRevocationNotes(e.target.value)}
+                                    maxLength={500}
+                                />
+                                {confirmRevoke.has_paid && (
+                                    <p className="text-[10px] text-muted font-semibold">
+                                        {revocationNotes.trim().length >= 10
+                                            ? '✓ Character count condition met'
+                                            : `Requires at least ${10 - revocationNotes.trim().length} more characters.`
+                                        }
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
                         <div className="flex gap-3">
                             <button
-                                onClick={() => handleRevoke(confirmRevoke.id)}
-                                disabled={revoking === confirmRevoke.id}
-                                className={`flex-1 bg-red-600 text-white px-5 py-3 rounded-full font-bold shadow-lg transition-all ${revoking ? 'opacity-70 scale-95' : 'hover:bg-red-700 hover:scale-[1.02]'}`}
+                                onClick={() => handleRevoke(confirmRevoke.id, selectedReason, revocationNotes)}
+                                disabled={
+                                    revoking === confirmRevoke.id ||
+                                    (confirmRevoke.has_paid && (!selectedReason || revocationNotes.trim().length < 10))
+                                }
+                                className={`flex-1 bg-red-600 text-white px-5 py-3.5 rounded-full font-bold shadow-lg shadow-red-600/10 transition-all ${
+                                    revoking || (confirmRevoke.has_paid && (!selectedReason || revocationNotes.trim().length < 10))
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : 'hover:bg-red-700 hover:scale-[1.02] active:scale-[0.98]'
+                                }`}
                             >
-                                {revoking === confirmRevoke.id ? 'Revoking...' : 'Yes, Revoke'}
+                                {revoking === confirmRevoke.id ? 'Revoking Allocation...' : 'Revoke & Send Email'}
                             </button>
                             <button
                                 onClick={() => setConfirmRevoke(null)}
-                                className="flex-1 bg-surface text-heading px-5 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                                className="flex-1 bg-surface text-heading px-5 py-3.5 rounded-full font-bold hover:bg-black/5 active:scale-[0.98] transition-all"
                             >
                                 Cancel
                             </button>
@@ -207,6 +315,7 @@ export default function AdminAllocations() {
                                             docs={studentDocs[s.id]}
                                             docLoading={docLoading && expandedRow === s.id}
                                             colSpan={7}
+                                            level={s.level}
                                         >
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
@@ -251,7 +360,7 @@ export default function AdminAllocations() {
                                         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-surface text-body">{s.department || '—'}</span>
                                     </div>
                                     {expandedRow === s.id && (
-                                        <DocumentPanel docs={studentDocs[s.id]} loading={docLoading && expandedRow === s.id} />
+                                        <DocumentPanel docs={studentDocs[s.id]} loading={docLoading && expandedRow === s.id} level={s.level} />
                                     )}
                                 </div>
                             ))}
@@ -290,6 +399,7 @@ export default function AdminAllocations() {
                                             docs={studentDocs[a.student_id]}
                                             docLoading={docLoading && expandedRow === a.student_id}
                                             colSpan={8}
+                                            level={a.level}
                                         >
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
@@ -346,7 +456,7 @@ export default function AdminAllocations() {
                                         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-lime/10 text-lime">Bed {a.bed_number}</span>
                                     </div>
                                     {expandedRow === a.student_id && (
-                                        <DocumentPanel docs={studentDocs[a.student_id]} loading={docLoading && expandedRow === a.student_id} />
+                                        <DocumentPanel docs={studentDocs[a.student_id]} loading={docLoading && expandedRow === a.student_id} level={a.level} />
                                     )}
                                 </div>
                             ))}
@@ -451,7 +561,7 @@ export default function AdminAllocations() {
 
 /* ── Sub-components ── */
 
-function ExpandableStudentRow({ isExpanded, onToggle, docs, docLoading, colSpan, children }) {
+function ExpandableStudentRow({ isExpanded, onToggle, docs, docLoading, colSpan, level, children }) {
     return (
         <>
             <tr
@@ -468,7 +578,7 @@ function ExpandableStudentRow({ isExpanded, onToggle, docs, docLoading, colSpan,
             {isExpanded && (
                 <tr className="border-b border-black/5">
                     <td colSpan={colSpan} className="px-6 py-4 bg-surface/30">
-                        <DocumentPanel docs={docs} loading={docLoading} />
+                        <DocumentPanel docs={docs} loading={docLoading} level={level} />
                     </td>
                 </tr>
             )}
@@ -476,7 +586,7 @@ function ExpandableStudentRow({ isExpanded, onToggle, docs, docLoading, colSpan,
     );
 }
 
-function DocumentPanel({ docs, loading }) {
+function DocumentPanel({ docs, loading, level }) {
     if (loading) {
         return (
             <div className="flex items-center gap-3 py-4">
@@ -486,11 +596,17 @@ function DocumentPanel({ docs, loading }) {
         );
     }
 
+    const requiresDocs = ['ND1', 'ND2', 'HND1', 'HND2'].includes(level);
+
     if (!docs || docs.length === 0) {
         return (
             <div className="flex items-center gap-3 py-4">
                 <FileText className="w-5 h-5 text-muted" />
-                <span className="text-sm font-medium text-muted">No eligibility documents uploaded yet.</span>
+                <span className="text-sm font-medium text-muted">
+                    {requiresDocs 
+                        ? "No eligibility documents uploaded yet." 
+                        : "No eligibility documents required for this student's level."}
+                </span>
             </div>
         );
     }

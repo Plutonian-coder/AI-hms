@@ -15,9 +15,9 @@ from services.audit_logger import log_event, REGISTER_IMPORTED
 
 router = APIRouter(prefix="/api/v1/admin/register", tags=["register_import"])
 
-REQUIRED_COLUMNS = {"matric_number", "surname", "first_name", "gender", "department", "level", "study_type"}
+REQUIRED_COLUMNS = {"matric_number", "surname", "first_name", "gender", "department", "level", "study_type", "email"}
 VALID_GENDERS = {"male", "female"}
-VALID_STUDY_TYPES = {"Full-time", "Part-time", "Sandwich"}
+VALID_STUDY_TYPES = {"Full-time", "Part-time", "CODFEL"}
 
 
 def _get_active_session(cur):
@@ -77,7 +77,12 @@ async def upload_register_csv(file: UploadFile = File(...), admin=Depends(get_cu
             errors.append(f"Row {i}: invalid gender '{gender}' (must be male/female)")
             continue
         if study_type not in VALID_STUDY_TYPES:
-            errors.append(f"Row {i}: invalid study_type '{study_type}' (must be Full-time/Part-time/Sandwich)")
+            errors.append(f"Row {i}: invalid study_type '{study_type}' (must be Full-time/Part-time/CODFEL)")
+            continue
+
+        email = row.get("email", "").strip().lower()
+        if not email:
+            errors.append(f"Row {i}: email is blank — required for system notifications")
             continue
 
         rows.append({
@@ -89,6 +94,7 @@ async def upload_register_csv(file: UploadFile = File(...), admin=Depends(get_cu
             "level": row.get("level", ""),
             "study_type": study_type,
             "faculty": row.get("faculty", ""),
+            "email": email,
         })
 
     return {
@@ -129,8 +135,8 @@ def confirm_register_import(body: dict, admin=Depends(get_current_admin)):
                     cur.execute(
                         """INSERT INTO session_register
                            (session_id, matric_number, surname, first_name, gender,
-                            department, level, study_type, faculty)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            department, level, study_type, faculty, email)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                            ON CONFLICT (session_id, matric_number) DO UPDATE SET
                                surname = EXCLUDED.surname,
                                first_name = EXCLUDED.first_name,
@@ -138,7 +144,8 @@ def confirm_register_import(body: dict, admin=Depends(get_current_admin)):
                                department = EXCLUDED.department,
                                level = EXCLUDED.level,
                                study_type = EXCLUDED.study_type,
-                               faculty = EXCLUDED.faculty
+                               faculty = EXCLUDED.faculty,
+                               email = EXCLUDED.email
                         """,
                         (
                             session_id,
@@ -150,6 +157,7 @@ def confirm_register_import(body: dict, admin=Depends(get_current_admin)):
                             row.get("level", ""),
                             row.get("study_type", "Full-time"),
                             row.get("faculty", ""),
+                            row.get("email", ""),
                         ),
                     )
                     imported += 1
@@ -208,6 +216,7 @@ def add_single_student(body: dict, admin=Depends(get_current_admin)):
     level = (body.get("level") or "").strip()
     study_type = (body.get("study_type") or "").strip()
     faculty = (body.get("faculty") or "").strip()
+    email = (body.get("email") or "").strip().lower()
 
     if not matric:
         raise HTTPException(status_code=400, detail="Matric number is required")
@@ -217,14 +226,16 @@ def add_single_student(body: dict, admin=Depends(get_current_admin)):
         raise HTTPException(status_code=400, detail=f"Gender must be male or female, got '{gender}'")
     if study_type not in VALID_STUDY_TYPES:
         raise HTTPException(status_code=400, detail=f"Study type must be Full-time, Part-time, or Sandwich")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required — it will receive system notifications")
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO session_register
                    (session_id, matric_number, surname, first_name, gender,
-                    department, level, study_type, faculty)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    department, level, study_type, faculty, email)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (session_id, matric_number) DO UPDATE SET
                        surname = EXCLUDED.surname,
                        first_name = EXCLUDED.first_name,
@@ -232,10 +243,11 @@ def add_single_student(body: dict, admin=Depends(get_current_admin)):
                        department = EXCLUDED.department,
                        level = EXCLUDED.level,
                        study_type = EXCLUDED.study_type,
-                       faculty = EXCLUDED.faculty
+                       faculty = EXCLUDED.faculty,
+                       email = EXCLUDED.email
                 """,
                 (session[0], matric, surname, first_name, gender,
-                 department, level, study_type, faculty),
+                 department, level, study_type, faculty, email),
             )
             conn.commit()
 
@@ -255,9 +267,9 @@ def download_csv_template():
     """Return a CSV template with required headers and sample rows."""
     from fastapi.responses import Response
 
-    header = "matric_number,surname,first_name,gender,department,level,study_type,faculty\n"
-    sample1 = "FPT/CSC/25/0001,Doe,John,male,Computer Science,100L,Full-time,Science\n"
-    sample2 = "FPT/CSC/25/0002,Smith,Jane,female,Mathematics,200L,Part-time,Science\n"
+    header = "matric_number,surname,first_name,gender,department,level,study_type,faculty,email\n"
+    sample1 = "FPT/CSC/25/0001,Doe,John,male,Computer Science,100L,Full-time,Science,john.doe@student.edu.ng\n"
+    sample2 = "FPT/CSC/25/0002,Smith,Jane,female,Mathematics,200L,Part-time,Science,jane.smith@student.edu.ng\n"
 
     return Response(
         content=header + sample1 + sample2,

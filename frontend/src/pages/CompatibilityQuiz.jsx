@@ -134,7 +134,7 @@ export default function CompatibilityQuiz() {
     // Already completed quiz
     if (quizCompleted) {
         return (
-            <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-lime/10 border border-lime/30 rounded-2xl p-6 flex items-start gap-4">
                     <CheckCircle className="w-6 h-6 text-lime shrink-0 mt-0.5" />
                     <div>
@@ -152,7 +152,7 @@ export default function CompatibilityQuiz() {
     // Showing SSE pipeline (submission in progress or complete)
     if (submitting || steps.length > 0 || pipelineResult || pipelineError) {
         return (
-            <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div>
                     <h1 className="text-3xl font-extrabold text-heading tracking-tight">AI Allocation</h1>
                     <p className="text-muted mt-2 font-medium">Matching you with compatible roommates...</p>
@@ -281,7 +281,7 @@ export default function CompatibilityQuiz() {
     const allAnswered = answers.every(a => a !== null);
 
     return (
-        <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+        <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
             <div>
                 <h1 className="text-3xl font-extrabold text-heading tracking-tight flex items-center gap-3">
                     <ClipboardCheck className="w-8 h-8 text-forest" />

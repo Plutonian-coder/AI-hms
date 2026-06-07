@@ -1,18 +1,35 @@
 """
-OCR Service — AI-powered receipt validation and RRR extraction using Gemini Vision.
+Receipt Validation Service — AI-powered receipt validation and RRR extraction.
 
 This service does TWO things in a single Gemini call:
 1. Verifies the image looks like a legitimate Remita/school fee receipt
 2. Extracts the 12-digit RRR number if the receipt passes validation
+
+12-Factor Compliant:
+  - Factor IV:  Lazy Gemini initialization
+  - Factor XI:  Structured logging to stdout
 """
 import re
 import json
-import google.generativeai as genai
-from PIL import Image
-from config import GEMINI_API_KEY
+import logging
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
+logger = logging.getLogger(__name__)
+
+# ── Lazy Gemini initialization (Factor IV) ───────────────────────────────────
+_model = None
+
+
+def _get_model():
+    """Lazy-init Gemini model — only created on first use."""
+    global _model
+    if _model is None:
+        import google.generativeai as genai
+        from config import GEMINI_API_KEY
+        genai.configure(api_key=GEMINI_API_KEY)
+        _model = genai.GenerativeModel("gemini-2.5-flash")
+        logger.info("Gemini model initialized for receipt validation")
+    return _model
+
 
 VALIDATION_PROMPT = """You are a fraud detection AI for a Nigerian university hostel payment system.
 
@@ -48,12 +65,14 @@ Rules:
 
 def extract_rrr(image_path: str) -> dict:
     """
-    Use Gemini Vision to validate receipt authenticity AND extract the RRR.
+    Use Gemini to validate receipt authenticity AND extract the RRR.
 
     Returns a dict:
         {"is_authentic": bool, "rrr": str|None, "rejection_reason": str|None}
     """
     try:
+        from PIL import Image
+        model = _get_model()
         img = Image.open(image_path)
         response = model.generate_content([VALIDATION_PROMPT, img])
         text = response.text.strip()
@@ -78,8 +97,8 @@ def extract_rrr(image_path: str) -> dict:
         }
 
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"Gemini OCR parse error: {e} — raw: {text}")
+        logger.error("Receipt validation parse error: %s — raw: %s", e, text)
         return {"is_authentic": False, "rrr": None, "rejection_reason": "AI could not process this image. Please upload a clearer receipt."}
     except Exception as e:
-        print(f"Gemini OCR error: {e}")
+        logger.error("Receipt validation error: %s", e, exc_info=True)
         return {"is_authentic": False, "rrr": None, "rejection_reason": "Receipt processing failed. Please try again."}

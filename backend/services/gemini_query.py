@@ -19,7 +19,7 @@ Tables:
 - blocks (id, hostel_id, name, status) — FK hostel_id → hostels
 - rooms (id, block_id, room_number, status) — FK block_id → blocks
 - beds (id, room_id, bed_number, status) — FK room_id → rooms. Status: vacant/occupied/maintenance
-- fee_components (id, session_id, name, amount_fulltime, amount_parttime, amount_sandwich, applies_to, is_mandatory, sort_order) — FK session_id → academic_sessions. Amounts in kobo.
+- fee_components (id, session_id, name, amount_fulltime, amount_parttime, amount_codfel, applies_to, is_mandatory, sort_order) — FK session_id → academic_sessions. Amounts in kobo.
 - hostel_applications (id, student_id, session_id, choice_1_id, choice_2_id, choice_3_id, special_notes, status, submitted_at) — FK student_id → users, session_id → academic_sessions
 - confirmed_payments (id, student_id, session_id, hms_reference, paystack_id, total_amount_kobo, payment_channel, paystack_status, status, confirmed_at) — FK student_id → users, session_id → academic_sessions
 - payment_component_log (id, payment_id, component_id, component_name, amount_kobo) — FK payment_id → confirmed_payments

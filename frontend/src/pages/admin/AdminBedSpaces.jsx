@@ -37,9 +37,9 @@ export default function AdminBedSpaces() {
                     How to generate bed spaces
                 </p>
                 <ol className="list-decimal list-inside mt-2 space-y-1 text-sm text-white/80">
-                    <li>Go to <strong className="text-white">Hostel Management</strong> and click "Manage Blocks" on a hostel.</li>
-                    <li>Create a block (e.g. "Block A").</li>
-                    <li>Click "Generate Rooms" on the block — min <strong className="text-lime">4</strong>, max <strong className="text-lime">50</strong> rooms · max <strong className="text-lime">8</strong> beds per room.</li>
+                    <li>Go to <strong className="text-white">Hostel Management</strong> and click the <strong className="text-lime">"Blocks"</strong> button on a hostel card.</li>
+                    <li>Click <strong className="text-white">"+ Add Block"</strong> to create a block (e.g. "Block A").</li>
+                    <li>Click <strong className="text-white">"Generate Rooms"</strong> on the block — min <strong className="text-lime">4</strong>, max <strong className="text-lime">50</strong> rooms · min <strong className="text-lime">1</strong>, max <strong className="text-lime">8</strong> beds per room.</li>
                 </ol>
             </div>
 
@@ -102,7 +102,7 @@ export default function AdminBedSpaces() {
                     })}
                     {hostels.length === 0 && (
                         <div className="p-8 text-center text-muted font-medium">
-                            No hostels found. Run the v3 migration to seed the database.
+                            No hostels found. Go to Hostel Management to create your first hostel.
                         </div>
                     )}
                 </div>

@@ -4,22 +4,26 @@ frontend/node_modules/
 
 # Build output
 frontend/dist/
+dist/
 
 # Python
 backend/venv/
 backend/__pycache__/
 backend/routers/__pycache__/
 backend/services/__pycache__/
+backend/scripts/__pycache__/
 __pycache__/
 *.pyc
 *.pyo
 
-# Environment variables
+# Environment variables (NEVER commit secrets — Factor III)
 backend/.env
+frontend/.env
 .env
 
-# Uploads (user-generated content)
+# Uploads (user-generated content — Factor VI)
 backend/uploads/
+uploads/
 
 # IDE
 .vscode/
@@ -30,7 +34,11 @@ backend/uploads/
 
 # OS
 Thumbs.db
-nul
-err.txt
-err2.txt
-test_cors_out_now.txt
+
+# Docker
+docker-compose.override.yml
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage

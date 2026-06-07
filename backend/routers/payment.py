@@ -12,7 +12,7 @@ import hmac
 import hashlib
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from database import get_cursor, get_connection
 from dependencies import get_current_student
 from config import PAYSTACK_SECRET_KEY, PAYSTACK_CALLBACK_URL
@@ -48,7 +48,7 @@ def _compute_fee(session_id: int, study_type: str, level: str):
     amount_col = {
         "Full-time": "amount_fulltime",
         "Part-time": "amount_parttime",
-        "Sandwich": "amount_sandwich",
+        "CODFEL": "amount_codfel",
     }.get(study_type, "amount_fulltime")
 
     is_fresher = level in ("100L", "ND1")
@@ -68,7 +68,7 @@ def _compute_fee(session_id: int, study_type: str, level: str):
             continue
         if applies_to == "parttime_only" and study_type != "Part-time":
             continue
-        if applies_to == "sandwich_only" and study_type != "Sandwich":
+        if applies_to == "codfel_only" and study_type != "CODFEL":
             continue
         if applies_to == "freshers_only" and not is_fresher:
             continue
@@ -106,12 +106,18 @@ def initialize_payment(student=Depends(get_current_student)):
         cur.execute(
             """SELECT id, choice_1_id, choice_2_id, choice_3_id
                FROM hostel_applications
-               WHERE student_id = %s AND session_id = %s AND status = 'submitted'""",
+               WHERE student_id = %s AND session_id = %s AND status = 'ready_for_allocation'""",
             (student_id, session_id),
         )
         app_row = cur.fetchone()
         if not app_row:
             raise HTTPException(status_code=403, detail="You need to submit a hostel application first.")
+
+        # Clean up any failed pending payment attempts (where paystack_id was never generated)
+        cur.execute(
+            "DELETE FROM confirmed_payments WHERE student_id = %s AND session_id = %s AND status = 'pending' AND paystack_id IS NULL",
+            (student_id, session_id),
+        )
 
         # Must not already have a confirmed payment
         cur.execute(
@@ -149,52 +155,64 @@ def initialize_payment(student=Depends(get_current_student)):
     # Generate HMS reference early (to include in metadata)
     hms_ref = generate_hms_reference(year_end or 2026)
 
-    # Create pending confirmed_payment record
-    with get_cursor() as cur:
-        cur.execute(
-            """INSERT INTO confirmed_payments
-               (student_id, session_id, hms_reference, total_amount_kobo, status)
-               VALUES (%s, %s, %s, %s, 'pending') RETURNING id""",
-            (student_id, session_id, hms_ref, total_kobo),
-        )
-        payment_id = cur.fetchone()[0]
+    # Create pending confirmed_payment record and initialize Paystack in a single transaction.
+    # If the Paystack call or authorization fails, the database transaction is automatically rolled back.
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO confirmed_payments
+                   (student_id, session_id, hms_reference, total_amount_kobo, status)
+                   VALUES (%s, %s, %s, %s, 'pending') RETURNING id""",
+                (student_id, session_id, hms_ref, total_kobo),
+            )
+            payment_id = cur.fetchone()[0]
 
-    # Initialize Paystack
-    with httpx.Client() as client:
-        resp = client.post(
-            f"{PAYSTACK_BASE}/transaction/initialize",
-            json={
-                "email": email,
-                "amount": total_kobo,
-                "callback_url": PAYSTACK_CALLBACK_URL,
-                "metadata": {
-                    "student_id": student_id,
-                    "session_id": session_id,
-                    "payment_id": payment_id,
-                    "hms_reference": hms_ref,
-                    "student_name": f"{surname} {first_name}",
-                },
-            },
-            headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
-            timeout=30,
-        )
+            # Initialize Paystack
+            try:
+                with httpx.Client() as client:
+                    resp = client.post(
+                        f"{PAYSTACK_BASE}/transaction/initialize",
+                        json={
+                            "email": email,
+                            "amount": total_kobo,
+                            "callback_url": PAYSTACK_CALLBACK_URL,
+                            "metadata": {
+                                "student_id": student_id,
+                                "session_id": session_id,
+                                "payment_id": payment_id,
+                                "hms_reference": hms_ref,
+                                "student_name": f"{surname} {first_name}",
+                            },
+                        },
+                        headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
+                        timeout=30,
+                    )
+            except Exception as e:
+                print(f"Paystack request failed to connect: {e}", flush=True)
+                raise HTTPException(
+                    status_code=502,
+                    detail="Paystack gateway is unreachable. Please verify your internet connection."
+                )
 
-    if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="Failed to initialize payment with Paystack.")
+            if resp.status_code != 200:
+                print(f"Paystack initialization failed. Status: {resp.status_code}, Response: {resp.text}", flush=True)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to initialize payment with Paystack. Code: {resp.status_code}. Response: {resp.text}"
+                )
 
-    data = resp.json()
-    if not data.get("status"):
-        raise HTTPException(status_code=502, detail=data.get("message", "Paystack initialization failed."))
+            data = resp.json()
+            if not data.get("status"):
+                raise HTTPException(status_code=502, detail=data.get("message", "Paystack initialization failed."))
 
-    reference = data["data"]["reference"]
-    authorization_url = data["data"]["authorization_url"]
+            reference = data["data"]["reference"]
+            authorization_url = data["data"]["authorization_url"]
 
-    # Store Paystack reference
-    with get_cursor() as cur:
-        cur.execute(
-            "UPDATE confirmed_payments SET paystack_id = %s WHERE id = %s",
-            (reference, payment_id),
-        )
+            # Store Paystack reference
+            cur.execute(
+                "UPDATE confirmed_payments SET paystack_id = %s WHERE id = %s",
+                (reference, payment_id),
+            )
 
     log_event(
         PAYMENT_INITIALIZED, "student", student["identifier"],
@@ -392,6 +410,29 @@ async def paystack_webhook(request: Request):
     return {"status": "already processed or error"}
 
 
+@router.post("/cancel-pending")
+def cancel_pending_payment(student=Depends(get_current_student)):
+    """Cancel a stale pending payment so the student can retry."""
+    student_id = student["user_id"]
+
+    with get_cursor() as cur:
+        cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+        sess = cur.fetchone()
+        if not sess:
+            raise HTTPException(status_code=400, detail="No active session.")
+
+        cur.execute(
+            "DELETE FROM confirmed_payments WHERE student_id = %s AND session_id = %s AND status = 'pending'",
+            (student_id, sess[0]),
+        )
+        deleted = cur.rowcount
+
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="No pending payment to cancel.")
+
+    return {"message": "Pending payment cancelled. You can now retry."}
+
+
 @router.get("/status")
 def get_payment_status(student=Depends(get_current_student)):
     """Check payment status for the current session."""
@@ -406,7 +447,7 @@ def get_payment_status(student=Depends(get_current_student)):
         cur.execute(
             """SELECT id, hms_reference, total_amount_kobo, status, payment_channel, confirmed_at, paystack_id
                FROM confirmed_payments
-               WHERE student_id = %s AND session_id = %s
+               WHERE student_id = %s AND session_id = %s AND (status != 'pending' OR paystack_id IS NOT NULL)
                ORDER BY id DESC LIMIT 1""",
             (student_id, sess[0]),
         )
@@ -492,4 +533,25 @@ def get_receipt(student=Depends(get_current_student)):
         ],
         "hostel_choices": [c for c in choices if c] if choices else [],
     }
+
+
+@router.get("/receipt/pdf")
+def download_receipt_pdf(student=Depends(get_current_student)):
+    """Generate and return the receipt as a downloadable PDF."""
+    # Reuse the receipt data helper
+    receipt_data = get_receipt(student)
+
+    from services.receipt_pdf import generate_receipt_pdf
+    pdf_bytes = generate_receipt_pdf(receipt_data)
+
+    hms_ref = receipt_data.get("hms_reference", "receipt").replace("/", "-")
+    filename = f"HMS_Receipt_{hms_ref}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 

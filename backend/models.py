@@ -10,7 +10,7 @@ from typing import List, Optional
 class UserRegister(BaseModel):
     identifier: str                                   # matric number
     password: str = Field(..., min_length=8)
-    email: str = ""
+    email: str = Field(..., min_length=1)              # required — receives system notifications
     phone: str = ""
     next_of_kin_name: str = ""
     next_of_kin_phone: str = ""
@@ -65,8 +65,8 @@ class FeeComponentCreate(BaseModel):
     name: str
     amount_fulltime: int = 0           # kobo
     amount_parttime: int = 0
-    amount_sandwich: int = 0
-    applies_to: str = Field(default="all", pattern="^(all|fulltime_only|parttime_only|sandwich_only|freshers_only)$")
+    amount_codfel: int = 0
+    applies_to: str = Field(default="all", pattern="^(all|fulltime_only|parttime_only|codfel_only|freshers_only)$")
     is_mandatory: bool = True
     sort_order: int = 0
 
@@ -75,7 +75,7 @@ class FeeComponentUpdate(BaseModel):
     name: Optional[str] = None
     amount_fulltime: Optional[int] = None
     amount_parttime: Optional[int] = None
-    amount_sandwich: Optional[int] = None
+    amount_codfel: Optional[int] = None
     applies_to: Optional[str] = None
     is_mandatory: Optional[bool] = None
     sort_order: Optional[int] = None

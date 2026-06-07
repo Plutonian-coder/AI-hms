@@ -1,29 +1,40 @@
 """
-Allocation Router — Dashboard, allocation details, hostel listing, profile updates.
+Allocation Router — Dashboard, allocation details, hostel listing, profile updates, photo upload.
 
 The actual allocation is triggered by the quiz router (quiz.py).
 This router provides read endpoints for the student portal.
 """
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import uuid
+import logging
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 
 from database import get_cursor
 from dependencies import get_current_student
+from config import UPLOAD_DIR
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/allocation", tags=["allocation"])
+
+PHOTO_DIR = os.path.join(UPLOAD_DIR, "photos")
+ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_PHOTO_SIZE = 2 * 1024 * 1024  # 2MB
 
 
 # ── Public: Check allocation by matric ───────────────────────────────────────
 
 @router.get("/check")
 def check_allocation_public(matric: str):
-    """Public endpoint — check allocation status by matric number."""
+    """Public endpoint — check allocation status by matric number or name."""
     with get_cursor() as cur:
         cur.execute("""
             SELECT u.surname, u.first_name, u.department, u.level,
                    h.name, bl.name, r.room_number, b.bed_number, r.id,
-                   a.avg_compatibility_score, a.matched_from_preference
+                   a.avg_compatibility_score, a.matched_from_preference, u.id
             FROM users u
             JOIN allocations a ON a.student_id = u.id AND a.status = 'active'
             JOIN academic_sessions sess ON sess.id = a.session_id AND sess.is_active = TRUE
@@ -31,14 +42,17 @@ def check_allocation_public(matric: str):
             JOIN rooms r ON r.id = b.room_id
             JOIN blocks bl ON bl.id = r.block_id
             JOIN hostels h ON h.id = bl.hostel_id
-            WHERE LOWER(u.identifier) = LOWER(%s)
-        """, (matric.strip(),))
+            WHERE LOWER(TRIM(u.identifier)) = LOWER(TRIM(%s))
+               OR LOWER(TRIM(u.surname || ' ' || u.first_name)) = LOWER(TRIM(%s))
+               OR LOWER(TRIM(u.first_name || ' ' || u.surname)) = LOWER(TRIM(%s))
+        """, (matric.strip(), matric.strip(), matric.strip()))
         row = cur.fetchone()
 
     if not row:
         return {"found": False}
 
     room_id = row[8]
+    user_id = row[11]
 
     with get_cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM beds WHERE room_id = %s", (room_id,))
@@ -50,8 +64,8 @@ def check_allocation_public(matric: str):
             JOIN beds b2 ON b2.id = a2.bed_id
             JOIN users u ON u.id = a2.student_id
             JOIN academic_sessions s ON s.id = a2.session_id AND s.is_active = TRUE
-            WHERE b2.room_id = %s AND LOWER(u.identifier) != LOWER(%s) AND a2.status = 'active'
-        """, (room_id, matric.strip()))
+            WHERE b2.room_id = %s AND u.id != %s AND a2.status = 'active'
+        """, (room_id, user_id))
         roommate_rows = cur.fetchall()
 
     return {
@@ -82,18 +96,22 @@ def get_student_dashboard(student=Depends(get_current_student)):
     with get_cursor() as cur:
         cur.execute(
             """SELECT identifier, surname, first_name, gender, department, level,
-                      email, phone, next_of_kin_name, next_of_kin_phone, study_type
+                      email, phone, next_of_kin_name, next_of_kin_phone, study_type,
+                      passport_photo_url
                FROM users WHERE id = %s""",
             (student_id,),
         )
         p = cur.fetchone()
 
     profile = {
+        "user_id": student_id,
         "identifier": p[0], "surname": p[1], "first_name": p[2],
         "full_name": f"{p[1]} {p[2]}", "gender": p[3],
         "department": p[4], "level": p[5], "email": p[6], "phone": p[7],
         "next_of_kin_name": p[8], "next_of_kin_phone": p[9],
         "study_type": p[10] or "Full-time",
+        "passport_photo_url": p[11],
+        "photo_url": f"/api/v1/allocation/photo/{student_id}" if p[11] else None,
     } if p else {}
 
     # Session
@@ -265,6 +283,61 @@ def update_profile(data: ProfileUpdate, student=Depends(get_current_student)):
         cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", params)
 
     return {"message": "Profile updated"}
+
+
+# ── Photo Upload ─────────────────────────────────────────────────────────────
+
+@router.post("/photo")
+async def upload_photo(file: UploadFile = File(...), student=Depends(get_current_student)):
+    """Upload or replace passport photo."""
+    if file.content_type not in ALLOWED_PHOTO_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, or WebP images are allowed.")
+
+    contents = await file.read()
+    if len(contents) > MAX_PHOTO_SIZE:
+        raise HTTPException(status_code=400, detail="Photo must be under 2MB.")
+
+    os.makedirs(PHOTO_DIR, exist_ok=True)
+
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
+    filename = f"{student['user_id']}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(PHOTO_DIR, filename)
+
+    # Delete old photo if exists
+    with get_cursor() as cur:
+        cur.execute("SELECT passport_photo_url FROM users WHERE id = %s", (student["user_id"],))
+        old_row = cur.fetchone()
+        if old_row and old_row[0]:
+            old_path = os.path.join(UPLOAD_DIR, old_row[0])
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    relative_path = f"photos/{filename}"
+    with get_cursor() as cur:
+        cur.execute("UPDATE users SET passport_photo_url = %s WHERE id = %s", (relative_path, student["user_id"]))
+
+    logger.info("Photo uploaded for user %s: %s", student["user_id"], relative_path)
+    return {"message": "Photo uploaded", "photo_url": f"/api/v1/allocation/photo/{student['user_id']}"}
+
+
+@router.get("/photo/{user_id}")
+def get_photo(user_id: int):
+    """Serve a student's passport photo."""
+    with get_cursor() as cur:
+        cur.execute("SELECT passport_photo_url FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="No photo found")
+
+    filepath = os.path.join(UPLOAD_DIR, row[0])
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Photo file not found")
+
+    return FileResponse(filepath)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
