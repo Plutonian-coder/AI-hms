@@ -20,7 +20,7 @@ const FONT_CLASS = {
 
 function load() {
     try {
-        const raw = localStorage.getItem('hms_settings');
+        const raw = localStorage.getItem('fuoye_settings');
         return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
     } catch {
         return { ...DEFAULTS };
@@ -28,7 +28,7 @@ function load() {
 }
 
 function save(settings) {
-    localStorage.setItem('hms_settings', JSON.stringify(settings));
+    localStorage.setItem('fuoye_settings', JSON.stringify(settings));
 }
 
 /** Apply font + dark-mode classes directly on <html> */

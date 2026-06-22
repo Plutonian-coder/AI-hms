@@ -32,6 +32,8 @@ export default function AdminStudents() {
             .catch(() => {});
     };
 
+    const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1').replace('/api/v1', '');
+
     const fetchStudents = (sessId) => {
         setLoading(true);
         const params = sessId ? `?session_id=${sessId}` : '';
@@ -252,9 +254,18 @@ export default function AdminStudents() {
                                             </td>
                                             <td className="px-5 py-3.5">
                                                 <div className="flex items-center gap-2.5">
-                                                    <div className="w-8 h-8 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-xs shrink-0 border border-forest/10">
-                                                        {s.full_name?.charAt(0) || '?'}
-                                                    </div>
+                                                    {s.photo_url ? (
+                                                        <img 
+                                                            src={API_BASE + s.photo_url} 
+                                                            alt="" 
+                                                            className="w-8 h-8 rounded-full object-cover border border-forest/10 shrink-0" 
+                                                            onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${s.full_name}&background=1B4332&color=fff&size=64`; }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-xs shrink-0 border border-forest/10">
+                                                            {s.full_name?.charAt(0) || '?'}
+                                                        </div>
+                                                    )}
                                                     <span className="font-semibold text-sm text-heading">{s.full_name}</span>
                                                 </div>
                                             </td>
@@ -343,9 +354,18 @@ export default function AdminStudents() {
                                     onClick={() => openProfile(s.id)}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-sm shrink-0">
-                                            {s.full_name?.charAt(0) || '?'}
-                                        </div>
+                                        {s.photo_url ? (
+                                            <img 
+                                                src={API_BASE + s.photo_url} 
+                                                alt="" 
+                                                className="w-9 h-9 rounded-full object-cover shrink-0" 
+                                                onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${s.full_name}&background=1B4332&color=fff&size=64`; }}
+                                            />
+                                        ) : (
+                                            <div className="w-9 h-9 rounded-full bg-forest/8 text-forest font-bold flex items-center justify-center text-sm shrink-0">
+                                                {s.full_name?.charAt(0) || '?'}
+                                            </div>
+                                        )}
                                         <div className="min-w-0 flex-1">
                                             <p className="font-bold text-sm text-heading truncate">{s.full_name}</p>
                                             <span className="inline-flex items-center mt-0.5 px-2 py-0.5 rounded-md bg-forest text-white text-[10px] font-bold font-mono">
@@ -429,9 +449,18 @@ export default function AdminStudents() {
                                             <>
                                                 {/* Quick Summary Card */}
                                                 <div className="glass-elevated p-5 rounded-2xl flex items-center gap-4">
-                                                    <div className="w-16 h-16 rounded-full bg-forest/8 text-forest font-black flex items-center justify-center text-2xl border border-forest/10 shrink-0">
-                                                        {profileData.first_name?.charAt(0) || '?'}
-                                                    </div>
+                                                    {profileData.photo_url ? (
+                                                        <img 
+                                                            src={API_BASE + profileData.photo_url} 
+                                                            alt={`${profileData.first_name} ${profileData.surname}`}
+                                                            className="w-16 h-16 rounded-full object-cover border border-forest/10 shrink-0 shadow-sm"
+                                                            onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${profileData.first_name}+${profileData.surname}&background=1B4332&color=fff&size=128`; }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-16 h-16 rounded-full bg-forest/8 text-forest font-black flex items-center justify-center text-2xl border border-forest/10 shrink-0">
+                                                            {profileData.first_name?.charAt(0) || '?'}
+                                                        </div>
+                                                    )}
                                                     <div className="min-w-0 flex-1">
                                                         <p className="font-extrabold text-lg text-heading leading-tight truncate">
                                                             {profileData.surname} {profileData.first_name}

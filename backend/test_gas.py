@@ -1,14 +1,27 @@
 import requests
+import json
+from config import GOOGLE_SCRIPT_URL
 
-url = "https://script.google.com/macros/s/AKfycbzoeLUwiJVzC8xaNcIuld0OZ4SahO7st6uaAvSLbmKa7E3ERWI5bz6OU4LOMgjye_Tg/exec"
+if not GOOGLE_SCRIPT_URL:
+    print("No GOOGLE_SCRIPT_URL configured.")
+    exit(1)
+
+print(f"Testing URL: {GOOGLE_SCRIPT_URL}")
 
 data = {
-    "to": "khalidyekini80@gmail.com",
-    "subject": "HMS Google Script Test",
-    "html": "<h3>Success!</h3><p>Your Google Apps Script webhook is working perfectly.</p>",
-    "senderName": "HMS System Admin"
+    "to": "yekeenkhalid363@gmail.com",
+    "subject": "Direct Webhook Test",
+    "html": "<h1>Test from Python</h1>",
+    "senderName": "Test Sender"
 }
 
-res = requests.post(url, json=data)
-print("Status Code:", res.status_code)
-print("Response Body:", res.text)
+print("Sending POST request...")
+res = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=30)
+print(f"Status Code: {res.status_code}")
+print(f"Response Headers: {res.headers}")
+print(f"Response Body (first 500 chars): {res.text[:500]}")
+
+try:
+    print(f"Parsed JSON: {res.json()}")
+except Exception as e:
+    print(f"Could not parse as JSON: {e}")

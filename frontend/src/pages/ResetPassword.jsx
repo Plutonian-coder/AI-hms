@@ -108,7 +108,7 @@ export default function ResetPassword() {
                         <p className="text-white/50 font-medium text-sm mt-2 max-w-xs mx-auto">
                             {success
                                 ? 'Your password has been changed successfully. You can now sign in with your new password.'
-                                : 'Create a new password for your HMS account. Must be at least 8 characters.'
+                                : 'Create a new password for your FUOYE Hostel Portal account. Must be at least 8 characters.'
                             }
                         </p>
                     </div>

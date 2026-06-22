@@ -7,20 +7,20 @@ This router provides read endpoints for the student portal.
 import os
 import uuid
 import logging
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 
 from database import get_cursor
 from dependencies import get_current_student
+from services.storage import upload_file_to_s3
 from config import UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/allocation", tags=["allocation"])
 
-PHOTO_DIR = os.path.join(UPLOAD_DIR, "photos")
 ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_PHOTO_SIZE = 2 * 1024 * 1024  # 2MB
 
@@ -85,6 +85,46 @@ def check_allocation_public(matric: str):
     }
 
 
+@router.get("/verify/{reference}")
+def verify_hostel_pass(reference: str):
+    """Public endpoint — verify hostel pass validity by payment reference."""
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT u.surname, u.first_name, u.identifier, u.department, u.level,
+                   h.name, bl.name, r.room_number, b.bed_number, u.passport_photo_url,
+                   sess.session_name
+            FROM confirmed_payments cp
+            JOIN allocations a ON a.student_id = cp.student_id AND a.session_id = cp.session_id AND a.status = 'active'
+            JOIN users u ON u.id = a.student_id
+            JOIN academic_sessions sess ON sess.id = a.session_id AND sess.is_active = TRUE
+            JOIN beds b ON b.id = a.bed_id
+            JOIN rooms r ON r.id = b.room_id
+            JOIN blocks bl ON bl.id = r.block_id
+            JOIN hostels h ON h.id = bl.hostel_id
+            JOIN payment_component_log pcl ON pcl.payment_id = cp.id
+            JOIN fee_components fc ON fc.id = pcl.component_id AND fc.fee_type = 'hostel'
+            WHERE cp.hms_reference = %s AND cp.status = 'confirmed'
+        """, (reference.strip(),))
+        row = cur.fetchone()
+
+    if not row:
+        return {"valid": False}
+
+    return {
+        "valid": True,
+        "student_name": f"{row[0]} {row[1]}",
+        "identifier": row[2],
+        "department": row[3],
+        "level": row[4],
+        "hostel_name": row[5],
+        "block_name": row[6],
+        "room_number": row[7],
+        "bed_number": row[8],
+        "photo_url": f"/api/v1/allocation/photo/{row[2]}" if row[9] else None, # Needs ID or Matric, we use proxy route below
+        "session_name": row[10]
+    }
+
+
 # ── Student Dashboard ────────────────────────────────────────────────────────
 
 @router.get("/dashboard")
@@ -138,7 +178,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
     application_status = None
     has_payment = False
     payment_status = None
-    hms_reference = None
+    fuoye_reference = None
     has_quiz = False
     has_allocation = False
     allocation = None
@@ -171,7 +211,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
             if app_pay_row:
                 app_payment_status = app_pay_row[0]
                 app_fee_paid = (app_payment_status == "confirmed")
-                hms_reference = app_pay_row[1]
+                fuoye_reference = app_pay_row[1]
 
             # Payment - Hostel Fee
             cur.execute(
@@ -189,7 +229,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
             if hostel_pay_row:
                 hostel_payment_status = hostel_pay_row[0]
                 hostel_fee_paid = (hostel_payment_status == "confirmed")
-                hms_reference = hostel_pay_row[1]
+                fuoye_reference = hostel_pay_row[1]
 
             # Quiz
             cur.execute(
@@ -215,7 +255,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
             "allocated": has_allocation,
             "hostel_fee_paid": hostel_fee_paid,
             "hostel_payment_status": hostel_payment_status,
-            "hms_reference": hms_reference,
+            "hms_reference": fuoye_reference,
         },
         "allocation": allocation,
     }
@@ -318,7 +358,7 @@ def update_profile(data: ProfileUpdate, student=Depends(get_current_student)):
 
 @router.post("/photo")
 async def upload_photo(file: UploadFile = File(...), student=Depends(get_current_student)):
-    """Upload or replace passport photo."""
+    """Upload or replace passport photo using Supabase S3."""
     if file.content_type not in ALLOWED_PHOTO_TYPES:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, or WebP images are allowed.")
 
@@ -326,47 +366,72 @@ async def upload_photo(file: UploadFile = File(...), student=Depends(get_current
     if len(contents) > MAX_PHOTO_SIZE:
         raise HTTPException(status_code=400, detail="Photo must be under 2MB.")
 
-    os.makedirs(PHOTO_DIR, exist_ok=True)
-
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
-    filename = f"{student['user_id']}_{uuid.uuid4().hex[:8]}.{ext}"
-    filepath = os.path.join(PHOTO_DIR, filename)
+    file_id = str(uuid.uuid4())
+    object_name = f"photos/{student['user_id']}_{file_id[:8]}.{ext}"
+    
+    # Upload to S3
+    try:
+        file_url = upload_file_to_s3(contents, object_name, file.content_type)
+    except Exception as e:
+        logger.error(f"S3 upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload photo to storage")
 
-    # Delete old photo if exists
     with get_cursor() as cur:
+        # Delete old photo if it was a db file (UUID length check roughly) - Legacy cleanup
         cur.execute("SELECT passport_photo_url FROM users WHERE id = %s", (student["user_id"],))
         old_row = cur.fetchone()
-        if old_row and old_row[0]:
-            old_path = os.path.join(UPLOAD_DIR, old_row[0])
-            if os.path.exists(old_path):
-                os.remove(old_path)
+        if old_row and old_row[0] and "/api/v1/files/" in old_row[0]:
+            old_file_id = old_row[0].split("/")[-1]
+            try:
+                cur.execute("DELETE FROM files WHERE id = %s", (old_file_id,))
+            except Exception:
+                pass # Ignore if files table doesn't exist or is dropped
 
-    with open(filepath, "wb") as f:
-        f.write(contents)
+        cur.execute("UPDATE users SET passport_photo_url = %s WHERE id = %s", (file_url, student["user_id"]))
 
-    relative_path = f"photos/{filename}"
+    logger.info("Photo uploaded for user %s: %s", student["user_id"], file_url)
+    return {"message": "Photo uploaded", "photo_url": file_url}
+
+
+@router.get("/photo/{user_id_or_matric}")
+def get_photo(user_id_or_matric: str):
+    """Serve a student's passport photo by ID or Matric."""
     with get_cursor() as cur:
-        cur.execute("UPDATE users SET passport_photo_url = %s WHERE id = %s", (relative_path, student["user_id"]))
-
-    logger.info("Photo uploaded for user %s: %s", student["user_id"], relative_path)
-    return {"message": "Photo uploaded", "photo_url": f"/api/v1/allocation/photo/{student['user_id']}"}
-
-
-@router.get("/photo/{user_id}")
-def get_photo(user_id: int):
-    """Serve a student's passport photo."""
-    with get_cursor() as cur:
-        cur.execute("SELECT passport_photo_url FROM users WHERE id = %s", (user_id,))
+        if user_id_or_matric.isdigit():
+            cur.execute("SELECT passport_photo_url FROM users WHERE id = %s", (int(user_id_or_matric),))
+        else:
+            cur.execute("SELECT passport_photo_url FROM users WHERE identifier = %s", (user_id_or_matric,))
         row = cur.fetchone()
 
     if not row or not row[0]:
         raise HTTPException(status_code=404, detail="No photo found")
 
-    filepath = os.path.join(UPLOAD_DIR, row[0])
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Photo file not found")
+    photo_url = row[0]
+    
+    # If it's already a full Supabase URL (or any absolute HTTP URL), redirect to it directly.
+    if photo_url.startswith("http"):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(photo_url)
 
-    return FileResponse(filepath)
+    # Legacy Postgres DB files fallback
+    if photo_url.startswith("/api/v1/files/"):
+        file_id = photo_url.split("/")[-1]
+        try:
+            with get_cursor() as cur:
+                cur.execute("SELECT data, content_type FROM files WHERE id = %s", (file_id,))
+                f_row = cur.fetchone()
+            if f_row:
+                return Response(content=f_row[0], media_type=f_row[1])
+        except Exception:
+            pass
+
+    # Fallback to local disk if migrating old files
+    filepath = os.path.join(UPLOAD_DIR, photo_url)
+    if os.path.exists(filepath):
+        return FileResponse(filepath)
+
+    raise HTTPException(status_code=404, detail="Photo file not found")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -435,14 +500,14 @@ def _fetch_allocation(student_id: int, session_id: int) -> dict | None:
             if avg_row and avg_row[0] is not None:
                 room_avg_vector = [round(float(v), 2) for v in avg_row]
 
-    # Get HMS receipt reference
-    hms_reference = None
+    # Get payment reference
+    fuoye_reference = None
     if payment_id:
         with get_cursor() as cur:
             cur.execute("SELECT hms_reference FROM confirmed_payments WHERE id = %s", (payment_id,))
             ref_row = cur.fetchone()
             if ref_row:
-                hms_reference = ref_row[0]
+                fuoye_reference = ref_row[0]
 
     # Room capacity
     with get_cursor() as cur:
@@ -458,7 +523,7 @@ def _fetch_allocation(student_id: int, session_id: int) -> dict | None:
         "matched_from_preference": pref,
         "avg_compatibility_score": float(avg_score) if avg_score else None,
         "allocated_at": alloc_at.isoformat() if alloc_at else None,
-        "hms_reference": hms_reference,
+        "hms_reference": fuoye_reference,
         "room_capacity": capacity,
         "occupants": len(roommates) + 1,
         "roommates": [

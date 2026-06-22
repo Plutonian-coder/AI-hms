@@ -169,7 +169,7 @@ export default function PaymentCallback() {
                         </div>
                         <div className="space-y-2">
                             <div className="flex justify-between py-1">
-                                <span className="text-sm text-forest/60 font-medium">HMS Reference</span>
+                                <span className="text-sm text-forest/60 font-medium">Payment Reference</span>
                                 <span className="text-sm font-mono font-bold text-forest">{pipelineResult.hms_reference}</span>
                             </div>
                             <div className="flex justify-between py-1">
@@ -181,19 +181,16 @@ export default function PaymentCallback() {
                 )}
 
                 <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                    {pipelineError && (
-                        <button onClick={() => navigate('/')} className="flex items-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors">
+                    {(pipelineError || pipelineResult) && (
+                        <button
+                            onClick={() => navigate('/')}
+                            className="flex items-center justify-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
+                        >
                             <RotateCcw className="w-4 h-4" /> Return to Dashboard
                         </button>
                     )}
                     {pipelineResult && (
                         <>
-                            <button
-                                onClick={() => navigate('/')}
-                                className="flex items-center justify-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-colors"
-                            >
-                                <RotateCcw className="w-4 h-4" /> Return to Dashboard
-                            </button>
                             <button
                                 onClick={() => navigate('/receipt')}
                                 className="flex-1 flex items-center justify-center gap-2 bg-forest text-white px-6 py-3 rounded-full font-bold hover:bg-forest-light transition-colors"

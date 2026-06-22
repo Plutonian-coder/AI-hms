@@ -15,15 +15,13 @@ import hashlib
 from fastapi import APIRouter, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse
 from database import get_cursor, get_connection
-from services.eligibility_ocr import verify_eligibility_document
 from dependencies import get_current_student
-from config import UPLOAD_DIR
+from services.storage import upload_file_to_s3
+
 
 router = APIRouter(prefix="/api/v1/eligibility", tags=["eligibility"])
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-TOTAL_STEPS = 6
+TOTAL_STEPS = 3
 
 # Which documents each level requires (1 per level)
 LEVEL_REQUIREMENTS = {
@@ -163,7 +161,10 @@ async def upload_eligibility_document(
     Upload and verify a single eligibility document via AI (SSE-streamed).
     6-step pipeline: Pre-flight → Upload → AI Verify → Identity Match → RRR Validation → Update Eligibility
     """
-    file_content = await document.read()
+    if len(file_content) > 5 * 1024 * 1024:
+        yield _sse_error(1, "Pre-flight Checks", "Document must be under 5MB.")
+        return
+
     file_ext = os.path.splitext(document.filename or "doc.png")[1]
 
     def pipeline():
@@ -225,111 +226,31 @@ async def upload_eligibility_document(
         yield _sse_step(1, "complete", "Pre-flight Checks", "Portal open, document type valid")
 
         # ── Step 2: Upload Document ──
-        yield _sse_step(2, "processing", "Uploading Document", "Saving your document...")
+        yield _sse_step(2, "processing", "Uploading Document", "Saving your document to secure storage...")
 
-        filename = f"elig_{uuid.uuid4().hex}{file_ext}"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        with open(filepath, "wb") as f:
-            f.write(file_content)
+        file_id = str(uuid.uuid4())
+        object_name = f"eligibility/{student_id}_{session_id}_{document_type}_{file_id[:8]}{file_ext}"
+        
+        try:
+            file_url = upload_file_to_s3(file_content, object_name, document.content_type)
+        except Exception as e:
+            yield _sse_error(2, "Uploading Document", f"Failed to upload document: {e}")
+            return
 
         file_hash = hashlib.sha256(file_content).hexdigest()
 
         yield _sse_step(2, "complete", "Uploading Document", "Document saved securely")
 
-        # ── Step 3: AI Document Verification ──
-        yield _sse_step(3, "processing", "AI Document Verification", "Gemini AI is analyzing your document...")
 
-        ocr_result = verify_eligibility_document(filepath, document_type)
+        # ── Step 3: Update Eligibility ──
+        yield _sse_step(3, "processing", "Updating Status", "Setting document status to Pending Review...")
 
-        if not ocr_result["is_authentic"]:
-            reason = ocr_result["rejection_reason"] or "Document does not appear to be authentic"
-            _upsert_document(student_id, session_id, document_type, filepath, file_hash, None, None, None, "rejected", reason)
-            yield _sse_error(3, "AI Document Verification", reason)
-            return
+        _upsert_document(student_id, session_id, document_type, file_url, file_hash, None, None, None, "pending_review", None)
 
-        extracted_rrr = ocr_result.get("extracted_rrr")
-        extracted_name = ocr_result.get("extracted_name")
-
-        yield _sse_step(3, "complete", "AI Document Verification", "Document verified as authentic")
-
-        # ── Step 4: Identity Match ──
-        yield _sse_step(4, "processing", "Identity Verification", "Matching document to your student record...")
-
-        extracted_id = ocr_result.get("extracted_identifier")
-
-        if extracted_id:
-            # Normalize for comparison
-            normalized_extracted = extracted_id.strip().upper().replace(" ", "")
-            normalized_student = identifier.strip().upper().replace(" ", "")
-
-            if normalized_extracted != normalized_student:
-                _upsert_document(
-                    student_id, session_id, document_type, filepath, file_hash,
-                    extracted_id, extracted_rrr, extracted_name, "rejected",
-                    f"Document identifier ({extracted_id}) does not match your matric number ({identifier})"
-                )
-                yield _sse_error(4, "Identity Verification",
-                                 f"The identifier on the document ({extracted_id}) does not match your student record ({identifier})")
-                return
-            yield _sse_step(4, "complete", "Identity Verification", f"Identity confirmed: {extracted_id}")
-        else:
-            # No identifier extracted — accept but log
-            yield _sse_step(4, "complete", "Identity Verification", "Document accepted (identifier not extractable — manual review may apply)")
-
-        # ── Step 5: RRR Validation ──
-        yield _sse_step(5, "processing", "RRR Validation", "Checking Remita payment reference...")
-
-        if extracted_rrr:
-            with get_cursor() as cur:
-                cur.execute(
-                    "SELECT status, amount FROM mock_remita_payments WHERE rrr = %s",
-                    (extracted_rrr,),
-                )
-                remita_row = cur.fetchone()
-
-            if not remita_row:
-                _upsert_document(
-                    student_id, session_id, document_type, filepath, file_hash,
-                    extracted_id, extracted_rrr, extracted_name, "rejected",
-                    f"RRR {extracted_rrr} not found in the Remita payment database"
-                )
-                yield _sse_error(5, "RRR Validation",
-                                 f"RRR {extracted_rrr} was not found in the payment database. Please upload a valid receipt.")
-                return
-
-            remita_status = remita_row[0]
-            if remita_status not in ("paid", "used"):
-                _upsert_document(
-                    student_id, session_id, document_type, filepath, file_hash,
-                    extracted_id, extracted_rrr, extracted_name, "rejected",
-                    f"RRR {extracted_rrr} has status '{remita_status}' — payment not confirmed"
-                )
-                yield _sse_error(5, "RRR Validation",
-                                 f"RRR {extracted_rrr} payment status is '{remita_status}'. Only paid receipts are accepted.")
-                return
-
-            yield _sse_step(5, "complete", "RRR Validation", f"RRR {extracted_rrr} confirmed — payment valid")
-        else:
-            # No RRR extracted — accept with warning
-            yield _sse_step(5, "complete", "RRR Validation", "RRR not found on document — accepted (manual review may apply)")
-
-        # ── Step 6: Update Eligibility ──
-        yield _sse_step(6, "processing", "Updating Eligibility", "Recording verification result...")
-
-        _upsert_document(student_id, session_id, document_type, filepath, file_hash, extracted_id, extracted_rrr, extracted_name, "verified", None)
-
-        # Check if all required docs are now verified
-        is_now_eligible = _update_eligibility_status(student_id, session_id, level)
-
-        if is_now_eligible:
-            yield _sse_step(6, "complete", "Updating Eligibility", "All documents verified — you are now ELIGIBLE!")
-        else:
-            remaining = _get_remaining_docs(student_id, session_id, level)
-            remaining_labels = [DOC_LABELS.get(d, d) for d in remaining]
-            yield _sse_step(6, "complete", "Updating Eligibility",
-                            f"Document verified. Still needed: {', '.join(remaining_labels)}")
-
-        yield _sse_result({"is_eligible": is_now_eligible, "document_type": document_type, "verdict": "verified"})
+        yield _sse_step(3, "complete", "Updating Status", "Document submitted for manual review by an admin.")
+        
+        # We don't automatically mark as eligible here
+        yield _sse_result({"is_eligible": False, "document_type": document_type, "verdict": "pending_review"})
 
     return StreamingResponse(pipeline(), media_type="text/event-stream")
 

@@ -1,9 +1,9 @@
 """
-Email Service — Rita from HMS
+Email Service — Rita from FUOYE Hostel Portal
 
-All lifecycle emails for the Hostel Management System.
+All lifecycle emails for the FUOYE Hostel Management Portal.
 Uses Gmail SMTP for reliable delivery to any email address.
-Sender persona: "Rita from HMS" — warm but professional.
+Sender persona: "Rita from FUOYE Hostel Portal" — warm but professional.
 
 Every email sent is logged to the email_logs table and audit_logs.
 
@@ -23,20 +23,20 @@ from config import SMTP_EMAIL, SMTP_APP_PASSWORD, HMS_APP_URL, RESEND_API_KEY, G
 
 logger = logging.getLogger(__name__)
 
-SENDER_NAME = "Rita from HMS"
+SENDER_NAME = "Rita from FUOYE Hostel Portal"
 
 # ── Shared HTML wrapper ──────────────────────────────────────────────────────
 
 def _wrap_html(title, body_html):
-    """Wraps email body in a branded HMS HTML template matching the Headspace aesthetic."""
+    """Wraps email body in a branded FUOYE HTML template matching the Headspace aesthetic."""
     return f"""
     <div style="background-color: #f8f8f8; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
         <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
             
             <!-- Logo Area -->
             <div style="margin-bottom: 30px;">
-                <span style="display: inline-block; width: 24px; height: 24px; background-color: #f97316; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>
-                <span style="color: #111827; font-size: 22px; font-weight: 800; vertical-align: middle; letter-spacing: -0.5px;">hms portal</span>
+                <img src="https://iili.io/CIR2W7I.png" alt="FUOYE Logo" style="width: 32px; height: 32px; vertical-align: middle; margin-right: 8px; object-fit: contain; border-radius: 50%;" />
+                <span style="color: #111827; font-size: 22px; font-weight: 800; vertical-align: middle; letter-spacing: -0.5px;">FUOYE Hostel Portal</span>
             </div>
 
             <!-- Dynamic Content (Hero, Heading, Body, Button) -->
@@ -45,12 +45,12 @@ def _wrap_html(title, body_html):
             <!-- Footer Area -->
             <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #f3f4f6;">
                 <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin: 0 0 20px 0;">
-                    If you have any questions, please visit our <a href="{HMS_APP_URL}/docs" style="color: #f97316; text-decoration: none; font-weight: bold;">Docs</a> or email us at <a href="mailto:khalidyekini80@gmail.com" style="color: #f97316; text-decoration: none; font-weight: bold;">khalidyekini80@gmail.com</a>. Our team can answer questions about your account or help you with your hostel allocation.
+                    If you have any questions, please email us at <a href="mailto:khalidyekini80@gmail.com" style="color: #f97316; text-decoration: none; font-weight: bold;">khalidyekini80@gmail.com</a>. Our team can answer questions about your account or help you with your hostel allocation.
                 </p>
                 <p style="font-size: 11px; color: #9ca3af; margin: 0;">
-                    You have received this email as a registered user of HMS®<br>
-                    Hostel Management System, Student Affairs Unit.<br>
-                    © 2026 HMS Inc. All rights reserved.
+                    You have received this email as a registered user of FUOYE Hostel Portal<br>
+                    Hostel Management Portal, Student Affairs Unit.<br>
+                    © 2026 Federal University Oye-Ekiti. All rights reserved.
                 </p>
             </div>
         </div>
@@ -102,7 +102,7 @@ def _log_email(
         log_event(
             EMAIL_SENT,
             actor_type="system",
-            actor_id="HMS_MAILER",
+            actor_id="FUOYE_MAILER",
             description=f"Email sent to {to_email}: {subject}",
             target_entity="email",
             target_id=recipient_matric or to_email,
@@ -150,7 +150,7 @@ def _send(to_email, subject, html, email_type="general",
                 "Content-Type": "application/json"
             }
             data = {
-                "from": "HMS Portal <onboarding@resend.dev>",
+                "from": "FUOYE Hostel Portal <onboarding@resend.dev>",
                 "to": [to_email],
                 "subject": subject,
                 "html": html
@@ -214,7 +214,7 @@ def send_registration_email(to_email: str, first_name: str, matric_number: str,
     body = f"""
         <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Registration<br>Successful</h1>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-            You're so close to starting your HMS journey, <strong>{first_name}</strong>. Your account has been created for the current academic session with matric number <strong>{matric_number}</strong>.
+            You're so close to starting your hostel journey, <strong>{first_name}</strong>. Your account has been created for the current academic session with matric number <strong>{matric_number}</strong>.
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 35px 0;">
             To finish setting up, just click the button below to log in and begin your hostel application.
@@ -222,7 +222,7 @@ def send_registration_email(to_email: str, first_name: str, matric_number: str,
         <a href="{HMS_APP_URL}/login" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">Log in to my dashboard</a>
     """
     return _send(
-        to_email, "Welcome to HMS Portal — Registration Successful",
+        to_email, "Welcome to FUOYE Hostel Portal — Registration Successful",
         _wrap_html("Welcome", body),
         email_type="registration",
         recipient_name=first_name,
@@ -259,7 +259,7 @@ def send_application_submitted_email(to_email: str, first_name: str, matric_numb
         <a href="{HMS_APP_URL}/" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my dashboard</a>
     """
     return _send(
-        to_email, "HMS — Application Received",
+        to_email, "FUOYE — Application Received",
         _wrap_html("Application Submitted", body),
         email_type="application_submitted",
         recipient_name=first_name,
@@ -275,7 +275,7 @@ def send_medical_review_email(to_email: str, first_name: str, status: str, notes
                               attempts_remaining: int = 0, user_id: int = None, session_id: int = None):
     """Sent when admin approves or rejects medical documentation."""
     if status == "approved":
-        subject = "HMS — Medical Documentation Approved ✓"
+        subject = "FUOYE — Medical Documentation Approved ✓"
         status_block = """
             <p style="color: #166534; background-color: #DCFCE7; padding: 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; margin: 0 0 35px 0;">
                 <strong>Approved!</strong> Your medical documentation is verified and you are now cleared for hostel allocation.
@@ -285,7 +285,7 @@ def send_medical_review_email(to_email: str, first_name: str, status: str, notes
     else:
         notes_html = f'<p style="margin: 10px 0 0 0; color: #991B1B;"><strong>Note:</strong> {notes}</p>' if notes else ""
         attempts_html = f'<p style="margin: 10px 0 0 0; color: #991B1B; font-size: 14px;">You have <strong>{attempts_remaining}</strong> attempt(s) remaining.</p>' if attempts_remaining > 0 else '<p style="margin: 10px 0 0 0; color: #991B1B; font-weight: bold;">You have exhausted all attempts. Please contact Admin.</p>'
-        subject = "HMS — Medical Documentation Review Update"
+        subject = "FUOYE — Medical Documentation Review Update"
         status_block = f"""
             <div style="color: #991B1B; background-color: #FEE2E2; padding: 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; margin: 0 0 35px 0; text-align: left;">
                 <strong>Action required:</strong> Unfortunately, your documentation could not be verified.
@@ -334,7 +334,7 @@ def send_allocation_success_email(to_email: str, first_name: str, hostel: str, r
         <a href="{HMS_APP_URL}/payment" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my invoice</a>
     """
     return _send(
-        to_email, "HMS — Bed Space Allocated!",
+        to_email, "FUOYE — Bed Space Allocated!",
         _wrap_html("Allocation Confirmed", body),
         email_type="allocation_success",
         recipient_name=first_name,
@@ -362,7 +362,7 @@ def send_invoice_generated_email(to_email: str, first_name: str, total_naira: fl
         <a href="{HMS_APP_URL}/payment" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">Pay my invoice</a>
     """
     return _send(
-        to_email, f"HMS — Invoice Ready (₦{total_naira:,.0f})",
+        to_email, f"FUOYE — Invoice Ready (₦{total_naira:,.0f})",
         _wrap_html("Invoice", body),
         email_type="invoice",
         recipient_name=first_name,
@@ -389,7 +389,7 @@ def send_payment_receipt_email(to_email: str, first_name: str, total_naira: floa
         <a href="{HMS_APP_URL}/receipt" style="background-color: #166534; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my receipt</a>
     """
     return _send(
-        to_email, f"HMS — Payment Receipt (₦{total_naira:,.0f})",
+        to_email, f"FUOYE — Payment Receipt (₦{total_naira:,.0f})",
         _wrap_html("Payment Receipt", body),
         email_type="payment_receipt",
         recipient_name=first_name,
@@ -408,7 +408,7 @@ def send_password_reset_email(to_email: str, first_name: str, reset_token: str):
     body = f"""
         <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Reset your<br>password</h1>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 35px 0;">
-            Hi <strong>{first_name}</strong>, we received a request to reset the password for your HMS account. Click the button below to create a new one. This link will expire in 15 minutes.
+            Hi <strong>{first_name}</strong>, we received a request to reset your FUOYE Hostel Portal password. Click the button below to create a new one. This link will expire in 15 minutes.
         </p>
         <a href="{reset_url}" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px; margin-bottom: 35px;">Reset my password</a>
         <p style="color: #9ca3af; font-size: 14px; line-height: 1.5; margin: 0;">
@@ -416,7 +416,7 @@ def send_password_reset_email(to_email: str, first_name: str, reset_token: str):
         </p>
     """
     return _send(
-        to_email, "HMS — Password Reset Request",
+        to_email, "FUOYE — Password Reset Request",
         _wrap_html("Password Reset", body),
         email_type="password_reset",
     )
@@ -459,7 +459,7 @@ def send_status_change_email(to_email: str, first_name: str, matric: str,
         <a href="{HMS_APP_URL}/" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my dashboard</a>
     """
     return _send(
-        to_email, f"HMS — Application Status Updated to {new_label}",
+        to_email, f"FUOYE — Application Status Updated to {new_label}",
         _wrap_html("Status Update", body),
         email_type="status_change",
         recipient_name=first_name,
@@ -513,7 +513,7 @@ def send_allocation_revoked_email(to_email: str, first_name: str, matric: str,
         <a href="{HMS_APP_URL}/" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">View my dashboard</a>
     """
     return _send(
-        to_email, "HMS — Allocation Revoked",
+        to_email, "FUOYE — Allocation Revoked",
         _wrap_html("Allocation Revoked", body),
         email_type="allocation_revoked",
         recipient_name=first_name,

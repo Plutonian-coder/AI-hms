@@ -112,17 +112,6 @@ def initialize_payment(data: PaymentInitRequest, student=Depends(get_current_stu
         session_id, session_name, _, year_end = sess
 
         if fee_type == "application":
-            # Must have completed at least stage 3 of the application
-            cur.execute(
-                """SELECT id, status, stage_completed
-                   FROM hostel_applications
-                   WHERE student_id = %s AND session_id = %s""",
-                (student_id, session_id),
-            )
-            app_row = cur.fetchone()
-            if not app_row or app_row[2] < 3:
-                raise HTTPException(status_code=403, detail="You need to complete all application stages before paying the application fee.")
-                
             # Must not have already paid application fee
             cur.execute("""
                 SELECT cp.id FROM confirmed_payments cp

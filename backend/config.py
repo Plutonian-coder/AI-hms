@@ -25,7 +25,7 @@ def _require(key: str) -> str:
 DATABASE_URL        = _require("DATABASE_URL")
 JWT_SECRET          = _require("JWT_SECRET")
 PAYSTACK_SECRET_KEY = _require("PAYSTACK_SECRET_KEY")
-GEMINI_API_KEY      = _require("GEMINI_API_KEY")
+OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 
 # ── SMTP Email (Gmail) ──────────────────────────────────────────────────────
 SMTP_EMAIL          = os.getenv("SMTP_EMAIL", "")
@@ -42,10 +42,18 @@ PAYSTACK_PUBLIC_KEY   = os.getenv("PAYSTACK_PUBLIC_KEY", "")
 PAYSTACK_CALLBACK_URL = os.getenv("PAYSTACK_CALLBACK_URL", "")
 HOSTEL_FEE_AMOUNT     = int(os.getenv("HOSTEL_FEE_AMOUNT", "15000"))
 
-UPLOAD_DIR          = os.getenv("UPLOAD_DIR", "/tmp/uploads")
+UPLOAD_DIR          = os.getenv("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "uploads"))
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
 OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 HMS_APP_URL         = os.getenv("HMS_APP_URL", "http://localhost:5173")
+
+# ── Supabase Storage (S3 API) ───────────────────────────────────────────────
+SUPABASE_S3_ENDPOINT       = os.getenv("SUPABASE_S3_ENDPOINT", "")
+SUPABASE_ACCESS_KEY_ID     = os.getenv("SUPABASE_ACCESS_KEY_ID", "")
+SUPABASE_SECRET_ACCESS_KEY = os.getenv("SUPABASE_SECRET_ACCESS_KEY", "")
+SUPABASE_BUCKET_NAME       = os.getenv("SUPABASE_BUCKET_NAME", "hms-uploads")
+SUPABASE_PROJECT_URL       = os.getenv("SUPABASE_PROJECT_URL", "")
+
 
 DB_POOL_MIN         = int(os.getenv("DB_POOL_MIN", "1"))
 DB_POOL_MAX         = int(os.getenv("DB_POOL_MAX", "3"))

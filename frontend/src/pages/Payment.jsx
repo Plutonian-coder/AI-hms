@@ -11,9 +11,7 @@ export default function Payment() {
 
     const [paymentStatus, setPaymentStatus] = useState(null);
     const [feeSummary, setFeeSummary] = useState(null);
-    const [noApplication, setNoApplication] = useState(false);
     const [allocated, setAllocated] = useState(false);
-    const [quizCompleted, setQuizCompleted] = useState(false);
     
     // Determine fee type from URL
     const searchParams = new URLSearchParams(window.location.search);
@@ -27,9 +25,14 @@ export default function Payment() {
                 if (payRes.data.has_payment) {
                     setPaymentStatus(payRes.data);
                     if (payRes.data.status === 'confirmed') {
-                        // Still need quiz status to show right CTA
-                        const dashRes = await apiClient.get('/allocation/dashboard').catch(() => null);
-                        if (dashRes) setQuizCompleted(dashRes.data.progress?.quiz_completed ?? false);
+                        // If app fee is paid and student already applied, redirect to dashboard
+                        if (feeType === 'application') {
+                            const dashRes = await apiClient.get('/allocation/dashboard').catch(() => null);
+                            if (dashRes?.data?.progress?.applied) {
+                                navigate('/', { replace: true });
+                                return;
+                            }
+                        }
                         setLoading(false);
                         return;
                     }
@@ -37,19 +40,19 @@ export default function Payment() {
 
                 // Check if already allocated
                 const dashRes = await apiClient.get('/allocation/dashboard');
-                setQuizCompleted(dashRes.data.progress?.quiz_completed ?? false);
                 if (dashRes.data.progress?.allocated && feeType === 'application') {
                     setAllocated(true);
                     setLoading(false);
                     return;
                 }
-
-                // Check application exists
-                if (!dashRes.data.progress?.applied && feeType === 'application') {
-                    setNoApplication(true);
+                
+                if (!dashRes.data.progress?.allocated && feeType === 'hostel') {
+                    setError('You must be allocated a bed before paying hostel fees.');
                     setLoading(false);
                     return;
                 }
+
+
 
                 // Get fee summary
                 const feeRes = await apiClient.get(`/application/fee-summary?fee_type=${feeType}`);
@@ -100,22 +103,7 @@ export default function Payment() {
         );
     }
 
-    if (noApplication) {
-        return (
-            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
-                    <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                        <h3 className="font-bold text-amber-800">Application Required</h3>
-                        <p className="text-amber-700 text-sm mt-1">You need to submit a hostel application before making payment.</p>
-                        <button onClick={() => navigate('/apply')} className="mt-3 text-sm font-bold text-forest underline">
-                            Submit Application
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+
 
     // Already paid and confirmed
     if (paymentStatus?.status === 'confirmed') {
@@ -134,7 +122,7 @@ export default function Payment() {
                         <div>
                             <h3 className="font-bold text-forest">Payment Confirmed</h3>
                             <p className="text-forest/70 text-sm mt-1">
-                                HMS Reference: <span className="font-mono font-bold">{paymentStatus.hms_reference}</span>
+                                Payment Reference: <span className="font-mono font-bold">{paymentStatus.hms_reference}</span>
                             </p>
                             <p className="text-forest/70 text-sm">
                                 Amount: <span className="font-bold">{'\u20A6'}{paymentStatus.amount?.toLocaleString()}</span>
@@ -150,10 +138,10 @@ export default function Payment() {
                             View Receipt
                         </button>
                         <button
-                            onClick={() => navigate(feeType === 'application' && !quizCompleted ? '/quiz' : '/')}
+                            onClick={() => navigate(feeType === 'application' ? '/apply' : '/')}
                             className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-5 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
                         >
-                            {feeType === 'application' && !quizCompleted ? 'Take Compatibility Quiz' : 'Go to Dashboard'} <ChevronRight className="w-4 h-4" />
+                            {feeType === 'application' ? 'Proceed to Apply' : 'Go to Dashboard'} <ChevronRight className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
@@ -201,7 +189,7 @@ export default function Payment() {
                             <span className="text-sm font-bold text-heading">{'\u20A6'}{paymentStatus.amount_naira?.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between py-2 border-b border-black/5">
-                            <span className="text-xs font-bold text-muted uppercase tracking-widest">HMS Reference</span>
+                            <span className="text-xs font-bold text-muted uppercase tracking-widest">Payment Reference</span>
                             <span className="text-sm font-mono font-bold text-heading">{paymentStatus.hms_reference}</span>
                         </div>
                     </div>

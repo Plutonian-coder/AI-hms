@@ -40,7 +40,7 @@ export default function ForgotPassword() {
                         <p className="text-white/50 font-medium text-sm mt-2 max-w-xs mx-auto">
                             {sent
                                 ? `We've sent a password reset link to your registered Gmail. Check your inbox and spam folder.`
-                                : 'Enter the Gmail address you registered with on HMS. The reset link will be sent to that email only.'
+                                : 'Enter the Gmail address you registered with on FUOYE Hostel Portal. The reset link will be sent to that email only.'
                             }
                         </p>
                     </div>
@@ -61,7 +61,7 @@ export default function ForgotPassword() {
                                     autoComplete="email"
                                 />
                                 <p className="text-white/30 text-[11px] font-medium mt-2">
-                                    Must be the same @gmail.com address from your HMS account.
+                                    Must be the same @gmail.com address from your FUOYE Hostel Portal account.
                                 </p>
                             </div>
 

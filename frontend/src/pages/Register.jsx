@@ -98,7 +98,7 @@ export default function Register() {
                     {/* Logo */}
                     <div className="flex flex-col items-center mb-7">
                         <div className="mb-2">
-                            <span className="text-5xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+                            <img src="/fuoye-logo.png" alt="FUOYE" className="w-16 h-16 object-contain mx-auto" />
                         </div>
                         <h1 className="text-2xl font-black text-heading tracking-tight">Student Registration</h1>
                         <p className="text-sm text-muted font-medium mt-1">

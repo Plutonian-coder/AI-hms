@@ -1,5 +1,5 @@
 """
-HMS — AI-Driven Hostel Management System — FastAPI Entry Point
+FUOYE — Hostel Management Portal — FastAPI Entry Point
 
 12-Factor Compliant:
   - Factor VII:  Port binding via $PORT env var
@@ -12,13 +12,12 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from logging_config import setup_logging
 from config import CORS_ORIGINS
 from database import get_pool, close_pool
-from routers import auth, allocation, admin, payment, application, register_import, quiz, report
+from routers import auth, allocation, admin, profile, eligibility, application, payment, register_import, quiz, report
 import tasks
 import asyncio
 
@@ -63,7 +62,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="HMS — Hostel Management System",
+    title="FUOYE — Hostel Management Portal",
     description="AI-driven hostel allocation with compatibility matching, multi-component fees, and audit trail.",
     version="3.0.0",
     lifespan=lifespan,
@@ -103,7 +102,7 @@ def health_ping():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "HMS — Hostel Management System", "version": "3.0.0"}
+    return {"status": "ok", "service": "FUOYE — Hostel Management Portal", "version": "3.0.0"}
 
 
 # Mount routers

@@ -17,13 +17,12 @@ from dependencies import get_current_admin
 from services.audit_logger import (
     log_event, SESSION_CREATED, SESSION_ACTIVATED, PORTAL_TOGGLED, SESSION_ENDED,
     FEE_COMPONENT_ADDED, FEE_COMPONENT_UPDATED, HOSTEL_CREATED, HOSTEL_DELETED,
-    ALLOCATION_REVOKED, ADMIN_NL_QUERY,
+    ALLOCATION_REVOKED,
     MEDICAL_REVIEW_APPROVED, MEDICAL_REVIEW_REJECTED, ADMIN_STATUS_UPDATE,
 )
 from services.email import (
     send_medical_review_email, send_status_change_email, send_allocation_revoked_email,
 )
-from services.gemini_query import generate_sql, validate_sql
 from typing import Optional
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -1264,7 +1263,8 @@ def list_students(session_id: Optional[int] = None, admin=Depends(get_current_ad
                     (u.id IS NOT NULL)                                  AS has_portal_access,
                     (cp.id IS NOT NULL)                                 AS has_paid,
                     (a.id  IS NOT NULL)                                 AS is_allocated,
-                    u.is_active
+                    u.is_active,
+                    u.passport_photo_url
                 FROM session_register sr
                 LEFT JOIN users u
                     ON UPPER(u.identifier) = UPPER(sr.matric_number)
@@ -1282,7 +1282,7 @@ def list_students(session_id: Optional[int] = None, admin=Depends(get_current_ad
                        u.department, u.level, u.study_type,
                        u.id, u.phone, u.next_of_kin_phone,
                        TRUE AS has_portal_access, FALSE AS has_paid, FALSE AS is_allocated,
-                       u.is_active
+                       u.is_active, u.passport_photo_url
                 FROM users u
                 WHERE u.role = 'student'
                 ORDER BY u.surname, u.first_name
@@ -1318,6 +1318,7 @@ def list_students(session_id: Optional[int] = None, admin=Depends(get_current_ad
             "is_allocated":      bool(r[12]),
             "is_active":         is_active,
             "account_status":    account_status,
+            "photo_url":         f"/api/v1/allocation/photo/{r[7]}" if r[14] and r[7] else None,
         })
     return result
 
@@ -1371,7 +1372,7 @@ def get_student_profile(student_id: int, admin=Depends(get_current_admin)):
         cur.execute(
             """SELECT id, identifier, surname, first_name, email, phone, gender,
                       department, level, study_type, is_active,
-                      next_of_kin_name, next_of_kin_phone, created_at
+                      next_of_kin_name, next_of_kin_phone, created_at, passport_photo_url
                FROM users WHERE id = %s AND role = 'student'""",
             (student_id,),
         )
@@ -1387,6 +1388,7 @@ def get_student_profile(student_id: int, admin=Depends(get_current_admin)):
             "is_active": user[10],
             "next_of_kin_name": user[11], "next_of_kin_phone": user[12],
             "created_at": user[13].isoformat() if user[13] else None,
+            "photo_url": f"/api/v1/allocation/photo/{user[0]}" if user[14] else None,
         }
 
         # Derive account status
@@ -1977,61 +1979,5 @@ def list_email_logs(
     }
 
 
-# ════════════════════════════════════════════════════════════
-# NATURAL LANGUAGE QUERY (Groq AI)
-# ════════════════════════════════════════════════════════════
 
-class NLQueryRequest(BaseModel):
-    query: str
-
-
-@router.post("/nl-query")
-def natural_language_query(data: NLQueryRequest, admin=Depends(get_current_admin)):
-    """Convert plain English to SQL via Groq, validate, and execute."""
-    if not data.query or len(data.query.strip()) < 3:
-        raise HTTPException(status_code=400, detail="Query too short")
-
-    # Generate SQL from Groq
-    result = generate_sql(data.query.strip())
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-
-    sql = result["sql"]
-
-    # Validate — reject mutations
-    is_valid, error_msg = validate_sql(sql)
-    if not is_valid:
-        log_event(
-            ADMIN_NL_QUERY, "admin", admin["identifier"],
-            f"NL query REJECTED: {data.query}",
-            metadata={"query": data.query, "sql": sql, "reason": error_msg},
-        )
-        raise HTTPException(status_code=400, detail=error_msg)
-
-    # Execute the validated query
-    try:
-        with get_cursor() as cur:
-            cur.execute(sql)
-            rows = cur.fetchall()
-            columns = [desc[0] for desc in cur.description] if cur.description else []
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"SQL execution error: {str(e)}")
-
-    # Log successful query
-    log_event(
-        ADMIN_NL_QUERY, "admin", admin["identifier"],
-        f"NL query: {data.query}",
-        metadata={"query": data.query, "sql": sql, "result_count": len(rows)},
-    )
-
-    return {
-        "query": data.query,
-        "sql": sql,
-        "columns": columns,
-        "rows": [
-            [str(v) if v is not None else None for v in row]
-            for row in rows[:100]
-        ],
-        "total": len(rows),
-    }
 

@@ -106,7 +106,7 @@ export default function AdminReports() {
             const url = window.URL.createObjectURL(new Blob([res.data]));
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'hms_report.csv';
+            a.download = 'fuoye_report.csv';
             a.click();
             window.URL.revokeObjectURL(url);
             toast.success('Report exported successfully');

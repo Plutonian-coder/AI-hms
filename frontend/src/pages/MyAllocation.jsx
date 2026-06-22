@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
+import PassCard from '../components/PassCard';
 
 const DIMENSION_LABELS = [
     'Sleep Time', 'Wake Time', 'Study Noise', 'Cleanliness',
@@ -18,6 +19,7 @@ export default function MyAllocation() {
     const [allocation, setAllocation] = useState(null);
     const [hostelFeePaid, setHostelFeePaid] = useState(false);
     const [hostelFeeDeadline, setHostelFeeDeadline] = useState(null);
+    const [dashboardData, setDashboardData] = useState(null);
     const [loading, setLoading] = useState(true);
 
     const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1').replace('/api/v1', '');
@@ -29,6 +31,7 @@ export default function MyAllocation() {
         ]).then(([allocRes, dashRes]) => {
             if (allocRes.data) setAllocation(allocRes.data);
             if (dashRes.data) {
+                setDashboardData(dashRes.data);
                 setHostelFeePaid(dashRes.data.progress?.hostel_fee_paid ?? false);
                 if (dashRes.data.session?.hostel_fee_deadline) {
                     setHostelFeeDeadline(dashRes.data.session.hostel_fee_deadline);
@@ -264,6 +267,35 @@ export default function MyAllocation() {
                         </div>
                     </div>
                 </div>
+
+                {/* ── Hostel Pass Preview ── */}
+                {hostelFeePaid && dashboardData && dashboardData.progress?.hms_reference && (
+                    <div className="mt-12">
+                        <div className="flex items-center justify-between mb-4 px-1">
+                            <div>
+                                <h3 className="text-lg font-extrabold text-heading tracking-tight">Hostel Entry Pass</h3>
+                                <p className="text-xs text-muted font-medium">Your official pass for hostel entry</p>
+                            </div>
+                            <button
+                                onClick={() => navigate('/hostel-pass')}
+                                className="text-xs font-bold text-forest hover:text-forest-light bg-forest/5 px-3 py-1.5 rounded-full transition-colors"
+                            >
+                                View Full Size
+                            </button>
+                        </div>
+                        <div className="w-full flex justify-center bg-surface-2 rounded-3xl p-4 sm:p-8 border border-black/5 overflow-hidden">
+                            <div className="scale-[0.5] sm:scale-75 md:scale-90 lg:scale-100 origin-top flex justify-center transition-transform duration-300">
+                                <PassCard
+                                    profile={dashboardData.profile}
+                                    allocation={dashboardData.allocation}
+                                    session={dashboardData.session}
+                                    reference={dashboardData.progress.hms_reference}
+                                    verifyUrl={`${window.location.origin}/verify/${encodeURIComponent(dashboardData.progress.hms_reference)}`}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

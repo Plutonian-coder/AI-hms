@@ -1,24 +1,18 @@
 import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, CreditCard, ClipboardCheck, BedDouble, LogOut, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LayoutDashboard, FileText, CreditCard, ClipboardCheck, BedDouble, LogOut, X, PanelLeftClose, PanelLeftOpen, CheckCircle, Lock, Loader2 } from 'lucide-react';
 
-const DEFAULT_NAV_ITEMS = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-    { to: '/apply', label: 'Apply', icon: FileText },
-    { to: '/payment?type=application', label: 'Application Fee', icon: CreditCard },
-    { to: '/quiz', label: 'Compatibility Quiz', icon: ClipboardCheck },
-    { to: '/my-allocation', label: 'My Allocation', icon: BedDouble },
+const FLOW_STEPS = [
+    { to: '/payment?type=application', label: 'Application Fee', icon: CreditCard, progressKey: 'app_fee_paid' },
+    { to: '/apply', label: 'Apply', icon: FileText, progressKey: 'applied' },
+    { to: '/quiz', label: 'Compatibility Quiz', icon: ClipboardCheck, progressKey: 'quiz_completed' },
+    { to: '/payment?type=hostel', label: 'Hostel Fee', icon: CreditCard, progressKey: 'hostel_fee_paid' },
+    { to: '/my-allocation', label: 'My Allocation', icon: BedDouble, progressKey: 'allocated' },
 ];
 
-export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, hiddenRoutes = [], progress = null }) {
+export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, progress = null }) {
     const navigate = useNavigate();
-    const { pathname } = useLocation();
-
-    // Dynamically adjust payment link
-    const NAV_ITEMS = [...DEFAULT_NAV_ITEMS];
-    if (progress?.allocated) {
-        NAV_ITEMS.push({ to: '/payment?type=hostel', label: 'Hostel Fee', icon: CreditCard });
-    }
+    const { pathname, search } = useLocation();
 
     useEffect(() => { onClose(); }, [pathname, onClose]);
 
@@ -26,6 +20,17 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
         navigate('/login');
+    };
+
+    // Determine which steps are done, current, or locked
+    const getStepState = (step, idx) => {
+        if (!progress) return 'locked';
+        const done = !!progress[step.progressKey];
+        if (done) return 'done';
+        // Current = first not-done step
+        const firstNotDone = FLOW_STEPS.findIndex(s => !progress[s.progressKey]);
+        if (idx === firstNotDone) return 'current';
+        return 'locked';
     };
 
     const NavItem = ({ item }) => (
@@ -46,7 +51,6 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
                 <>
                     <item.icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-forest' : 'text-muted-light'}`} />
                     {!collapsed && <span>{item.label}</span>}
-                    {/* Tooltip for collapsed mode */}
                     {collapsed && (
                         <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-heading text-white text-xs font-semibold rounded-lg shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
                             {item.label}
@@ -57,13 +61,71 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
         </NavLink>
     );
 
+    const FlowItem = ({ item, state }) => {
+        const isDone = state === 'done';
+        const isLocked = state === 'locked';
+        const isCurrent = state === 'current';
+        const fullPath = pathname + search;
+        const isActive = fullPath === item.to || (item.to === '/apply' && pathname === '/apply');
+
+        if (isLocked) {
+            return (
+                <div
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold opacity-40 cursor-not-allowed group relative ${
+                        collapsed ? 'justify-center px-2' : ''
+                    }`}
+                >
+                    <Lock className="w-4 h-4 shrink-0 text-muted-light" />
+                    {!collapsed && <span className="text-muted">{item.label}</span>}
+                    {collapsed && (
+                        <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-heading text-white text-xs font-semibold rounded-lg shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                            {item.label}
+                        </span>
+                    )}
+                </div>
+            );
+        }
+
+        return (
+            <NavLink
+                to={item.to}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 group relative ${
+                    collapsed ? 'justify-center px-2' : ''
+                } ${
+                    isActive
+                        ? 'bg-lime-soft text-forest border border-lime-border'
+                        : isDone
+                            ? 'text-muted/70 hover:text-heading hover:bg-surface-2'
+                            : isCurrent
+                                ? 'text-forest hover:bg-lime-soft/50'
+                                : 'text-muted hover:text-heading hover:bg-surface-2'
+                }`}
+            >
+                {isDone ? (
+                    <CheckCircle className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-forest' : 'text-emerald-500/60'}`} />
+                ) : (
+                    <item.icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-forest' : isCurrent ? 'text-forest' : 'text-muted-light'}`} />
+                )}
+                {!collapsed && (
+                    <span className={isDone && !isActive ? 'line-through decoration-1' : ''}>{item.label}</span>
+                )}
+                {collapsed && (
+                    <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-heading text-white text-xs font-semibold rounded-lg shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                        {item.label}
+                    </span>
+                )}
+            </NavLink>
+        );
+    };
+
     const SidebarContent = ({ showClose }) => (
         <div className="flex flex-col h-full">
             {/* Logo */}
             <div className={`px-4 py-4 border-b border-sidebar-border flex items-center shrink-0 ${collapsed ? 'justify-center' : 'justify-between'}`}>
                 {!collapsed && (
                     <div className="flex items-center gap-2">
-                        <span className="text-2xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+                        <img src="/fuoye-logo.png" alt="FUOYE" className="w-8 h-8 object-contain" />
+                        <span className="text-lg font-serif font-black text-forest tracking-tighter">FUOYE</span>
                         <div className="border-l border-sidebar-border pl-2">
                             <p className="text-[10px] text-muted font-bold uppercase tracking-wider">Student</p>
                             <p className="text-[10px] text-muted font-bold uppercase tracking-wider -mt-1">Portal</p>
@@ -71,7 +133,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
                     </div>
                 )}
                 {collapsed && (
-                    <span className="text-xl font-serif font-black text-forest tracking-tighter italic">H</span>
+                    <img src="/fuoye-logo.png" alt="FUOYE" className="w-7 h-7 object-contain" />
                 )}
 
                 {showClose ? (
@@ -110,7 +172,24 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
                     <p className="text-[10px] font-bold text-muted-light uppercase tracking-[0.15em] px-3 mb-2">Main</p>
                 )}
                 {collapsed && <div className="border-t border-sidebar-border mb-2 mx-1" />}
-                {NAV_ITEMS.filter(item => !hiddenRoutes.includes(item.to)).map(item => <NavItem key={item.to} item={item} />)}
+                <NavItem item={{ to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true }} />
+
+                {/* Flow steps */}
+                {!collapsed && (
+                    <p className="text-[10px] font-bold text-muted-light uppercase tracking-[0.15em] px-3 mt-4 mb-2">Progress</p>
+                )}
+                {collapsed && <div className="border-t border-sidebar-border my-2 mx-1" />}
+                {!progress ? (
+                    <div className="px-2 py-2 space-y-2 animate-pulse">
+                        {[1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className={`h-11 w-full bg-surface-2 rounded-xl ${collapsed ? 'w-10 mx-auto' : ''}`} />
+                        ))}
+                    </div>
+                ) : (
+                    FLOW_STEPS.map((step, idx) => (
+                        <FlowItem key={step.to} item={step} state={getStepState(step, idx)} />
+                    ))
+                )}
             </nav>
 
             {/* Sign out */}

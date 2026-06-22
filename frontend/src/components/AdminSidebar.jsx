@@ -94,7 +94,8 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
             <div className={`px-4 py-4 border-b border-sidebar-border flex items-center shrink-0 ${collapsed ? 'justify-center' : 'justify-between'}`}>
                 {!collapsed && (
                     <div className="flex items-center gap-2">
-                        <span className="text-2xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+                        <img src="/fuoye-logo.png" alt="FUOYE" className="w-8 h-8 object-contain" />
+                        <span className="text-lg font-serif font-black text-forest tracking-tighter">FUOYE</span>
                         <div className="border-l border-sidebar-border pl-2">
                             <p className="text-[10px] text-muted font-bold uppercase tracking-wider">Admin</p>
                             <p className="text-[10px] text-muted font-bold uppercase tracking-wider -mt-1">Portal</p>
@@ -102,7 +103,7 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
                     </div>
                 )}
                 {collapsed && (
-                    <span className="text-xl font-serif font-black text-forest tracking-tighter italic">H</span>
+                    <img src="/fuoye-logo.png" alt="FUOYE" className="w-7 h-7 object-contain" />
                 )}
 
                 {showClose ? (

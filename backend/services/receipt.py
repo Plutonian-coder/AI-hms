@@ -1,22 +1,22 @@
 """
-Receipt Service — Generate session-scoped HMS receipt references.
+Receipt Service — Generate session-scoped FUOYE receipt references.
 
-Format: HMS/YYYY/XXXXX where YYYY is from the session year and XXXXX is zero-padded sequential.
+Format: FUOYE/YYYY/XXXXX where YYYY is from the session year and XXXXX is zero-padded sequential.
 """
 from database import get_cursor
 
 
 def generate_hms_reference(session_year: int) -> str:
     """
-    Generate the next HMS receipt reference for the given session year.
+    Generate the next FUOYE receipt reference for the given session year.
 
     Args:
         session_year: The end year of the academic session (e.g. 2026 for 2025/2026)
 
     Returns:
-        Reference string like HMS/2026/00001
+        Reference string like FUOYE/2026/00001
     """
-    prefix = f"HMS/{session_year}/"
+    prefix = f"FUOYE/{session_year}/"
 
     with get_cursor() as cur:
         cur.execute(

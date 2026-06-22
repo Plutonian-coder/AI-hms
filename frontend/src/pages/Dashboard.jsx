@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import apiClient from '../api/client';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import {
     CheckCircle, ChevronRight, Pencil, X, Save, Camera,
     UserCheck, FileText, CreditCard, ClipboardCheck, BedDouble,
-    Loader2, Home, MapPin, Users, Award, Printer, User
+    Loader2, Home, MapPin, Users, Award, User
 } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
@@ -15,6 +15,7 @@ import { useToast } from '../components/Toast';
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function Dashboard() {
+    const { setProgress } = useOutletContext() || {};
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -29,6 +30,9 @@ export default function Dashboard() {
         apiClient.get('/allocation/dashboard')
             .then(res => {
                 setData(res.data);
+                if (setProgress && res.data?.progress) {
+                    setProgress(res.data.progress);
+                }
                 const p = res.data.profile;
                 setProfileForm({ email: p.email || '', phone: p.phone || '', next_of_kin_name: p.next_of_kin_name || '', next_of_kin_phone: p.next_of_kin_phone || '' });
             })
@@ -53,10 +57,48 @@ export default function Dashboard() {
     };
 
     if (loading) return (
-        <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-forest" />
-                <p className="text-sm font-semibold text-muted">Loading your dashboard…</p>
+        <div className="animate-in fade-in duration-300">
+            <div className="flex flex-col lg:flex-row gap-5">
+                <div className="w-full lg:w-80 lg:shrink-0">
+                    <div className="glass rounded-2xl overflow-hidden animate-pulse">
+                        <div className="aspect-[4/3] w-full bg-surface-2" />
+                        <div className="p-5">
+                            <div className="h-6 w-3/4 bg-surface-2 rounded-lg mb-2" />
+                            <div className="h-3 w-1/2 bg-surface-2 rounded-full mb-6" />
+                            <div className="space-y-4">
+                                {[1, 2, 3, 4, 5].map(i => (
+                                    <div key={i} className="flex justify-between items-center">
+                                        <div className="h-3 w-16 bg-surface-2 rounded-full" />
+                                        <div className="h-3 w-24 bg-surface-2 rounded-full" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex-1 space-y-6 animate-pulse">
+                    <div>
+                        <div className="h-4 w-32 bg-surface-2 rounded-full mb-2" />
+                        <div className="h-8 w-64 bg-surface-2 rounded-xl" />
+                    </div>
+                    <div className="glass rounded-3xl p-6 sm:p-8">
+                        <div className="flex justify-between items-center mb-8">
+                            <div className="h-5 w-40 bg-surface-2 rounded-full" />
+                            <div className="h-6 w-24 bg-surface-2 rounded-full" />
+                        </div>
+                        <div className="space-y-6">
+                            {[1, 2, 3, 4].map(i => (
+                                <div key={i} className="flex gap-4 items-start">
+                                    <div className="w-8 h-8 rounded-full bg-surface-2 shrink-0" />
+                                    <div className="flex-1">
+                                        <div className="h-4 w-48 bg-surface-2 rounded-full mb-2" />
+                                        <div className="h-3 w-32 bg-surface-2 rounded-full" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -105,19 +147,19 @@ export default function Dashboard() {
         { key: 'app_fee', label: 'Application Fee', desc: 'Application fee paid', icon: CreditCard, done: progress.app_fee_paid, link: '/payment?type=application', sublabel: progress.app_payment_status },
         { key: 'applied', label: 'Applied', desc: 'Hostel application submitted', icon: FileText, done: progress.applied, link: '/apply', sublabel: progress.application_status },
         { key: 'quiz', label: 'Quiz Completed', desc: 'Compatibility quiz taken', icon: ClipboardCheck, done: progress.quiz_completed, link: '/quiz' },
-        { key: 'allocated', label: 'Allocated', desc: 'Bed space assigned', icon: BedDouble, done: progress.allocated, link: '/my-allocation' },
         { key: 'hostel_fee', label: 'Hostel Fee', desc: 'Hostel fee paid', icon: CreditCard, done: progress.hostel_fee_paid, link: '/payment?type=hostel', sublabel: progress.hostel_payment_status },
+        { key: 'allocated', label: 'Allocated', desc: 'Bed space assigned', icon: BedDouble, done: progress.allocated, link: '/my-allocation' },
     ];
 
     const currentStepIdx = steps.findIndex(s => !s.done);
     const completedCount = steps.filter(s => s.done).length;
 
     const ctaMap = {
-        'Applied': { label: 'Submit Application', link: '/apply' },
         'Application Fee': { label: 'Pay Application Fee', link: '/payment?type=application' },
+        'Applied': { label: 'Submit Application', link: '/apply' },
         'Quiz Completed': { label: 'Take Compatibility Quiz', link: '/quiz' },
-        'Allocated': { label: 'View Allocation', link: '/my-allocation' },
         'Hostel Fee': { label: 'Pay Hostel Fee', link: '/payment?type=hostel' },
+        'Allocated': { label: 'View Allocation', link: '/my-allocation' },
     };
 
     const currentStep = currentStepIdx >= 0 ? steps[currentStepIdx] : null;
@@ -410,20 +452,14 @@ export default function Dashboard() {
                                     </div>
                                 )}
 
-                                {/* HMS Ref + Print */}
-                                <div className="flex items-center justify-between pt-2 border-t border-black/5">
-                                    {progress.hms_reference && (
-                                        <div>
-                                            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">HMS Reference</p>
-                                            <p className="text-sm font-mono font-bold text-forest mt-0.5">{progress.hms_reference}</p>
-                                        </div>
-                                    )}
+                                {/* Download Hostel Pass */}
+                                <div className="flex items-center justify-end pt-2 border-t border-black/5">
                                     <Link
-                                        to="/my-allocation"
+                                        to="/hostel-pass"
                                         className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 hover:bg-emerald-700 hover:shadow-lg transition-all"
                                     >
-                                        <Printer className="w-3.5 h-3.5" />
-                                        Print Slip
+                                        <BedDouble className="w-3.5 h-3.5" />
+                                        Download Hostel Pass
                                     </Link>
                                 </div>
                             </div>

@@ -27,7 +27,7 @@ COLUMN_CATALOGUE = {
     "payment": {
         "label": "Payment",
         "columns": {
-            "cp.hms_reference": "HMS Reference",
+            "cp.hms_reference": "Payment Reference",
             "cp.total_amount_kobo / 100": "Amount (₦)",
             "cp.payment_channel": "Channel",
             "cp.status": "Payment Status",
@@ -347,7 +347,7 @@ def format_csv(aliases: list[str], rows: list[list], aggregates: dict) -> str:
     writer = csv.writer(output)
 
     # Header
-    writer.writerow(["HMS Report Export"])
+    writer.writerow(["FUOYE Report Export"])
     writer.writerow([])
 
     # Column headers

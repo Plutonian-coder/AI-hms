@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
-import { Menu, LogOut, ChevronDown, Settings as SettingsIcon, BookOpen } from 'lucide-react';
+import { Routes, Route, Navigate, useNavigate, Link, Outlet, useLocation } from 'react-router-dom';
+import { Menu, LogOut, ChevronDown, Settings as SettingsIcon } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AdminSidebar from './components/AdminSidebar';
+import apiClient from './api/client';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import HostelApplication from './pages/HostelApplication';
@@ -15,6 +16,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import HostelPass from './pages/HostelPass';
+import VerifyPass from './pages/VerifyPass';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminHostels from './pages/admin/AdminHostels';
 import AdminBlocks from './pages/admin/AdminBlocks';
@@ -29,7 +32,6 @@ import AdminReports from './pages/admin/AdminReports';
 import AdminRegisterImport from './pages/admin/AdminRegisterImport';
 import AdminFeeComponents from './pages/admin/AdminFeeComponents';
 import Settings from './pages/Settings';
-import Docs from './pages/Docs';
 import AdminReviewQueue from './pages/admin/AdminReviewQueue';
 import AdminApplicationTracker from './pages/admin/AdminApplicationTracker';
 
@@ -105,14 +107,6 @@ const ProfileDropdown = ({ user, initial }) => {
               <SettingsIcon className="w-4 h-4 text-muted" />
               Settings
             </Link>
-            <Link
-              to="/docs"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-body hover:bg-surface-2 transition-colors"
-            >
-              <BookOpen className="w-4 h-4 text-muted" />
-              Help & Docs
-            </Link>
             <button
               onClick={handleSignOut}
               className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
@@ -129,7 +123,7 @@ const ProfileDropdown = ({ user, initial }) => {
 };
 
 /* ── Student layout ─────────────────────────────────────────────────────────── */
-const StudentLayout = ({ children }) => {
+const StudentLayout = () => {
   const user = getUser();
   const initial = user?.full_name?.charAt(0) || 'S';
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -148,31 +142,34 @@ const StudentLayout = ({ children }) => {
 
   const [progress, setProgress] = useState(null);
 
-  // Check progress globally to configure nav links dynamically
-  useEffect(() => {
+  const fetchProgress = useCallback(() => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
-    import('./api/client').then(({ default: apiClient }) => {
-      apiClient.get('/allocation/dashboard')
-        .then(res => {
-          if (res.data?.progress) {
-            setProgress(res.data.progress);
-            // Hide payment route if BOTH fees are paid (or handle logic in Sidebar)
-            if (res.data.progress.app_fee_paid && res.data.progress.hostel_fee_paid) {
-              setHiddenRoutes(prev => prev.includes('/payment') ? prev : [...prev, '/payment']);
-            }
+    apiClient.get('/allocation/dashboard')
+      .then(res => {
+        if (res.data?.progress) {
+          setProgress(res.data.progress);
+          if (res.data.progress.app_fee_paid && res.data.progress.hostel_fee_paid) {
+            setHiddenRoutes(prev => prev.includes('/payment') ? prev : [...prev, '/payment']);
           }
-        })
-        .catch(() => { /* silently ignore */ });
-    });
+        }
+      })
+      .catch(() => { /* silently ignore */ });
   }, []);
+
+  // Check progress globally to configure nav links dynamically
+  useEffect(() => {
+    fetchProgress();
+  }, [fetchProgress]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden app-bg">
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} hiddenRoutes={hiddenRoutes} progress={progress} />
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto">
+      <div className="print:hidden h-full flex shrink-0 z-50">
+        <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} hiddenRoutes={hiddenRoutes} progress={progress} />
+      </div>
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto print:overflow-visible">
         {/* Header */}
-        <header className="glass-header sticky top-0 z-10 px-5 py-3 flex items-center justify-between shrink-0">
+        <header className="glass-header sticky top-0 z-10 px-5 py-3 flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -181,15 +178,16 @@ const StudentLayout = ({ children }) => {
               <Menu className="w-5 h-5" />
             </button>
             <div className="lg:hidden flex items-center gap-2">
-              <span className="text-xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+              <img src="/fuoye-logo.png" alt="FUOYE" className="w-7 h-7 object-contain" />
+              <span className="text-lg font-serif font-black text-forest tracking-tighter">FUOYE</span>
             </div>
             <span className="hidden lg:block text-xs font-bold text-muted uppercase tracking-widest">Student Portal</span>
           </div>
           <ProfileDropdown user={user} initial={initial} />
         </header>
         {/* Page content */}
-        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full mx-auto overflow-x-hidden">
-          {children}
+        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full mx-auto overflow-x-hidden print:p-0 print:overflow-visible">
+          <Outlet context={{ refreshProgress: fetchProgress, setProgress }} />
         </main>
       </div>
     </div>
@@ -197,7 +195,7 @@ const StudentLayout = ({ children }) => {
 };
 
 /* ── Admin layout ───────────────────────────────────────────────────────────── */
-const AdminLayout = ({ children }) => {
+const AdminLayout = () => {
   const user = getUser();
   const initial = user?.full_name?.charAt(0) || 'A';
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -215,10 +213,12 @@ const AdminLayout = ({ children }) => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden app-bg">
-      <AdminSidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} />
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto">
+      <div className="print:hidden h-full flex shrink-0 z-50">
+        <AdminSidebar isOpen={sidebarOpen} onClose={closeSidebar} collapsed={sidebarCollapsed} onToggleCollapse={toggleCollapse} />
+      </div>
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto print:overflow-visible">
         {/* Header */}
-        <header className="glass-header sticky top-0 z-10 px-5 py-3 flex items-center justify-between shrink-0">
+        <header className="glass-header sticky top-0 z-10 px-5 py-3 flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -227,7 +227,8 @@ const AdminLayout = ({ children }) => {
               <Menu className="w-5 h-5" />
             </button>
             <div className="lg:hidden flex items-center gap-2">
-              <span className="text-xl font-serif font-black text-forest tracking-tighter italic">HMS</span>
+              <img src="/fuoye-logo.png" alt="FUOYE" className="w-7 h-7 object-contain" />
+              <span className="text-lg font-serif font-black text-forest tracking-tighter">FUOYE</span>
               <span className="text-[10px] font-bold text-muted uppercase tracking-wider ml-1">Admin</span>
             </div>
             <span className="hidden lg:block text-xs font-bold text-muted uppercase tracking-widest">Admin Portal</span>
@@ -235,8 +236,8 @@ const AdminLayout = ({ children }) => {
           <ProfileDropdown user={user} initial={initial} />
         </header>
         {/* Page content */}
-        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full mx-auto overflow-x-hidden">
-          {children}
+        <main className="flex-1 p-4 sm:p-5 lg:p-8 w-full mx-auto overflow-x-hidden print:p-0 print:overflow-visible">
+          <Outlet />
         </main>
       </div>
     </div>
@@ -249,7 +250,7 @@ const SmartRoot = () => {
   if (!token) return <LandingPage />;
   const user = getUser();
   if (user?.role === 'admin') return <Navigate to="/admin" replace />;
-  return <StudentLayout><Dashboard /></StudentLayout>;
+  return <Navigate to="/dashboard" replace />;
 };
 
 export default function App() {
@@ -272,18 +273,22 @@ export default function App() {
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/docs" element={<Docs />} />
+      <Route path="/verify/:token" element={<VerifyPass />} />
 
       {/* Smart root */}
       <Route path="/" element={<SmartRoot />} />
 
       {/* Student */}
-      <Route path="/apply" element={<ProtectedRoute requiredRole="student"><StudentLayout><HostelApplication /></StudentLayout></ProtectedRoute>} />
-      <Route path="/payment" element={<ProtectedRoute requiredRole="student"><StudentLayout><Payment /></StudentLayout></ProtectedRoute>} />
-      <Route path="/payment/callback" element={<ProtectedRoute requiredRole="student"><StudentLayout><PaymentCallback /></StudentLayout></ProtectedRoute>} />
-      <Route path="/receipt" element={<ProtectedRoute requiredRole="student"><StudentLayout><Receipt /></StudentLayout></ProtectedRoute>} />
-      <Route path="/quiz" element={<ProtectedRoute requiredRole="student"><StudentLayout><CompatibilityQuiz /></StudentLayout></ProtectedRoute>} />
-      <Route path="/my-allocation" element={<ProtectedRoute requiredRole="student"><StudentLayout><MyAllocation /></StudentLayout></ProtectedRoute>} />
+      <Route element={<ProtectedRoute requiredRole="student"><StudentLayout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/apply" element={<HostelApplication />} />
+        <Route path="/payment" element={<Payment />} />
+        <Route path="/payment/callback" element={<PaymentCallback />} />
+        <Route path="/receipt" element={<Receipt />} />
+        <Route path="/hostel-pass" element={<HostelPass />} />
+        <Route path="/quiz" element={<CompatibilityQuiz />} />
+        <Route path="/my-allocation" element={<MyAllocation />} />
+      </Route>
 
       {/* Settings — available to all authenticated users */}
       <Route path="/settings" element={
@@ -300,21 +305,23 @@ export default function App() {
       <Route path="/eligibility" element={<Navigate to="/apply" replace />} />
 
       {/* Admin */}
-      <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminDashboard /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/hostels" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminHostels /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/hostels/:hostelId/blocks" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminBlocks /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/rooms/:roomId/students" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminRoomStudents /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/bedspaces" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminBedSpaces /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/sessions" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminSessions /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/fee-components" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminFeeComponents /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/students" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminStudents /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/allocations" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminAllocations /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/transactions" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminTransactions /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/audit-logs" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminAuditLogs /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/reports" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminReports /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/register-import" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminRegisterImport /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/review-queue" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminReviewQueue /></AdminLayout></ProtectedRoute>} />
-      <Route path="/admin/application-tracker" element={<ProtectedRoute requiredRole="admin"><AdminLayout><AdminApplicationTracker /></AdminLayout></ProtectedRoute>} />
+      <Route element={<ProtectedRoute requiredRole="admin"><AdminLayout /></ProtectedRoute>}>
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/hostels" element={<AdminHostels />} />
+        <Route path="/admin/hostels/:hostelId/blocks" element={<AdminBlocks />} />
+        <Route path="/admin/rooms/:roomId/students" element={<AdminRoomStudents />} />
+        <Route path="/admin/bedspaces" element={<AdminBedSpaces />} />
+        <Route path="/admin/sessions" element={<AdminSessions />} />
+        <Route path="/admin/fee-components" element={<AdminFeeComponents />} />
+        <Route path="/admin/students" element={<AdminStudents />} />
+        <Route path="/admin/allocations" element={<AdminAllocations />} />
+        <Route path="/admin/transactions" element={<AdminTransactions />} />
+        <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+        <Route path="/admin/reports" element={<AdminReports />} />
+        <Route path="/admin/register-import" element={<AdminRegisterImport />} />
+        <Route path="/admin/review-queue" element={<AdminReviewQueue />} />
+        <Route path="/admin/application-tracker" element={<AdminApplicationTracker />} />
+      </Route>
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

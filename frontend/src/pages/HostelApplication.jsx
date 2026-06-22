@@ -229,7 +229,7 @@ export default function HostelApplication() {
                         {isReview ? <AlertTriangle className="w-6 h-6 text-warning shrink-0 mt-0.5" /> : <CheckCircle className="w-6 h-6 text-forest shrink-0 mt-0.5" />}
                         <div>
                             <h3 className="font-bold text-heading">{isReview ? 'Under Administrative Review' : isReady ? 'Application Cleared' : 'Application Submitted'}</h3>
-                            <p className="text-sm text-body mt-1">{isReview ? 'Your medical documentation is being reviewed. You will be notified by email within 3–5 working days.' : isReady ? 'Your application is cleared for allocation. Proceed to make payment.' : `Status: ${status.replace(/_/g, ' ')}`}</p>
+                            <p className="text-sm text-body mt-1">{isReview ? 'Your medical documentation is being reviewed. You will be notified by email within 3–5 working days.' : isReady ? 'Your application is cleared for allocation. Proceed to take the compatibility quiz.' : `Status: ${status.replace(/_/g, ' ')}`}</p>
                             {appStatus?.admin_status_note && (
                                 <div className="mt-3 p-3 rounded-xl bg-white/60 border border-black/5">
                                     <p className="text-xs font-bold text-muted uppercase tracking-widest mb-1">Admin Note</p>
@@ -250,8 +250,8 @@ export default function HostelApplication() {
                         </div>
                     )}
                     {isReady && (
-                        <button onClick={() => navigate('/payment?type=application')} className="mt-6 w-full flex items-center justify-center gap-2 bg-forest text-white px-5 py-3.5 rounded-xl font-bold shadow-lg shadow-forest/20 hover:bg-forest-hover hover:scale-[1.02] transition-all">
-                            Proceed to Payment <ChevronRight className="w-4 h-4" />
+                        <button onClick={() => navigate('/quiz')} className="mt-6 w-full flex items-center justify-center gap-2 bg-forest text-white px-5 py-3.5 rounded-xl font-bold shadow-lg shadow-forest/20 hover:bg-forest-hover hover:scale-[1.02] transition-all">
+                            Take Compatibility Quiz <ChevronRight className="w-4 h-4" />
                         </button>
                     )}
                 </div>
@@ -459,20 +459,14 @@ export default function HostelApplication() {
                                 })}
                             </div>
                         </div>
-                        <div className="p-4 bg-warning-bg/30 border border-warning/20 rounded-xl">
-                            <p className="text-xs text-warning font-semibold">⚠️ You must pay the Application Fee before you can submit. Your application will be locked after submission.</p>
+                        <div className="p-4 bg-lime-soft border border-lime-border rounded-xl">
+                            <p className="text-xs text-forest font-semibold">⚠️ Your application will be locked after submission.</p>
                         </div>
                         <div className="flex gap-3">
                             <button onClick={() => setCurrentStage(3)} className="px-5 py-3 rounded-xl border border-gray-200 text-sm font-bold text-muted hover:text-heading hover:bg-surface transition-all">Back</button>
-                            {progress?.app_fee_paid ? (
-                                <button onClick={handleSubmit} disabled={submitting} className="flex-1 flex justify-center items-center py-3.5 rounded-xl shadow-lg shadow-lime/25 text-sm font-black text-forest bg-lime hover:bg-lime-hover transition-all hover:scale-[1.02] disabled:opacity-50">
-                                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Send className="w-4 h-4 mr-2" /> Submit Application</>}
-                                </button>
-                            ) : (
-                                <button onClick={() => navigate('/payment?type=application')} className="flex-1 flex justify-center items-center py-3.5 rounded-xl shadow-lg shadow-forest/25 text-sm font-black text-white bg-forest hover:bg-forest-hover transition-all hover:scale-[1.02]">
-                                    <CreditCard className="w-4 h-4 mr-2" /> Pay Application Fee
-                                </button>
-                            )}
+                            <button onClick={handleSubmit} disabled={submitting} className="flex-1 flex justify-center items-center py-3.5 rounded-xl shadow-lg shadow-lime/25 text-sm font-black text-forest bg-lime hover:bg-lime-hover transition-all hover:scale-[1.02] disabled:opacity-50">
+                                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Send className="w-4 h-4 mr-2" /> Submit Application</>}
+                            </button>
                         </div>
                     </div>
                 )}

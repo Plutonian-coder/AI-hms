@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import apiClient from '../api/client';
-import { ArrowRight, Search, BedDouble, Users, ShieldCheck, BarChart3, ClipboardList, RefreshCw, ChevronRight, Zap, BookOpen } from 'lucide-react';
+import { ArrowRight, Search, BedDouble, Users, ShieldCheck, BarChart3, ClipboardList, RefreshCw, ChevronRight, Zap } from 'lucide-react';
 
 export default function LandingPage() {
     const [matric, setMatric] = useState('');
@@ -37,8 +37,9 @@ export default function LandingPage() {
             {/* ─── NAVBAR ─── */}
             <nav className="sticky top-0 z-50 bg-cream/80 backdrop-blur-md border-b border-black/5">
                 <div className="max-w-7xl mx-auto px-6 lg:px-12 h-16 flex items-center justify-between">
-                    <Link to="/" className="text-xl font-black text-heading tracking-tight">
-                        HMS
+                    <Link to="/" className="flex items-center gap-2 text-xl font-black text-heading tracking-tight">
+                        <img src="/fuoye-logo.png" alt="FUOYE" className="w-8 h-8 object-contain" />
+                        FUOYE
                     </Link>
                     <div className="flex items-center gap-6">
                         <a href="#features" className="hidden sm:block text-sm font-semibold text-muted hover:text-heading transition-colors">
@@ -321,7 +322,7 @@ export default function LandingPage() {
                                 tag: 'Secure Payments',
                                 title: 'Transparent Online Payments',
                                 desc: 'Hostel fees are itemised by component — accommodation, utilities, levies — with amounts tailored per study type. All payments are processed securely through Paystack.',
-                                detail: 'Each payment generates a unique digital HMS receipt, replacing unverifiable paper receipts with a permanent digital record.',
+                                detail: 'Each payment generates a unique digital receipt reference, replacing unverifiable paper receipts with a permanent digital record.',
                             },
                             {
                                 icon: ClipboardList,
@@ -424,12 +425,7 @@ export default function LandingPage() {
                             <ChevronRight className="w-5 h-5" />
                         </Link>
                     </div>
-                    <p className="text-white/30 text-sm font-medium mt-8">
-                        Need a complete walkthrough?{' '}
-                        <Link to="/docs" className="text-lime/70 font-bold hover:text-lime transition-colors underline underline-offset-2">
-                            Read the full documentation →
-                        </Link>
-                    </p>
+
                 </div>
             </section>
 
@@ -438,22 +434,19 @@ export default function LandingPage() {
                 <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                         <div>
-                            <span className="text-lg font-black text-white tracking-tight">HMS</span>
-                            <p className="text-white/30 text-sm font-medium mt-1">AI-Driven Hostel Management System</p>
+                            <img src="/fuoye-logo.png" alt="FUOYE" className="w-8 h-8 object-contain" />
+                            <span className="text-lg font-black text-white tracking-tight">FUOYE</span>
+                            <p className="text-white/30 text-sm font-medium mt-1">Hostel Management Portal</p>
                         </div>
                         <div className="flex items-center gap-6 text-sm font-medium text-white/40">
                             <Link to="/login" className="hover:text-white transition-colors">Sign In</Link>
                             <Link to="/register" className="hover:text-white transition-colors">Register</Link>
                             <a href="#features" className="hover:text-white transition-colors">Features</a>
                             <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
-                            <Link to="/docs" className="flex items-center gap-1.5 hover:text-white transition-colors">
-                                <BookOpen className="w-3.5 h-3.5" />
-                                Docs
-                            </Link>
                         </div>
                     </div>
                     <div className="border-t border-white/10 mt-8 pt-8 text-center">
-                        <p className="text-white/20 text-xs font-medium">&copy; {new Date().getFullYear()} HMS. All rights reserved.</p>
+                        <p className="text-white/20 text-xs font-medium">&copy; {new Date().getFullYear()} FUOYE. All rights reserved.</p>
                     </div>
                 </div>
             </footer>
