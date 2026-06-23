@@ -161,9 +161,12 @@ async def upload_eligibility_document(
     Upload and verify a single eligibility document via AI (SSE-streamed).
     6-step pipeline: Pre-flight → Upload → AI Verify → Identity Match → RRR Validation → Update Eligibility
     """
+    file_content = await document.read()
     if len(file_content) > 5 * 1024 * 1024:
-        yield _sse_error(1, "Pre-flight Checks", "Document must be under 5MB.")
-        return
+        # If it's too large, we can't yield directly from the route, we must return a stream
+        def error_stream():
+            yield _sse_error(1, "Pre-flight Checks", "Document must be under 5MB.")
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     file_ext = os.path.splitext(document.filename or "doc.png")[1]
 
