@@ -12,12 +12,13 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from logging_config import setup_logging
 from config import CORS_ORIGINS
 from database import get_pool, close_pool
-from routers import auth, allocation, admin, profile, eligibility, application, payment, register_import, quiz, report
+from routers import auth, allocation, admin, eligibility, application, payment, register_import, quiz, report
 import tasks
 import asyncio
 
