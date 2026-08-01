@@ -269,9 +269,13 @@ def list_hostels(student=Depends(get_current_student)):
     gender = student["gender"]
 
     with get_cursor() as cur:
+        # Capacity comes from the beds that actually exist rather than the
+        # denormalized hostels.capacity column, which goes stale and made
+        # available beds read as negative.
         cur.execute("""
-            SELECT h.id, h.name, h.gender_restriction, h.status, h.capacity,
-                   COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) AS occupied
+            SELECT h.id, h.name, h.gender_restriction, h.status,
+                   COUNT(DISTINCT b.id) AS capacity,
+                   COUNT(DISTINCT b.id) FILTER (WHERE b.status = 'occupied') AS occupied
             FROM hostels h
             LEFT JOIN blocks bl ON bl.hostel_id = h.id
             LEFT JOIN rooms r ON r.block_id = bl.id
@@ -287,7 +291,7 @@ def list_hostels(student=Depends(get_current_student)):
         {
             "id": r[0], "name": r[1], "gender": r[2], "status": r[3],
             "capacity": r[4], "occupied": r[5],
-            "available": r[4] - r[5],
+            "available": max(r[4] - r[5], 0),
             "occupancy_pct": round(r[5] / r[4] * 100, 1) if r[4] > 0 else 0,
         }
         for r in rows

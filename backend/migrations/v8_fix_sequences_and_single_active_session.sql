@@ -65,3 +65,19 @@ WHERE is_active = TRUE
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_session
     ON academic_sessions ((is_active))
     WHERE is_active = TRUE;
+
+
+-- ── 4. Resync hostels.capacity with the beds that actually exist ───────────
+-- capacity was only ever incremented by generate_rooms(), so hostels whose
+-- beds arrived by any other route (the Supabase import) kept capacity = 0
+-- while occupied counted real beds — surfacing as negative vacancy in the UI
+-- ("TOTAL 0 / OCCUPIED 7 / VACANT -7").
+
+UPDATE hostels h
+SET capacity = (
+    SELECT COUNT(*)
+    FROM beds b
+    JOIN rooms r   ON r.id = b.room_id
+    JOIN blocks bl ON bl.id = r.block_id
+    WHERE bl.hostel_id = h.id
+);

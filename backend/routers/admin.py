@@ -17,9 +17,10 @@ from dependencies import get_current_admin
 from services.audit_logger import (
     log_event, SESSION_CREATED, SESSION_ACTIVATED, PORTAL_TOGGLED, SESSION_ENDED,
     FEE_COMPONENT_ADDED, FEE_COMPONENT_UPDATED, HOSTEL_CREATED, HOSTEL_DELETED,
-    ALLOCATION_REVOKED,
+    ALLOCATION_REVOKED, ADMIN_NL_QUERY,
     MEDICAL_REVIEW_APPROVED, MEDICAL_REVIEW_REJECTED, ADMIN_STATUS_UPDATE,
 )
+from services.nl_query import run_nl_query, NLQueryError
 from services.email import (
     send_medical_review_email, send_status_change_email, send_allocation_revoked_email,
 )
@@ -472,13 +473,44 @@ def create_hostel(data: HostelCreate, admin=Depends(get_current_admin)):
     return {"message": "Hostel created", "hostel_id": hostel_id}
 
 
+class NLQueryRequest(BaseModel):
+    query: str
+
+
+@router.post("/nl-query")
+def nl_query(data: NLQueryRequest, admin=Depends(get_current_admin)):
+    """Answer a plain-English question by generating and running a read-only SQL query."""
+    question = data.query.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Enter a question first.")
+    if len(question) > 500:
+        raise HTTPException(status_code=400, detail="Question is too long (max 500 characters).")
+
+    try:
+        result = run_nl_query(question)
+    except NLQueryError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    log_event(
+        ADMIN_NL_QUERY, "admin", admin["identifier"],
+        f"Ran AI query: {question[:200]}",
+        target_entity="nl_query",
+    )
+    return result
+
+
 @router.get("/hostels")
 def list_hostels(admin=Depends(get_current_admin)):
     with get_cursor() as cur:
+        # Capacity is derived from the beds that actually exist, not from the
+        # denormalized hostels.capacity column — that column is only bumped by
+        # generate_rooms(), so beds created any other way (e.g. the Supabase
+        # import) left it stale and produced negative vacancy counts.
         cur.execute("""
-            SELECT h.id, h.name, h.gender_restriction, h.status, h.capacity,
+            SELECT h.id, h.name, h.gender_restriction, h.status,
                    COUNT(DISTINCT bl.id) AS block_count,
-                   COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) AS occupied
+                   COUNT(DISTINCT b.id) AS capacity,
+                   COUNT(DISTINCT b.id) FILTER (WHERE b.status = 'occupied') AS occupied
             FROM hostels h
             LEFT JOIN blocks bl ON bl.hostel_id = h.id
             LEFT JOIN rooms r   ON r.block_id = bl.id
@@ -491,8 +523,8 @@ def list_hostels(admin=Depends(get_current_admin)):
     return [
         {
             "id": r[0], "name": r[1], "gender": r[2], "status": r[3],
-            "capacity": r[4], "block_count": r[5], "occupied": r[6],
-            "available": r[4] - r[6],
+            "block_count": r[4], "capacity": r[5], "occupied": r[6],
+            "available": max(r[5] - r[6], 0),
         }
         for r in rows
     ]
@@ -735,8 +767,23 @@ def create_many_rooms_and_beds(block_id: int, data: BulkRoomGenerate, admin=Depe
                     cur.execute("INSERT INTO beds (room_id, bed_number) VALUES (%s, %s)", (room_id, bed_idx))
                     created_beds += 1
 
-            new_capacity = current_capacity + created_beds
-            cur.execute("UPDATE hostels SET capacity = %s WHERE id = %s", (new_capacity, hostel_id))
+            # Recompute from the actual beds rather than incrementing the stored
+            # value — incrementing lets the column drift permanently out of sync
+            # if beds are ever added or removed by any other path.
+            cur.execute(
+                """UPDATE hostels h
+                   SET capacity = (
+                       SELECT COUNT(*)
+                       FROM beds b
+                       JOIN rooms r  ON r.id = b.room_id
+                       JOIN blocks bl ON bl.id = r.block_id
+                       WHERE bl.hostel_id = h.id
+                   )
+                   WHERE h.id = %s
+                   RETURNING capacity""",
+                (hostel_id,),
+            )
+            new_capacity = cur.fetchone()[0]
             conn.commit()
 
     return {
