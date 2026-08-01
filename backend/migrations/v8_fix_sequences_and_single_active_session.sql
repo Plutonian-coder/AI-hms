@@ -81,3 +81,24 @@ SET capacity = (
     JOIN blocks bl ON bl.id = r.block_id
     WHERE bl.hostel_id = h.id
 );
+
+
+-- ── 5. Release beds still held by a non-active session ─────────────────────
+-- beds.status is global rather than per-session, so occupancy from a retired
+-- session leaks into whichever session is active — hostels showed beds as
+-- taken by students who belong to a different year entirely. Only allocations
+-- in the active session may hold a bed. Allocation rows are left untouched, so
+-- reactivating that session restores its occupancy (reactivate_session()
+-- re-marks the beds).
+
+UPDATE beds b
+SET status = 'vacant'
+WHERE b.status = 'occupied'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM allocations a
+      JOIN academic_sessions s ON s.id = a.session_id
+      WHERE a.bed_id = b.id
+        AND a.status = 'active'
+        AND s.is_active = TRUE
+  );
