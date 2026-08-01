@@ -32,6 +32,7 @@ import AdminReports from './pages/admin/AdminReports';
 import AdminRegisterImport from './pages/admin/AdminRegisterImport';
 import AdminFeeComponents from './pages/admin/AdminFeeComponents';
 import Settings from './pages/Settings';
+import AdminSettings from './pages/admin/AdminSettings';
 import AdminReviewQueue from './pages/admin/AdminReviewQueue';
 import AdminApplicationTracker from './pages/admin/AdminApplicationTracker';
 
@@ -253,6 +254,17 @@ const SmartRoot = () => {
   return <Navigate to="/dashboard" replace />;
 };
 
+/* ── Role-aware settings layout (avoids duplicate /settings in two groups) ── */
+const RoleLayout = () => {
+  const user = getUser();
+  return user?.role === 'admin' ? <AdminLayout /> : <StudentLayout />;
+};
+
+const RoleSettings = () => {
+  const user = getUser();
+  return user?.role === 'admin' ? <AdminSettings /> : <Settings />;
+};
+
 export default function App() {
   const navigate = useNavigate();
 
@@ -290,17 +302,6 @@ export default function App() {
         <Route path="/my-allocation" element={<MyAllocation />} />
       </Route>
 
-      {/* Settings — available to all authenticated users */}
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          {(() => {
-            const u = getUser();
-            const Layout = u?.role === 'admin' ? AdminLayout : StudentLayout;
-            return <Layout><Settings /></Layout>;
-          })()}
-        </ProtectedRoute>
-      } />
-
       {/* Legacy redirect */}
       <Route path="/eligibility" element={<Navigate to="/apply" replace />} />
 
@@ -321,6 +322,11 @@ export default function App() {
         <Route path="/admin/register-import" element={<AdminRegisterImport />} />
         <Route path="/admin/review-queue" element={<AdminReviewQueue />} />
         <Route path="/admin/application-tracker" element={<AdminApplicationTracker />} />
+      </Route>
+
+      {/* Settings — single route, role-aware layout + page via Outlet */}
+      <Route element={<ProtectedRoute><RoleLayout /></ProtectedRoute>}>
+        <Route path="/settings" element={<RoleSettings />} />
       </Route>
 
       {/* Catch-all */}

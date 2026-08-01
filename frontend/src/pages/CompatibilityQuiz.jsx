@@ -220,8 +220,21 @@ export default function CompatibilityQuiz() {
                         </div>
                     )}
 
+                    {/* Pending Review Result */}
+                    {pipelineResult && pipelineResult.status === 'pending_review' && (
+                        <div className="mt-6 p-5 bg-orange-50 border border-orange-200 rounded-2xl">
+                            <div className="flex items-center gap-3 mb-4">
+                                <CheckCircle className="w-6 h-6 text-orange-600" />
+                                <h3 className="font-bold text-orange-800 text-lg">Preferences Saved</h3>
+                            </div>
+                            <p className="text-sm font-medium text-orange-700">
+                                {pipelineResult.message}
+                            </p>
+                        </div>
+                    )}
+
                     {/* Success result */}
-                    {pipelineResult && (
+                    {pipelineResult && pipelineResult.status !== 'pending_review' && (
                         <div className="mt-6 p-5 bg-lime/5 border border-lime/20 rounded-2xl">
                             <div className="flex items-center gap-3 mb-4">
                                 <CheckCircle className="w-6 h-6 text-lime" />
@@ -268,12 +281,20 @@ export default function CompatibilityQuiz() {
                                 Back to Quiz
                             </button>
                         )}
-                        {pipelineResult && (
+                        {pipelineResult && pipelineResult.status !== 'pending_review' && (
                             <button
                                 onClick={() => navigate('/payment?type=hostel')}
                                 className="w-full flex items-center justify-center gap-2 bg-forest text-white px-6 py-3 rounded-full font-bold shadow-lg shadow-forest/25 hover:bg-forest-light hover:scale-[1.02] transition-all"
                             >
                                 Pay Hostel Fee <ArrowRight className="w-4 h-4" />
+                            </button>
+                        )}
+                        {pipelineResult && pipelineResult.status === 'pending_review' && (
+                            <button
+                                onClick={() => navigate('/')}
+                                className="w-full flex items-center justify-center gap-2 bg-cream text-heading px-6 py-3 rounded-full font-bold hover:bg-black/5 transition-all"
+                            >
+                                Return to Dashboard
                             </button>
                         )}
                     </div>

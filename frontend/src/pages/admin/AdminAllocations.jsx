@@ -54,6 +54,17 @@ export default function AdminAllocations() {
 
     useEffect(() => { fetchData(); }, []);
 
+    const handleCheckIn = async (allocationId, matricNo) => {
+        if (!window.confirm(`Verify physical arrival and issue room keys for ${matricNo}?`)) return;
+        try {
+            const res = await apiClient.post(`/admin/allocations/${allocationId}/check-in`);
+            toast.success(res.data.message);
+            fetchData();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Check-in failed');
+        }
+    };
+
     const handleRevoke = async (id, reason = '', notes = '') => {
         setRevoking(id);
         try {
@@ -386,6 +397,7 @@ export default function AdminAllocations() {
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Hostel</th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Room</th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Bed</th>
+                                        <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Check-In Status</th>
                                         <th className="text-left px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Date</th>
                                         <th className="text-right px-6 py-3 text-xs font-bold text-muted uppercase tracking-widest">Action</th>
                                     </tr>
@@ -398,7 +410,7 @@ export default function AdminAllocations() {
                                             onToggle={() => toggleExpand(a.student_id)}
                                             docs={studentDocs[a.student_id]}
                                             docLoading={docLoading && expandedRow === a.student_id}
-                                            colSpan={8}
+                                            colSpan={9}
                                             level={a.level}
                                         >
                                             <td className="px-6 py-4">
@@ -412,11 +424,30 @@ export default function AdminAllocations() {
                                             <td className="px-6 py-4"><span className="font-mono font-semibold text-sm text-muted">{a.room_number}</span></td>
                                             <td className="px-6 py-4"><span className="font-semibold text-sm text-heading">Bed {a.bed_number}</span></td>
                                             <td className="px-6 py-4">
+                                                {a.checked_in ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                        <CheckCircle className="w-3 h-3" /> Checked-In
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                                        Pending Arrival
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
                                                 <span className="text-xs font-medium text-muted">
                                                     {a.allocated_at ? new Date(a.allocated_at).toLocaleDateString() : '—'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                                                {!a.checked_in && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleCheckIn(a.id, a.identifier); }}
+                                                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-forest bg-lime-soft hover:bg-lime-border border border-lime-border rounded-full transition-colors"
+                                                    >
+                                                        <CheckCircle className="w-3.5 h-3.5 text-forest" /> Issue Keys
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setConfirmRevoke(a); }}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-full transition-colors"

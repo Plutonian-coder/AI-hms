@@ -25,6 +25,12 @@ frontend/.env
 backend/uploads/
 uploads/
 
+# Supabase -> AWS migration artifacts (contain real student PII — photos, data dumps)
+backend/supabase_storage_backup/
+backend/supabase_data_export.sql
+supabase_storage_backup/
+*.sql.bak
+
 # IDE
 .vscode/
 .idea/

@@ -22,7 +22,7 @@ export default function AdminRegisterImport() {
     const [bulkExpanded, setBulkExpanded] = useState(true);
     const [manualForm, setManualForm] = useState({
         matric_number: '', surname: '', first_name: '', gender: '',
-        department: '', level: '', study_type: '', faculty: '',
+        department: '', level: '', study_type: '', faculty: '', email: '',
     });
     const toast = useToast();
 
@@ -119,7 +119,7 @@ export default function AdminRegisterImport() {
             toast.success(res.data.message);
             setManualForm({
                 matric_number: '', surname: '', first_name: '', gender: '',
-                department: '', level: '', study_type: '', faculty: '',
+                department: '', level: '', study_type: '', faculty: '', email: '',
             });
             fetchStats();
         } catch (err) {
@@ -279,6 +279,17 @@ export default function AdminRegisterImport() {
                                     value={manualForm.faculty}
                                     onChange={e => handleManualChange('faculty', e.target.value)}
                                     placeholder="e.g. Science"
+                                    className="w-full glass-input text-heading rounded-xl p-3 font-medium text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Email *</label>
+                                <input
+                                    type="email"
+                                    value={manualForm.email}
+                                    onChange={e => handleManualChange('email', e.target.value)}
+                                    placeholder="student@gmail.com"
+                                    required
                                     className="w-full glass-input text-heading rounded-xl p-3 font-medium text-sm"
                                 />
                             </div>

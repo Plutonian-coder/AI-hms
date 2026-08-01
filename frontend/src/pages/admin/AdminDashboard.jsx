@@ -34,7 +34,7 @@ export default function AdminDashboard() {
                     hostel: s.hostel_fee_deadline ? new Date(s.hostel_fee_deadline).toISOString().slice(0, 16) : '',
                 });
             })
-            .catch(() => toast.error('Failed to load dashboard data.'))
+            .catch(() => {})
             .finally(() => setLoading(false));
     }, []);
 

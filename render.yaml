@@ -21,8 +21,6 @@ services:
         sync: false
       - key: PAYSTACK_CALLBACK_URL
         sync: false
-      - key: GEMINI_API_KEY
-        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: GROQ_API_KEY
@@ -38,4 +36,20 @@ services:
       - key: DB_POOL_MIN
         sync: false
       - key: DB_POOL_MAX
+        sync: false
+      # Email — Google Apps Script (primary) / Gmail SMTP (fallback)
+      - key: GOOGLE_SCRIPT_URL
+        sync: false
+      - key: SMTP_EMAIL
+        sync: false
+      - key: SMTP_APP_PASSWORD
+        sync: false
+      # AWS S3 — file storage (photos, medical docs)
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_BUCKET_NAME
         sync: false

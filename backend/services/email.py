@@ -121,47 +121,43 @@ def _log_email(
 def _send(to_email, subject, html, email_type="general",
           recipient_name=None, recipient_matric=None, recipient_user_id=None,
           session_id=None, extra_metadata=None):
-    """Send an email via Resend (HTTP), Google Apps Script (HTTP), or Gmail SMTP and log it. Never raises — logs errors."""
+    """Send an email via Google Apps Script (HTTP), Resend (HTTP), or Gmail SMTP and log it. Never raises — logs errors."""
     if not GOOGLE_SCRIPT_URL and not RESEND_API_KEY and (not SMTP_EMAIL or not SMTP_APP_PASSWORD):
         logger.warning("Email not configured (No Google Script, Resend, or SMTP). Email to %s skipped.", to_email)
         return None
 
     status = "sent"
     try:
-        if GOOGLE_SCRIPT_URL:
-            # Send via Google Apps Script Webhook (bypasses Render SMTP blocking, 100% free)
+        _sent = False
+
+        # ── 1. Try Google Apps Script ──────────────────────────────────────────
+        if GOOGLE_SCRIPT_URL and not _sent:
             data = {
                 "to": to_email,
                 "subject": subject,
                 "html": html,
                 "senderName": SENDER_NAME
             }
-            # Add a timeout so it doesn't hang forever
-            res = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=15)
-            # The GAS script should return 200/302. Handle errors:
-            if res.status_code >= 400:
-                raise Exception(f"Google Apps Script error: {res.text}")
-            logger.info("Email sent to %s via Google Apps Script. Subject: %s", to_email, subject)
-            
-        elif RESEND_API_KEY:
-            # Send via Resend HTTP API (bypasses Render SMTP blocking)
-            headers = {
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            data = {
-                "from": "FUOYE Hostel Portal <onboarding@resend.dev>",
-                "to": [to_email],
-                "subject": subject,
-                "html": html
-            }
-            res = requests.post("https://api.resend.com/emails", headers=headers, json=data)
-            if res.status_code >= 400:
-                raise Exception(f"Resend API error: {res.text}")
-            logger.info("Email sent to %s via Resend. Subject: %s", to_email, subject)
-            
-        else:
-            # Send via Gmail SMTP
+            try:
+                res = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=15, allow_redirects=True)
+
+                if res.status_code >= 400:
+                    raise Exception(f"GAS HTTP {res.status_code}: {res.text[:200]}")
+
+                try:
+                    gas_json = res.json()
+                    if gas_json.get("status") not in ("success", "ok"):
+                        raise Exception(f"GAS script error: {gas_json.get('message', res.text[:200])}")
+                except ValueError:
+                    raise Exception(f"GAS returned non-JSON: {res.text[:200]}")
+
+                logger.info("Email sent to %s via Google Apps Script. Subject: %s", to_email, subject)
+                _sent = True
+            except Exception as gas_err:
+                logger.warning("GAS send failed for %s: %s — trying fallback.", to_email, gas_err)
+
+        # ── 3. Final fallback: Gmail SMTP ──────────────────────────────────────
+        if (SMTP_EMAIL and SMTP_APP_PASSWORD) and not _sent:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = f"{SENDER_NAME} <{SMTP_EMAIL}>"
@@ -185,6 +181,11 @@ def _send(to_email, subject, html, email_type="general",
                     server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
                     server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
             logger.info("Email sent to %s via SMTP. Subject: %s", to_email, subject)
+            _sent = True
+
+        if not _sent:
+            raise Exception("All email delivery methods failed or are unconfigured.")
+
     except Exception as e:
         logger.error("Failed to send email to %s: %s", to_email, str(e))
         status = "failed"
@@ -229,6 +230,43 @@ def send_registration_email(to_email: str, first_name: str, matric_number: str,
         recipient_matric=matric_number,
         recipient_user_id=user_id,
         session_id=session_id,
+    )
+
+
+# ── 1b. Student Invite Email (sent at import, before sign-up) ────────────────
+
+def send_student_invite_email(to_email: str, first_name: str, matric_number: str,
+                              session_name: str, session_id: int = None):
+    """
+    Invitation email sent when a student is imported into the session register.
+    Notifies them they are verified and provides a direct link to the sign-up page.
+    """
+    body = f"""
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">You're<br>Verified! 🎉</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+            Hi <strong>{first_name}</strong>, your enrollment for the <strong>{session_name}</strong> academic session has been confirmed by the Student Affairs Unit.
+        </p>
+        <div style="background-color: #f9f9f9; padding: 24px; border-radius: 16px; margin: 0 0 25px 0; text-align: left;">
+            <p style="margin: 0 0 6px 0; font-size: 13px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Your Matric Number</p>
+            <p style="margin: 0; font-size: 22px; font-weight: 900; color: #111827; letter-spacing: 0.5px;">{matric_number}</p>
+        </div>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 35px 0;">
+            You can now create your hostel portal account. Click the button below to proceed to the sign-up page — your matric number is your key.
+        </p>
+        <a href="{HMS_APP_URL}/register" style="background-color: #f97316; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">Create my account</a>
+        <p style="color: #9ca3af; font-size: 13px; line-height: 1.5; margin: 30px 0 0 0;">
+            If you were not expecting this email or believe this is an error, please contact the Student Affairs Unit immediately.
+        </p>
+    """
+    return _send(
+        to_email,
+        f"FUOYE — You're a Verified Student. Create Your Hostel Account Now",
+        _wrap_html("Student Invite", body),
+        email_type="student_invite",
+        recipient_name=first_name,
+        recipient_matric=matric_number,
+        session_id=session_id,
+        extra_metadata={"session_name": session_name},
     )
 
 
@@ -522,3 +560,32 @@ def send_allocation_revoked_email(to_email: str, first_name: str, matric: str,
         session_id=session_id,
         extra_metadata={"reason": reason, "notes": notes, "hostel": hostel, "room": room, "bed": bed},
     )
+
+
+def send_admin_assigned_email(to_email: str, first_name: str, identifier: str,
+                              user_id: int = None, session_id: int = None):
+    """Sent when a user is assigned as an administrator."""
+    body = f"""
+        <h1 style="color: #111827; font-size: 32px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.2;">Admin Access<br>Granted</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
+            Hi <strong>{first_name}</strong>, you have been assigned as an administrator on the FUOYE Hostel Management Portal.
+        </p>
+        <div style="background-color: #ECFDF5; padding: 24px; border-radius: 16px; margin: 0 0 35px 0; text-align: left;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #047857; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Account Details</p>
+            <p style="margin: 0; font-size: 16px; font-weight: 800; color: #047857;">Admin ID: {identifier}</p>
+            <p style="margin: 5px 0 0 0; font-size: 15px; color: #047857;">Email: {to_email}</p>
+        </div>
+        <p style="color: #4b5563; font-size: 15px; line-height: 1.6; margin: 0 0 35px 0;">
+            You can now log in to the portal and manage sessions, student allocations, and hostel infrastructure.
+        </p>
+        <a href="{HMS_APP_URL}/login" style="background-color: #10b981; color: #ffffff; padding: 16px 32px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; font-size: 16px;">Go to Admin Portal</a>
+    """
+    return _send(
+        to_email, "FUOYE Hostel Portal — Admin Access Granted",
+        _wrap_html("Admin Access Granted", body),
+        email_type="admin_assigned",
+        recipient_name=first_name,
+        recipient_matric=identifier,
+        recipient_user_id=user_id,
+        session_id=session_id,
+    )

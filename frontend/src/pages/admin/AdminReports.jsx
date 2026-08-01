@@ -117,6 +117,72 @@ export default function AdminReports() {
         }
     };
 
+    const exportPDF = async () => {
+        if (selectedColumns.length === 0) { toast.error('Add at least one column'); return; }
+        try {
+            let rows = preview ? preview.rows : null;
+            if (!rows) {
+                const res = await apiClient.post('/admin/reports/preview', {
+                    columns: selectedColumns, filters, limit: 500
+                });
+                rows = res.data.rows;
+            }
+
+            const headers = selectedColumns.map(c => colLabelMap[c] || c);
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Official Senate Hostel Allocation Report</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 30px; color: #111; }
+                        .header { text-align: center; border-bottom: 3px double #1B4332; padding-bottom: 15px; margin-bottom: 20px; }
+                        .header h1 { font-size: 18px; margin: 0; color: #1B4332; text-transform: uppercase; letter-spacing: 1px; }
+                        .header h2 { font-size: 14px; margin: 6px 0 0 0; color: #333; }
+                        .meta { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-bottom: 15px; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+                        th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; }
+                        th { background-color: #e8f5e9; color: #1B4332; font-weight: bold; text-transform: uppercase; font-size: 10px; }
+                        tr:nth-child(even) { background-color: #f9f9f9; }
+                        .footer { margin-top: 40px; text-align: right; font-size: 11px; color: #666; border-top: 1px solid #ddd; padding-top: 10px; }
+                        @media print { body { padding: 0; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>Federal University Oye-Ekiti</h1>
+                        <h2>Student Affairs Division — Official Senate Hostel Allocation Report</h2>
+                    </div>
+                    <div class="meta">
+                        <span>GENERATED AT: ${new Date().toLocaleString()}</span>
+                        <span>TOTAL RECORDS: ${rows.length}</span>
+                        <span>CONFIDENTIALITY: OFFICIAL SENATE RECORD</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map(r => `<tr>${selectedColumns.map(c => `<td>${r[c] !== null && r[c] !== undefined ? r[c] : '—'}</td>`).join('')}</tr>`).join('')}
+                        </tbody>
+                    </table>
+                    <div class="footer">
+                        <p>Certified & Signed: ___________________________ (Dean of Student Affairs)</p>
+                    </div>
+                    <script>
+                        window.onload = function() { window.print(); }
+                    </script>
+                </body>
+                </html>
+            `);
+            win.document.close();
+            toast.success('Official Senate PDF Report ready for print / export');
+        } catch (err) {
+            toast.error('Failed to generate PDF report');
+        }
+    };
+
     if (loading) return <div className="text-muted animate-pulse font-medium p-8">Loading Report Builder...</div>;
     if (!catalogue) return <div className="text-muted p-8">Failed to load catalogue.</div>;
 
@@ -309,6 +375,14 @@ export default function AdminReports() {
                             >
                                 <Eye className="w-4 h-4" />
                                 {generating ? 'Generating…' : 'Generate Preview'}
+                            </button>
+                            <button
+                                onClick={exportPDF}
+                                disabled={selectedColumns.length === 0}
+                                className={`flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-full text-sm font-bold shadow-md transition-all ${selectedColumns.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700 hover:shadow-lg'}`}
+                            >
+                                <FileBarChart className="w-4 h-4" />
+                                Download Official PDF
                             </button>
                             <button
                                 onClick={exportCSV}

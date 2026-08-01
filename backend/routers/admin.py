@@ -869,17 +869,25 @@ def get_admin_stats(admin=Depends(get_current_admin)):
             for row in cur.fetchall():
                 status_breakdown[row[0]] = row[1]
 
+        # Occupancy rate calculation
+        allocated_beds = active_allocations
+        available_beds = max(0, total_beds - allocated_beds)
+        occupancy_rate = round((allocated_beds / total_beds * 100), 1) if total_beds > 0 else 0.0
+
     return {
         "total_students": total_students,
         "eligible_count": eligible_count,
         "total_hostels": total_hostels,
         "total_beds": total_beds,
-        "occupied_beds": occupied_beds,
-        "available_beds": total_beds - occupied_beds,
+        "occupied_beds": allocated_beds,
+        "available_beds": available_beds,
+        "occupancy_rate": occupancy_rate,
         "active_allocations": active_allocations,
+        "total_allocations": active_allocations,
         "applications": applications,
         "revenue_kobo": revenue,
         "revenue_naira": revenue // 100,
+        "total_revenue": revenue // 100,
         "unallocated_eligible": unallocated,
         "pending_reviews": pending_reviews,
         "medical_approved": medical_approved_count,
@@ -1318,7 +1326,7 @@ def list_students(session_id: Optional[int] = None, admin=Depends(get_current_ad
             "is_allocated":      bool(r[12]),
             "is_active":         is_active,
             "account_status":    account_status,
-            "photo_url":         f"/api/v1/allocation/photo/{r[7]}" if r[14] and r[7] else None,
+            "photo_url":         r[14] if r[14] and str(r[14]).startswith("http") else (f"/api/v1/allocation/photo/{r[7]}" if r[14] and r[7] else None),
         })
     return result
 
@@ -1388,7 +1396,7 @@ def get_student_profile(student_id: int, admin=Depends(get_current_admin)):
             "is_active": user[10],
             "next_of_kin_name": user[11], "next_of_kin_phone": user[12],
             "created_at": user[13].isoformat() if user[13] else None,
-            "photo_url": f"/api/v1/allocation/photo/{user[0]}" if user[14] else None,
+            "photo_url": user[14] if user[14] and str(user[14]).startswith("http") else (f"/api/v1/allocation/photo/{user[0]}" if user[14] else None),
         }
 
         # Derive account status
@@ -1519,7 +1527,7 @@ def list_allocations(admin=Depends(get_current_admin)):
                        SELECT 1 FROM confirmed_payments cp 
                        WHERE cp.student_id = a.student_id AND cp.session_id = a.session_id AND cp.status = 'confirmed'
                    ) AS has_paid,
-                   u.level
+                   u.level, a.checked_in, a.checked_in_at
             FROM allocations a
             JOIN users u ON u.id = a.student_id
             JOIN beds b ON b.id = a.bed_id
@@ -1541,9 +1549,50 @@ def list_allocations(admin=Depends(get_current_admin)):
             "allocated_at": r[10].isoformat() if r[10] else None,
             "has_paid": r[11],
             "level": r[12],
+            "checked_in": bool(r[13]),
+            "checked_in_at": r[14].isoformat() if r[14] else None,
         }
         for r in rows
     ]
+
+
+@router.post("/allocations/{allocation_id}/check-in")
+def check_in_allocation(allocation_id: int, admin=Depends(get_current_admin)):
+    """Mark student as physically checked in by Hall Warden / Porter and issue room key."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT a.id, a.checked_in, u.identifier, u.surname || ' ' || u.first_name, h.name, r.room_number, b.bed_number
+                   FROM allocations a
+                   JOIN users u ON u.id = a.student_id
+                   JOIN beds b ON b.id = a.bed_id
+                   JOIN rooms r ON r.id = b.room_id
+                   JOIN blocks bl ON bl.id = r.block_id
+                   JOIN hostels h ON h.id = bl.hostel_id
+                   WHERE a.id = %s AND a.status = 'active'""",
+                (allocation_id,)
+            )
+            alloc = cur.fetchone()
+            if not alloc:
+                raise HTTPException(status_code=404, detail="Active allocation not found")
+            if alloc[1]:
+                raise HTTPException(status_code=400, detail="Student is already physically checked in")
+
+            cur.execute(
+                """UPDATE allocations
+                   SET checked_in = TRUE, checked_in_at = NOW(), checked_in_by = %s
+                   WHERE id = %s""",
+                (admin["identifier"], allocation_id)
+            )
+            conn.commit()
+
+    log_event(
+        "PHYSICAL_CHECK_IN", "admin", admin["identifier"],
+        f"Verified check-in & issued keys for {alloc[2]} ({alloc[3]}) in {alloc[4]} Room {alloc[5]} Bed {alloc[6]}",
+        target_entity="allocation", target_id=str(allocation_id)
+    )
+
+    return {"message": f"Check-in verified and room key issued for {alloc[3]} ({alloc[2]})"}
 
 
 VALID_REVOCATION_REASONS = {
@@ -1977,6 +2026,152 @@ def list_email_logs(
             for r in rows
         ],
     }
+
+
+class AssignAdminRequest(BaseModel):
+    email: str
+    password: str
+    first_name: Optional[str] = None
+    surname: Optional[str] = None
+
+
+@router.post("/assign-admin")
+def assign_admin(data: AssignAdminRequest, admin=Depends(get_current_admin)):
+    """Assign administrative access to a user. Only callable by ADMIN001 (root admin)."""
+    if admin["identifier"] != "ADMIN001":
+        raise HTTPException(status_code=403, detail="Only the root administrator (ADMIN001) can assign administrators")
+
+    import logging
+    logger = logging.getLogger(__name__)
+
+    from routers.auth import _hash_password
+    from services.email import send_admin_assigned_email
+
+    email_clean = data.email.strip().lower()
+    hashed_pw = _hash_password(data.password)
+    is_new = False
+    user_id = None
+    first_name_to_use = data.first_name
+    identifier_to_use = None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, identifier, first_name, surname, role FROM users WHERE LOWER(email) = %s", (email_clean,))
+            existing = cur.fetchone()
+
+            if existing:
+                user_id, identifier, first_name, surname, role = existing
+                identifier_to_use = identifier.upper()
+                cur.execute(
+                    "UPDATE users SET role = 'admin', identifier = %s, password_hash = %s WHERE id = %s",
+                    (identifier_to_use, hashed_pw, user_id)
+                )
+                first_name_to_use = first_name
+            else:
+                identifier_to_use = email_clean.upper()
+                first_name_to_use = data.first_name or "Admin"
+                surname_to_use = data.surname or "User"
+                cur.execute(
+                    """INSERT INTO users (identifier, surname, first_name, email, password_hash, gender, role)
+                       VALUES (%s, %s, %s, %s, %s, 'male', 'admin') RETURNING id""",
+                    (identifier_to_use, surname_to_use, first_name_to_use, email_clean, hashed_pw)
+                )
+                user_id = cur.fetchone()[0]
+                is_new = True
+            conn.commit()
+
+    log_event(
+        "ADMIN_ASSIGNED",
+        actor_type="admin",
+        actor_id=admin["identifier"],
+        description=f"Assigned admin access to {data.email} (New user: {is_new})",
+        target_entity="user",
+        target_id=str(user_id)
+    )
+
+    try:
+        send_admin_assigned_email(
+            to_email=data.email,
+            first_name=first_name_to_use,
+            identifier=identifier_to_use,
+            user_id=user_id
+        )
+    except Exception as e:
+        logger.error(f"Failed to send admin assignment email: {e}")
+
+    return {
+        "message": f"Successfully assigned administrator access to {data.email}",
+        "user_id": user_id,
+        "is_new": is_new
+    }
+
+
+@router.get("/list-admins")
+def list_admins(admin=Depends(get_current_admin)):
+    """List all users with administrative access. Only callable by ADMIN001 (root admin)."""
+    if admin["identifier"] != "ADMIN001":
+        raise HTTPException(status_code=403, detail="Only the root administrator (ADMIN001) can view the admin list")
+
+    with get_cursor() as cur:
+        cur.execute(
+            """SELECT id, identifier, surname, first_name, email, is_active, created_at
+               FROM users
+               WHERE role = 'admin'
+               ORDER BY created_at DESC"""
+        )
+        rows = cur.fetchall()
+
+    return {
+        "admins": [
+            {
+                "id": r[0],
+                "identifier": r[1],
+                "surname": r[2],
+                "first_name": r[3],
+                "email": r[4],
+                "is_active": r[5],
+                "created_at": r[6].isoformat() if r[6] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/revoke-admin/{user_id}")
+def revoke_admin(user_id: int, admin=Depends(get_current_admin)):
+    """Revoke administrative access for a user. Only callable by ADMIN001 (root admin)."""
+    if admin["identifier"] != "ADMIN001":
+        raise HTTPException(status_code=403, detail="Only the root administrator (ADMIN001) can revoke administrators")
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT identifier, email, role FROM users WHERE id = %s", (user_id,))
+            u = cur.fetchone()
+            if not u:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            identifier, email, role = u
+            if identifier == "ADMIN001":
+                raise HTTPException(status_code=400, detail="Cannot revoke root administrator")
+            
+            if role != "admin":
+                raise HTTPException(status_code=400, detail="User is not an administrator")
+
+            cur.execute("UPDATE users SET role = 'student' WHERE id = %s", (user_id,))
+            conn.commit()
+
+    log_event(
+        "ADMIN_REVOKED",
+        actor_type="admin",
+        actor_id=admin["identifier"],
+        description=f"Revoked admin access for {email}",
+        target_entity="user",
+        target_id=str(user_id)
+    )
+
+    return {"message": f"Successfully revoked administrative access for {email}"}
+
+
 
 
 

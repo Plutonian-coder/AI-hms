@@ -76,7 +76,7 @@ export default function PaymentCallback() {
 
     if (!reference) {
         return (
-            <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-6 flex items-start gap-4">
                     <XCircle className="w-6 h-6 text-red-600 shrink-0" />
                     <div>
@@ -92,7 +92,7 @@ export default function PaymentCallback() {
     }
 
     return (
-        <div className="max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+        <div className="max-w-2xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
             <div>
                 <h1 className="text-3xl font-extrabold text-heading tracking-tight">Payment Verification</h1>
                 <p className="text-muted mt-2 font-medium">Verifying your payment and generating your receipt...</p>
@@ -197,19 +197,12 @@ export default function PaymentCallback() {
                             >
                                 <Receipt className="w-4 h-4" /> View Receipt
                             </button>
-                            {pipelineResult.fee_type === 'hostel' ? (
+                            {pipelineResult.fee_type === 'hostel' && (
                                 <button
                                     onClick={() => navigate('/my-allocation')}
                                     className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
                                 >
                                     View My Allocation <ArrowRight className="w-4 h-4" />
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={() => navigate('/quiz')}
-                                    className="flex-1 flex items-center justify-center gap-2 bg-lime text-forest px-6 py-3 rounded-full font-bold shadow-lg shadow-lime/25 hover:bg-lime-hover hover:scale-[1.02] transition-all"
-                                >
-                                    Take Quiz <ArrowRight className="w-4 h-4" />
                                 </button>
                             )}
                         </>

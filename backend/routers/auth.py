@@ -13,6 +13,7 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from pydantic import BaseModel
 from jose import jwt
 from passlib.context import CryptContext
 
@@ -245,6 +246,94 @@ def login(data: UserLogin):
         level=level,
         department=department,
     )
+# ── Profile Management ─────────────────────────────────────────────────────────
+
+from typing import Optional
+
+class UpdateProfileRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    next_of_kin_name: Optional[str] = None
+    next_of_kin_phone: Optional[str] = None
+
+
+@router.get("/profile")
+def get_profile(user: dict = Depends(get_current_user)):
+    """Fetch the authenticated user's profile information."""
+    with get_cursor() as cur:
+        cur.execute(
+            """SELECT identifier, surname, first_name, email, phone, gender, 
+                      department, level, study_type, role, next_of_kin_name, next_of_kin_phone
+               FROM users WHERE id = %s""",
+            (user["user_id"],),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "identifier": row[0],
+        "surname": row[1],
+        "first_name": row[2],
+        "email": row[3],
+        "phone": row[4],
+        "gender": row[5],
+        "department": row[6],
+        "level": row[7],
+        "study_type": row[8],
+        "role": row[9],
+        "next_of_kin_name": row[10],
+        "next_of_kin_phone": row[11]
+    }
+
+
+@router.put("/profile")
+def update_profile(
+    data: UpdateProfileRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Update the authenticated user's contact and next of kin information."""
+    update_fields = []
+    params = []
+    
+    if data.email is not None:
+        update_fields.append("email = %s")
+        params.append(data.email.strip() or None)
+        
+    if data.phone is not None:
+        update_fields.append("phone = %s")
+        params.append(data.phone.strip() or None)
+        
+    if data.next_of_kin_name is not None:
+        update_fields.append("next_of_kin_name = %s")
+        params.append(data.next_of_kin_name.strip() or None)
+        
+    if data.next_of_kin_phone is not None:
+        update_fields.append("next_of_kin_phone = %s")
+        params.append(data.next_of_kin_phone.strip() or None)
+
+    if not update_fields:
+        return {"message": "No fields to update."}
+
+    params.append(user["user_id"])
+    
+    with get_cursor() as cur:
+        cur.execute(
+            f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s",
+            params
+        )
+
+    log_event(
+        "PROFILE_UPDATED",
+        actor_type=user["role"],
+        actor_id=user["identifier"],
+        description=f"Profile updated for {user['identifier']}",
+        target_entity="user",
+        target_id=str(user["user_id"]),
+    )
+
+    return {"message": "Profile updated successfully."}
 
 
 # ── Password Change ──────────────────────────────────────────────────────────

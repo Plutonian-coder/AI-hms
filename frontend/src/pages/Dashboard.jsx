@@ -36,7 +36,7 @@ export default function Dashboard() {
                 const p = res.data.profile;
                 setProfileForm({ email: p.email || '', phone: p.phone || '', next_of_kin_name: p.next_of_kin_name || '', next_of_kin_phone: p.next_of_kin_phone || '' });
             })
-            .catch(() => toast.error('Failed to load dashboard data.'))
+            .catch(() => {})
             .finally(() => setLoading(false));
     };
 
@@ -108,9 +108,9 @@ export default function Dashboard() {
     const firstName = profile.first_name || 'Student';
     const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1').replace('/api/v1', '');
 
-    // Photo URL — backend returns a ready-to-use path like "/api/v1/allocation/photo/123"
+    // Photo URL — S3 URLs are absolute (https://...), legacy paths are relative
     const photoUrl = profile.photo_url
-        ? `${API_BASE}${profile.photo_url}?v=${photoKey}`
+        ? (profile.photo_url.startsWith('http') ? profile.photo_url : `${API_BASE}${profile.photo_url}?v=${photoKey}`)
         : null;
 
     const handlePhotoUpload = async (e) => {
@@ -147,8 +147,10 @@ export default function Dashboard() {
         { key: 'app_fee', label: 'Application Fee', desc: 'Application fee paid', icon: CreditCard, done: progress.app_fee_paid, link: '/payment?type=application', sublabel: progress.app_payment_status },
         { key: 'applied', label: 'Applied', desc: 'Hostel application submitted', icon: FileText, done: progress.applied, link: '/apply', sublabel: progress.application_status },
         { key: 'quiz', label: 'Quiz Completed', desc: 'Compatibility quiz taken', icon: ClipboardCheck, done: progress.quiz_completed, link: '/quiz' },
-        { key: 'hostel_fee', label: 'Hostel Fee', desc: 'Hostel fee paid', icon: CreditCard, done: progress.hostel_fee_paid, link: '/payment?type=hostel', sublabel: progress.hostel_payment_status },
+        // Allocation happens as part of quiz submission, before the hostel fee is paid —
+        // this must stay ordered ahead of "Hostel Fee" to match when it actually completes.
         { key: 'allocated', label: 'Allocated', desc: 'Bed space assigned', icon: BedDouble, done: progress.allocated, link: '/my-allocation' },
+        { key: 'hostel_fee', label: 'Hostel Fee', desc: 'Hostel fee paid', icon: CreditCard, done: progress.hostel_fee_paid, link: '/payment?type=hostel', sublabel: progress.hostel_payment_status },
     ];
 
     const currentStepIdx = steps.findIndex(s => !s.done);

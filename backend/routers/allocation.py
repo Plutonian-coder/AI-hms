@@ -120,7 +120,7 @@ def verify_hostel_pass(reference: str):
         "block_name": row[6],
         "room_number": row[7],
         "bed_number": row[8],
-        "photo_url": f"/api/v1/allocation/photo/{row[2]}" if row[9] else None, # Needs ID or Matric, we use proxy route below
+        "photo_url": row[9] if row[9] and row[9].startswith("http") else (f"/api/v1/allocation/photo/{row[2]}" if row[9] else None),
         "session_name": row[10]
     }
 
@@ -151,7 +151,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
         "next_of_kin_name": p[8], "next_of_kin_phone": p[9],
         "study_type": p[10] or "Full-time",
         "passport_photo_url": p[11],
-        "photo_url": f"/api/v1/allocation/photo/{student_id}" if p[11] else None,
+        "photo_url": p[11] if p[11] and p[11].startswith("http") else (f"/api/v1/allocation/photo/{student_id}" if p[11] else None),
     } if p else {}
 
     # Session
@@ -238,9 +238,9 @@ def get_student_dashboard(student=Depends(get_current_student)):
             )
             has_quiz = cur.fetchone() is not None
 
-            # Allocation
-            allocation = _fetch_allocation(student_id, session_id)
-            has_allocation = allocation is not None
+        # Allocation
+        allocation = _fetch_allocation(student_id, session_id)
+        has_allocation = allocation is not None
 
     return {
         "profile": profile,

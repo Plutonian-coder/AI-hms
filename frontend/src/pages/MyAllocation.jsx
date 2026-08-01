@@ -199,9 +199,9 @@ export default function MyAllocation() {
                                         className="bg-white border border-sidebar-border rounded-2xl p-4 shadow-sm hover:shadow transition-all duration-300 flex items-center justify-between gap-4 group hover:-translate-y-0.5"
                                     >
                                         <div className="flex items-center gap-3.5 min-w-0">
-                                            {mate.passport_photo_url && !mate.passport_photo_url.startsWith('http') ? (
+                                            {mate.passport_photo_url ? (
                                                 <img
-                                                    src={`${API_BASE}${mate.passport_photo_url}`}
+                                                    src={mate.passport_photo_url.startsWith('http') ? mate.passport_photo_url : `${API_BASE}${mate.passport_photo_url}`}
                                                     alt={mate.full_name}
                                                     className="w-12 h-12 rounded-full object-cover border border-sidebar-border shadow-sm group-hover:scale-105 transition-transform duration-300"
                                                 />

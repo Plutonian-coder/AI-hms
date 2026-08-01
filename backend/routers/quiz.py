@@ -245,13 +245,22 @@ def submit_quiz(data: QuizSubmit, student=Depends(get_current_student)):
         # Get hostel choices from application
         with get_cursor() as cur:
             cur.execute(
-                "SELECT choice_1_id, choice_2_id, choice_3_id, has_special_needs FROM hostel_applications WHERE student_id = %s AND session_id = %s",
+                "SELECT choice_1_id, choice_2_id, choice_3_id, has_special_needs, status FROM hostel_applications WHERE student_id = %s AND session_id = %s",
                 (student_id, session_id),
             )
             choices_row = cur.fetchone()
 
         if not choices_row:
             yield _sse_error(2, "Computing Compatibility", "No hostel application found.")
+            return
+
+        app_status = choices_row[4]
+        if app_status != "ready_for_allocation":
+            yield _sse_step(2, "complete", "Preferences Saved", "Application review pending")
+            yield _sse_result({
+                "status": "pending_review",
+                "message": "Your compatibility profile is saved. Your application must be completed or approved before allocation can proceed."
+            })
             return
 
         has_special_needs = choices_row[3]

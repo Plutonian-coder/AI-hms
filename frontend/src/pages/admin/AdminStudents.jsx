@@ -233,7 +233,7 @@ export default function AdminStudents() {
                                     <tr className="bg-surface border-b border-sidebar-border">
                                         <Th>Reg. Number</Th>
                                         <Th>Student Name</Th>
-                                        <Th>Class</Th>
+                                        <Th>Level</Th>
                                         <Th>Gender</Th>
                                         <Th>Account</Th>
                                         <Th>Finances</Th>
@@ -256,7 +256,7 @@ export default function AdminStudents() {
                                                 <div className="flex items-center gap-2.5">
                                                     {s.photo_url ? (
                                                         <img 
-                                                            src={API_BASE + s.photo_url} 
+                                                            src={s.photo_url.startsWith('http') ? s.photo_url : API_BASE + s.photo_url} 
                                                             alt="" 
                                                             className="w-8 h-8 rounded-full object-cover border border-forest/10 shrink-0" 
                                                             onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${s.full_name}&background=1B4332&color=fff&size=64`; }}
@@ -303,13 +303,9 @@ export default function AdminStudents() {
                                                 )}
                                             </td>
                                             <td className="px-5 py-3.5">
-                                                {s.is_allocated ? (
-                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-lime-soft border border-lime-border text-forest">
-                                                        Allocated
-                                                    </span>
-                                                ) : s.has_paid ? (
+                                                {s.has_paid ? (
                                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700">
-                                                        Paid
+                                                        <CheckCircle2 className="w-3 h-3" /> Paid
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-surface border border-sidebar-border text-muted">
@@ -356,7 +352,7 @@ export default function AdminStudents() {
                                     <div className="flex items-center gap-3">
                                         {s.photo_url ? (
                                             <img 
-                                                src={API_BASE + s.photo_url} 
+                                                src={s.photo_url.startsWith('http') ? s.photo_url : API_BASE + s.photo_url} 
                                                 alt="" 
                                                 className="w-9 h-9 rounded-full object-cover shrink-0" 
                                                 onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${s.full_name}&background=1B4332&color=fff&size=64`; }}
@@ -451,7 +447,7 @@ export default function AdminStudents() {
                                                 <div className="glass-elevated p-5 rounded-2xl flex items-center gap-4">
                                                     {profileData.photo_url ? (
                                                         <img 
-                                                            src={API_BASE + profileData.photo_url} 
+                                                            src={profileData.photo_url.startsWith('http') ? profileData.photo_url : API_BASE + profileData.photo_url} 
                                                             alt={`${profileData.first_name} ${profileData.surname}`}
                                                             className="w-16 h-16 rounded-full object-cover border border-forest/10 shrink-0 shadow-sm"
                                                             onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${profileData.first_name}+${profileData.surname}&background=1B4332&color=fff&size=128`; }}

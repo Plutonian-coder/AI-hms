@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, Lock, Eye, EyeOff, Loader2, Check,
-    Moon, Sun, Type, Monitor
+    Moon, Sun, Type, User, Shield, Activity
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useSettings } from '../context/SettingsContext';
@@ -45,15 +45,16 @@ export default function Settings() {
     const navigate = useNavigate();
     const { settings, set } = useSettings();
     const toast = useToast();
+    const [activeTab, setActiveTab] = useState('profile');
 
     const user = (() => {
         try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
     })();
 
     return (
-        <div className="max-w-xl mx-auto space-y-6 animate-in fade-in duration-350">
+        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-350">
             {/* Back header */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-2">
                 <button
                     onClick={() => navigate(-1)}
                     className="p-2 rounded-xl hover:bg-surface-2 text-muted hover:text-heading transition-colors"
@@ -66,8 +67,214 @@ export default function Settings() {
                 </div>
             </div>
 
-            {/* ── Appearance ─────────────────────────────────────────────── */}
-            <Section title="Appearance">
+            <div className="flex flex-col md:flex-row gap-8">
+                {/* Sidebar Navigation */}
+                <div className="w-full md:w-56 shrink-0 space-y-1.5">
+                    <TabButton 
+                        id="profile" 
+                        icon={User} 
+                        label="Profile" 
+                        active={activeTab === 'profile'} 
+                        onClick={setActiveTab} 
+                    />
+                    <TabButton 
+                        id="security" 
+                        icon={Shield} 
+                        label="Security" 
+                        active={activeTab === 'security'} 
+                        onClick={setActiveTab} 
+                    />
+                    <TabButton 
+                        id="appearance" 
+                        icon={Moon} 
+                        label="Appearance" 
+                        active={activeTab === 'appearance'} 
+                        onClick={setActiveTab} 
+                    />
+                </div>
+
+                {/* Main Content Area */}
+                <div className="flex-1">
+                    {activeTab === 'profile' && <ProfileTab user={user} toast={toast} />}
+                    {activeTab === 'security' && <SecurityTab user={user} toast={toast} />}
+                    {activeTab === 'appearance' && <AppearanceTab settings={settings} set={set} FONTS={FONTS} />}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ── Tab Layout Components ────────────────────────────────────────────────── */
+function TabButton({ id, icon: Icon, label, active, onClick }) {
+    return (
+        <button
+            onClick={() => onClick(id)}
+            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                active 
+                    ? 'bg-forest text-white shadow-md shadow-forest/20' 
+                    : 'text-muted hover:bg-surface-2 hover:text-heading'
+            }`}
+        >
+            <Icon className={`w-4.5 h-4.5 ${active ? 'text-lime' : ''}`} />
+            {label}
+        </button>
+    );
+}
+
+/* ── Profile Tab ─────────────────────────────────────────────────────────── */
+function ProfileTab({ user, toast }) {
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [profile, setProfile] = useState(null);
+    const [form, setForm] = useState({
+        email: '',
+        phone: '',
+        next_of_kin_name: '',
+        next_of_kin_phone: ''
+    });
+
+    useEffect(() => {
+        apiClient.get('/auth/profile')
+            .then(res => {
+                setProfile(res.data);
+                setForm({
+                    email: res.data.email || '',
+                    phone: res.data.phone || '',
+                    next_of_kin_name: res.data.next_of_kin_name || '',
+                    next_of_kin_phone: res.data.next_of_kin_phone || ''
+                });
+            })
+            .catch(err => toast.error('Failed to load profile details.'))
+            .finally(() => setLoading(false));
+    }, [toast]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            await apiClient.put('/auth/profile', form);
+            toast.success('Profile updated successfully.');
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to update profile.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-muted">
+                <Loader2 className="w-8 h-8 animate-spin mb-3" />
+                <p className="text-sm font-semibold">Loading profile...</p>
+            </div>
+        );
+    }
+
+    if (!profile) return null;
+
+    return (
+        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <Section title="Personal Information">
+                <div className="p-5">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Full Name</label>
+                            <p className="text-sm font-medium text-heading">{profile.surname} {profile.first_name}</p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Identifier</label>
+                            <p className="text-sm font-medium text-heading">{profile.identifier}</p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Role</label>
+                            <p className="text-sm font-medium text-heading capitalize">{profile.role}</p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Gender</label>
+                            <p className="text-sm font-medium text-heading capitalize">{profile.gender}</p>
+                        </div>
+                    </div>
+                </div>
+            </Section>
+
+            {profile.role === 'student' && (
+                <Section title="Academic Information">
+                    <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Department</label>
+                            <p className="text-sm font-medium text-heading">{profile.department || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Level</label>
+                            <p className="text-sm font-medium text-heading">{profile.level || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Study Type</label>
+                            <p className="text-sm font-medium text-heading">{profile.study_type || 'N/A'}</p>
+                        </div>
+                    </div>
+                </Section>
+            )}
+
+            <Section title="Contact Information">
+                <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest">Email Address</label>
+                            <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="glass-input w-full rounded-xl px-4 py-2.5 text-sm font-medium text-heading" placeholder="user@example.com" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold text-muted uppercase tracking-widest">Phone Number</label>
+                            <input type="tel" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="glass-input w-full rounded-xl px-4 py-2.5 text-sm font-medium text-heading" placeholder="+234..." />
+                        </div>
+                    </div>
+                    
+                    {profile.role === 'student' && (
+                        <>
+                            <div className="pt-2 mt-4 mb-2">
+                                <p className="text-sm font-bold text-heading">Emergency Contact (Next of Kin)</p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="block text-[10px] font-bold text-muted uppercase tracking-widest">Name</label>
+                                    <input type="text" value={form.next_of_kin_name} onChange={e => setForm({...form, next_of_kin_name: e.target.value})} className="glass-input w-full rounded-xl px-4 py-2.5 text-sm font-medium text-heading" placeholder="Full Name" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="block text-[10px] font-bold text-muted uppercase tracking-widest">Phone</label>
+                                    <input type="tel" value={form.next_of_kin_phone} onChange={e => setForm({...form, next_of_kin_phone: e.target.value})} className="glass-input w-full rounded-xl px-4 py-2.5 text-sm font-medium text-heading" placeholder="+234..." />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    <div className="pt-3 flex justify-end">
+                        <button type="submit" disabled={saving} className="bg-forest text-white rounded-xl px-6 py-2.5 text-sm font-bold shadow-md shadow-forest/15 hover:bg-forest-hover transition-all flex items-center gap-2">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </Section>
+        </div>
+    );
+}
+
+/* ── Security Tab ────────────────────────────────────────────────────────── */
+function SecurityTab({ user, toast }) {
+    return (
+        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <Section title="Account Security">
+                <ChangePasswordForm user={user} toast={toast} />
+            </Section>
+        </div>
+    );
+}
+
+/* ── Appearance Tab ──────────────────────────────────────────────────────── */
+function AppearanceTab({ settings, set, FONTS }) {
+    return (
+        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <Section title="Interface Settings">
                 {/* Dark mode */}
                 <SettingRow
                     icon={settings.darkMode ? Moon : Sun}
@@ -80,15 +287,27 @@ export default function Settings() {
                     />
                 </SettingRow>
 
+                {/* Reduced Motion Accessibility */}
+                <SettingRow
+                    icon={Activity}
+                    label="Reduced Motion"
+                    sub="Minimize interface animations for accessibility"
+                >
+                    <Toggle
+                        value={settings.reducedMotion || false}
+                        onChange={v => set('reducedMotion', v)}
+                    />
+                </SettingRow>
+
                 {/* Font */}
-                <div className="px-5 py-4">
+                <div className="px-5 py-4 border-t border-black/5">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center">
                             <Type className="w-4 h-4 text-muted" />
                         </div>
                         <div>
-                            <p className="text-sm font-semibold text-heading">Font</p>
-                            <p className="text-xs text-muted">Choose the interface typeface</p>
+                            <p className="text-sm font-semibold text-heading">Font Typeface</p>
+                            <p className="text-xs text-muted">Choose the primary interface font</p>
                         </div>
                     </div>
 
@@ -99,7 +318,7 @@ export default function Settings() {
                                 onClick={() => set('font', f.key)}
                                 className={`flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
                                     settings.font === f.key
-                                        ? 'bg-lime-soft border-lime-border'
+                                        ? 'bg-lime-soft border-lime-border shadow-sm shadow-lime/10'
                                         : 'bg-surface border-sidebar-border hover:bg-surface-2'
                                 }`}
                             >
@@ -121,8 +340,8 @@ export default function Settings() {
                     </div>
 
                     {/* Live preview */}
-                    <div className="mt-3 p-3.5 rounded-xl bg-surface-2 border border-sidebar-border">
-                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Preview</p>
+                    <div className="mt-4 p-4 rounded-xl bg-surface-2 border border-sidebar-border">
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Live Preview</p>
                         <p
                             className="text-sm text-heading leading-relaxed"
                             style={FONTS.find(f => f.key === settings.font)?.style}
@@ -131,11 +350,6 @@ export default function Settings() {
                         </p>
                     </div>
                 </div>
-            </Section>
-
-            {/* ── Security ───────────────────────────────────────────────── */}
-            <Section title="Security">
-                <ChangePasswordForm user={user} toast={toast} />
             </Section>
         </div>
     );
@@ -195,7 +409,7 @@ function ChangePasswordForm({ user, toast }) {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-4">
                 <PasswordField
                     label="Current Password"
                     value={form.current}
@@ -204,42 +418,46 @@ function ChangePasswordForm({ user, toast }) {
                     onToggle={() => setShow(s => ({ ...s, current: !s.current }))}
                     placeholder="Enter current password"
                 />
-                <PasswordField
-                    label="New Password"
-                    value={form.next}
-                    onChange={v => handleChange('next', v)}
-                    visible={show.next}
-                    onToggle={() => setShow(s => ({ ...s, next: !s.next }))}
-                    placeholder="Min 8 characters"
-                />
-                <PasswordField
-                    label="Confirm New Password"
-                    value={form.confirm}
-                    onChange={v => handleChange('confirm', v)}
-                    visible={show.next}
-                    onToggle={() => setShow(s => ({ ...s, next: !s.next }))}
-                    placeholder="Repeat new password"
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <PasswordField
+                        label="New Password"
+                        value={form.next}
+                        onChange={v => handleChange('next', v)}
+                        visible={show.next}
+                        onToggle={() => setShow(s => ({ ...s, next: !s.next }))}
+                        placeholder="Min 8 characters"
+                    />
+                    <PasswordField
+                        label="Confirm New Password"
+                        value={form.confirm}
+                        onChange={v => handleChange('confirm', v)}
+                        visible={show.next}
+                        onToggle={() => setShow(s => ({ ...s, next: !s.next }))}
+                        placeholder="Repeat new password"
+                    />
+                </div>
 
                 {/* Strength indicator */}
                 {form.next && (
                     <StrengthBar password={form.next} />
                 )}
 
-                <button
-                    type="submit"
-                    disabled={loading || !form.current || !form.next || !form.confirm}
-                    className={`w-full flex items-center justify-center gap-2 bg-forest text-white rounded-xl px-5 py-3 text-sm font-bold shadow-md shadow-forest/15 transition-all ${
-                        loading || !form.current || !form.next || !form.confirm
-                            ? 'opacity-50 cursor-not-allowed'
-                            : 'hover:bg-forest-hover'
-                    }`}
-                >
-                    {loading
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Updating…</>
-                        : <><Lock className="w-4 h-4" /> Update Password</>
-                    }
-                </button>
+                <div className="pt-2 flex justify-end">
+                    <button
+                        type="submit"
+                        disabled={loading || !form.current || !form.next || !form.confirm}
+                        className={`flex items-center justify-center gap-2 bg-forest text-white rounded-xl px-6 py-2.5 text-sm font-bold shadow-md shadow-forest/15 transition-all ${
+                            loading || !form.current || !form.next || !form.confirm
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'hover:bg-forest-hover'
+                        }`}
+                    >
+                        {loading
+                            ? <><Loader2 className="w-4 h-4 animate-spin" /> Updating…</>
+                            : <><Lock className="w-4 h-4" /> Update Password</>
+                        }
+                    </button>
+                </div>
             </form>
         </div>
     );
@@ -287,10 +505,10 @@ function StrengthBar({ password }) {
 function Section({ title, children }) {
     return (
         <div className="glass rounded-2xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-black/5">
+            <div className="px-5 py-3.5 border-b border-black/5 bg-surface-2/50">
                 <p className="text-[10px] font-bold text-muted uppercase tracking-[0.18em]">{title}</p>
             </div>
-            <div className="divide-y divide-black/5">
+            <div className="divide-y divide-black/5 bg-surface">
                 {children}
             </div>
         </div>

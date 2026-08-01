@@ -1,0 +1,30 @@
+# Never bake secrets or user data into the image — Dockerfile does `COPY . .`
+.env
+.env.*
+
+# User-uploaded content (ephemeral — Factor VI)
+uploads/
+
+# Supabase -> AWS migration artifacts (contain real student PII)
+supabase_storage_backup/
+supabase_data_export.sql
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Scratch / one-off scripts not needed at runtime
+test_*.py
+test*.py
+
+# VCS / editor
+.git/
+.gitignore
+.vscode/
+.idea/

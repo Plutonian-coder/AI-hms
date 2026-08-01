@@ -47,12 +47,11 @@ GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
 OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 HMS_APP_URL         = os.getenv("HMS_APP_URL", "http://localhost:5173")
 
-# ── Supabase Storage (S3 API) ───────────────────────────────────────────────
-SUPABASE_S3_ENDPOINT       = os.getenv("SUPABASE_S3_ENDPOINT", "")
-SUPABASE_ACCESS_KEY_ID     = os.getenv("SUPABASE_ACCESS_KEY_ID", "")
-SUPABASE_SECRET_ACCESS_KEY = os.getenv("SUPABASE_SECRET_ACCESS_KEY", "")
-SUPABASE_BUCKET_NAME       = os.getenv("SUPABASE_BUCKET_NAME", "hms-uploads")
-SUPABASE_PROJECT_URL       = os.getenv("SUPABASE_PROJECT_URL", "")
+# ── AWS S3 Storage ──
+AWS_ACCESS_KEY_ID     = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+AWS_REGION            = os.getenv("AWS_REGION", "eu-west-2")
+AWS_BUCKET_NAME       = os.getenv("AWS_BUCKET_NAME", "ai-hms-uploads-london")
 
 
 DB_POOL_MIN         = int(os.getenv("DB_POOL_MIN", "1"))

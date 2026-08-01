@@ -2,12 +2,15 @@ import { useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, CreditCard, ClipboardCheck, BedDouble, LogOut, X, PanelLeftClose, PanelLeftOpen, CheckCircle, Lock, Loader2 } from 'lucide-react';
 
+// Allocation completes as part of quiz submission, before the hostel fee is
+// paid — "My Allocation" must stay ordered ahead of "Hostel Fee" to match
+// when it actually completes (see Dashboard.jsx's timeline for the same rule).
 const FLOW_STEPS = [
     { to: '/payment?type=application', label: 'Application Fee', icon: CreditCard, progressKey: 'app_fee_paid' },
     { to: '/apply', label: 'Apply', icon: FileText, progressKey: 'applied' },
     { to: '/quiz', label: 'Compatibility Quiz', icon: ClipboardCheck, progressKey: 'quiz_completed' },
-    { to: '/payment?type=hostel', label: 'Hostel Fee', icon: CreditCard, progressKey: 'hostel_fee_paid' },
     { to: '/my-allocation', label: 'My Allocation', icon: BedDouble, progressKey: 'allocated' },
+    { to: '/payment?type=hostel', label: 'Hostel Fee', icon: CreditCard, progressKey: 'hostel_fee_paid' },
 ];
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, progress = null }) {
@@ -22,13 +25,15 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
         navigate('/login');
     };
 
-    // Determine which steps are done, current, or locked
-    const getStepState = (step, idx) => {
+    // Determine which steps are done, current, or locked — positional, so a
+    // later step can never render as "done" while an earlier one is pending
+    // (e.g. allocation completes as a side effect of the quiz, before the
+    // hostel fee is paid — it must still wait its turn in the UI).
+    const getStepState = (idx) => {
         if (!progress) return 'locked';
-        const done = !!progress[step.progressKey];
-        if (done) return 'done';
-        // Current = first not-done step
         const firstNotDone = FLOW_STEPS.findIndex(s => !progress[s.progressKey]);
+        if (firstNotDone === -1) return 'done';
+        if (idx < firstNotDone) return 'done';
         if (idx === firstNotDone) return 'current';
         return 'locked';
     };
@@ -187,7 +192,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
                     </div>
                 ) : (
                     FLOW_STEPS.map((step, idx) => (
-                        <FlowItem key={step.to} item={step} state={getStepState(step, idx)} />
+                        <FlowItem key={step.to} item={step} state={getStepState(idx)} />
                     ))
                 )}
             </nav>

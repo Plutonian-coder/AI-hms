@@ -15,13 +15,25 @@ data = {
     "senderName": "Test Sender"
 }
 
-print("Sending POST request...")
-res = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=30)
+print("Sending POST request (allow_redirects=False)...")
+res = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=30, allow_redirects=False)
 print(f"Status Code: {res.status_code}")
-print(f"Response Headers: {res.headers}")
+
+# Handle redirect — re-POST to Location (same as the fixed _send() logic)
+if res.status_code in (301, 302, 303, 307, 308):
+    location = res.headers.get("Location")
+    print(f"Redirect detected -> re-POSTing to: {location}")
+    res = requests.post(location, json=data, timeout=30, allow_redirects=False)
+    print(f"Final Status Code: {res.status_code}")
+
 print(f"Response Body (first 500 chars): {res.text[:500]}")
 
 try:
-    print(f"Parsed JSON: {res.json()}")
+    parsed = res.json()
+    print(f"Parsed JSON: {parsed}")
+    if parsed.get("status") == "success":
+        print("✅ Email sent successfully via GAS!")
+    else:
+        print(f"❌ GAS returned error: {parsed.get('message')}")
 except Exception as e:
     print(f"Could not parse as JSON: {e}")
