@@ -120,16 +120,24 @@ export default function AdminReports() {
     const exportPDF = async () => {
         if (selectedColumns.length === 0) { toast.error('Add at least one column'); return; }
         try {
-            let rows = preview ? preview.rows : null;
-            if (!rows) {
-                const res = await apiClient.post('/admin/reports/preview', {
-                    columns: selectedColumns, filters, limit: 500
-                });
-                rows = res.data.rows;
-            }
+            // Always refetch rather than reusing the preview, which is capped at
+            // 50 rows — an official record must not silently truncate.
+            const res = await apiClient.post('/admin/reports/preview', {
+                columns: selectedColumns, filters, limit: 500
+            });
+            const rows = res.data.rows || [];
+            const headers = res.data.columns || selectedColumns.map(c => colLabelMap[c] || c);
 
-            const headers = selectedColumns.map(c => colLabelMap[c] || c);
+            // Report data is written into a raw HTML document, so anything
+            // originating from student records has to be escaped.
+            const esc = (v) => String(v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const win = window.open('', '_blank');
+            if (!win) {
+                toast.error('Allow pop-ups for this site to generate the PDF report.');
+                return;
+            }
             win.document.write(`
                 <!DOCTYPE html>
                 <html>
@@ -156,15 +164,15 @@ export default function AdminReports() {
                     </div>
                     <div class="meta">
                         <span>GENERATED AT: ${new Date().toLocaleString()}</span>
-                        <span>TOTAL RECORDS: ${rows.length}</span>
+                        <span>TOTAL RECORDS: ${rows.length}${res.data.total > rows.length ? ` of ${res.data.total}` : ''}</span>
                         <span>CONFIDENTIALITY: OFFICIAL SENATE RECORD</span>
                     </div>
                     <table>
                         <thead>
-                            <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+                            <tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr>
                         </thead>
                         <tbody>
-                            ${rows.map(r => `<tr>${selectedColumns.map(c => `<td>${r[c] !== null && r[c] !== undefined ? r[c] : '—'}</td>`).join('')}</tr>`).join('')}
+                            ${rows.map(r => `<tr>${r.map(cell => `<td>${cell === null || cell === undefined || cell === '' ? '—' : esc(cell)}</td>`).join('')}</tr>`).join('')}
                         </tbody>
                     </table>
                     <div class="footer">
