@@ -34,6 +34,10 @@ export default function AdminRegisterImport() {
 
     useEffect(() => { fetchStats(); }, []);
 
+    // Matric numbers encode the entry year, so the hint has to track whichever
+    // session is active ("2025/2026" -> 25) rather than a hardcoded year.
+    const sessionYearCode = registerStats?.session_name?.split('/')[0]?.slice(-2) || 'YY';
+
     // CSV Template download
     const downloadTemplate = () => {
         apiClient.get('/admin/register/template', { responseType: 'blob' })
@@ -204,7 +208,7 @@ export default function AdminRegisterImport() {
                                 <input
                                     value={manualForm.matric_number}
                                     onChange={e => handleManualChange('matric_number', e.target.value)}
-                                    placeholder="e.g. FPT/CSC/25/0001"
+                                    placeholder={`e.g. FPT/CSC/${sessionYearCode}/0001`}
                                     required
                                     className="w-full glass-input text-heading rounded-xl p-3 font-medium text-sm"
                                 />

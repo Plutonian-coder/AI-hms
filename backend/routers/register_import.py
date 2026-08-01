@@ -367,9 +367,20 @@ def download_csv_template():
     """Return a CSV template with required headers and sample rows."""
     from fastapi.responses import Response
 
+    # Sample matric numbers carry the active session's entry year rather than a
+    # fixed one, so the template matches whichever session is being imported.
+    yy = "25"
+    try:
+        with get_cursor() as cur:
+            session = _get_active_session(cur)
+        if session and session[1] and "/" in session[1]:
+            yy = session[1].split("/")[0][-2:]
+    except Exception:
+        pass
+
     header = "matric_number,surname,first_name,gender,department,level,study_type,faculty,email\n"
-    sample1 = "FPT/CSC/25/0001,Doe,John,male,Computer Science,100L,Full-time,Science,john.doe@student.edu.ng\n"
-    sample2 = "FPT/CSC/25/0002,Smith,Jane,female,Mathematics,200L,Part-time,Science,jane.smith@student.edu.ng\n"
+    sample1 = f"FPT/CSC/{yy}/0001,Doe,John,male,Computer Science,100L,Full-time,Science,john.doe@student.edu.ng\n"
+    sample2 = f"FPT/CSC/{yy}/0002,Smith,Jane,female,Mathematics,200L,Part-time,Science,jane.smith@student.edu.ng\n"
 
     return Response(
         content=header + sample1 + sample2,

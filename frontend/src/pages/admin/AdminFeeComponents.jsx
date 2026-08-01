@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import apiClient from '../../api/client';
 import { Plus, Pencil, Trash2, DollarSign, CheckCircle, X, AlertCircle, Save } from 'lucide-react';
 import { useToast } from '../../components/Toast';
@@ -38,7 +38,15 @@ export default function AdminFeeComponents() {
     const [form, setForm] = useState(EMPTY_FORM);
     const [submitting, setSubmitting] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
+    const formRef = useRef(null);
     const toast = useToast();
+
+    // The scroll container is a div in the app layout, not the window, so
+    // window.scrollTo() silently did nothing and the form opened off-screen —
+    // clicking Edit looked like it did nothing at all.
+    useEffect(() => {
+        if (showForm) formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, [showForm, editingId]);
 
     const fetchData = () => {
         Promise.all([
@@ -85,7 +93,6 @@ export default function AdminFeeComponents() {
             sort_order: comp.sort_order,
         });
         setShowForm(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleSubmit = async (e) => {
@@ -176,7 +183,7 @@ export default function AdminFeeComponents() {
 
             {/* Add / Edit Form */}
             {showForm && (
-                <div className="glass rounded-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                <div ref={formRef} className="glass rounded-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
                     <div className="px-6 py-4 border-b border-black/5 flex items-center justify-between bg-surface/50">
                         <div className="flex items-center gap-2">
                             <DollarSign className="w-4 h-4 text-forest" />
@@ -363,7 +370,7 @@ export default function AdminFeeComponents() {
                                                 }
                                             </td>
                                             <td className="px-5 py-3.5">
-                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                                                     <button onClick={() => openEdit(c)}
                                                         className="p-1.5 rounded-lg text-muted hover:text-heading hover:bg-surface transition-colors" title="Edit">
                                                         <Pencil className="w-3.5 h-3.5" />
