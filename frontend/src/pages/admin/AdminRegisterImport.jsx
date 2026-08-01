@@ -34,9 +34,15 @@ export default function AdminRegisterImport() {
 
     useEffect(() => { fetchStats(); }, []);
 
-    // Matric numbers encode the entry year, so the hint has to track whichever
-    // session is active ("2025/2026" -> 25) rather than a hardcoded year.
-    const sessionYearCode = registerStats?.session_name?.split('/')[0]?.slice(-2) || 'YY';
+    // The year inside a matric is the student's ENTRY year, not the session
+    // year — a 300L student in 2025/2026 entered in 2023. Derive the hint from
+    // the level being entered so it shows the year that will actually validate.
+    const sessionStartYear = parseInt(registerStats?.session_name?.split('/')[0], 10);
+    const yearOfStudy = parseInt(manualForm.level, 10) / 100;
+    const sessionYearCode =
+        Number.isFinite(sessionStartYear) && Number.isFinite(yearOfStudy)
+            ? String(sessionStartYear - (yearOfStudy - 1)).slice(-2)
+            : 'YY';
 
     // CSV Template download
     const downloadTemplate = () => {

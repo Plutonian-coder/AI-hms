@@ -7,6 +7,7 @@ The system validates, previews, and imports into session_register.
 """
 import csv
 import io
+import re
 import threading
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
@@ -27,16 +28,77 @@ def _get_active_session(cur):
     return cur.fetchone()
 
 
-def validate_matric_format(matric: str, session_name: str) -> str | None:
+MAX_PROGRAMME_YEARS = 10   # generous ceiling for carry-over / spillover students
+
+
+def _session_start_year(session_name: str) -> int | None:
+    """'2024/2025' -> 2024."""
+    m = re.match(r"\s*(\d{4})\s*/", session_name or "")
+    return int(m.group(1)) if m else None
+
+
+def _year_of_study(level: str) -> int | None:
+    """'300L' -> 3, 'ND2' -> 2, 'HND1' -> 1. None when unrecognised."""
+    if not level:
+        return None
+    lvl = level.strip().upper()
+    m = re.match(r"^([1-9])00\s*L?$", lvl)          # 100L … 900L
+    if m:
+        return int(m.group(1))
+    m = re.match(r"^(?:ND|HND|NCE|PGD)\s*([1-9])$", lvl)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def validate_matric_format(matric: str, session_name: str, level: str = "") -> str | None:
     """
-    Validates that a matric number follows the basic FUOYE format (e.g., FPT/CSC/26/0009).
-    We do NOT restrict the session year, as returning/carry-over students 
-    will have matric numbers from previous sessions.
+    Check the matric shape, and that its entry year is possible for the level.
+
+    The year inside a matric number is the student's ENTRY year and never
+    changes, so a register is expected to contain several different years at
+    once — a 300L student in 2024/2025 entered in 2022. What is *not* possible
+    is an entry year that would make the student too junior for the level they
+    are enrolled in (a 2025 entrant cannot be in 500L in 2025/2026), or one in
+    the future. An entry year older than expected is allowed: that is exactly
+    what a repeating or carry-over student looks like.
     """
     parts = matric.strip().upper().split('/')
     if len(parts) < 4:
-        return f"Matric number must follow the format with at least 4 parts (e.g., FPT/CSC/YY/NNNN)"
-    
+        return "Matric number must follow the format with at least 4 parts (e.g., FPT/CSC/YY/NNNN)"
+
+    if not re.fullmatch(r"\d{2}", parts[2]):
+        return f"Matric number year segment must be 2 digits (e.g. FPT/CSC/24/0001), got '{parts[2]}'"
+
+    session_start = _session_start_year(session_name)
+    year_of_study = _year_of_study(level)
+    # Unrecognised level or session name — validate shape only rather than
+    # blocking an import on a format this function doesn't know about.
+    if session_start is None or year_of_study is None:
+        return None
+
+    entry_year = 2000 + int(parts[2])
+    expected_entry = session_start - (year_of_study - 1)
+
+    if entry_year > session_start:
+        return (
+            f"Matric year '{parts[2]}' means admission in {entry_year}, which is after the "
+            f"{session_name} session started. Check the matric number."
+        )
+
+    if entry_year > expected_entry:
+        return (
+            f"A {level} student in {session_name} would have entered in {expected_entry} "
+            f"(matric '/{str(expected_entry)[-2:]}/'), but this matric says {entry_year}. "
+            f"Check the level or the matric number."
+        )
+
+    if entry_year < expected_entry - MAX_PROGRAMME_YEARS:
+        return (
+            f"Matric year '{parts[2]}' ({entry_year}) is too far back for a {level} student "
+            f"in {session_name}. Check the matric number."
+        )
+
     return None
 
 
@@ -100,7 +162,7 @@ async def upload_register_csv(file: UploadFile = File(...), admin=Depends(get_cu
             errors.append(f"Row {i}: email is blank — required for system notifications")
             continue
 
-        matric_err = validate_matric_format(matric, session[1])
+        matric_err = validate_matric_format(matric, session[1], row.get("level", ""))
         if matric_err:
             errors.append(f"Row {i}: {matric_err}")
             continue
@@ -299,7 +361,7 @@ def add_single_student(body: dict, admin=Depends(get_current_admin)):
     if not email:
         raise HTTPException(status_code=400, detail="Email is required — it will receive system notifications")
 
-    matric_err = validate_matric_format(matric, session[1])
+    matric_err = validate_matric_format(matric, session[1], level)
     if matric_err:
         raise HTTPException(status_code=400, detail=matric_err)
 
