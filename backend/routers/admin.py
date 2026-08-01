@@ -38,19 +38,23 @@ def create_session(data: SessionCreate, admin=Depends(get_current_admin)):
     expired_count = 0
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
-            old_session = cur.fetchone()
+            # Close EVERY currently-active session, not just one. Only a single
+            # session may be active at a time; if the table has somehow drifted
+            # into multiple active rows, this converges it back to one.
+            cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE")
+            old_sessions = cur.fetchall()
 
-            if old_session:
-                cur.execute("SELECT expire_session_allocations(%s)", (old_session[0],))
-                expired_count = cur.fetchone()[0]
+            for (old_id,) in old_sessions:
+                cur.execute("SELECT expire_session_allocations(%s)", (old_id,))
+                expired_count += cur.fetchone()[0]
+
+            if old_sessions:
                 cur.execute(
                     """UPDATE academic_sessions
                        SET is_active = FALSE, session_ended = TRUE,
                            application_portal_open = FALSE, payment_portal_open = FALSE,
                            allocation_portal_open = FALSE, register_import_open = FALSE
-                       WHERE id = %s""",
-                    (old_session[0],),
+                       WHERE is_active = TRUE""",
                 )
 
             levels = data.eligible_levels or ["100L", "200L", "300L", "400L", "500L"]
@@ -173,21 +177,23 @@ def end_session(admin=Depends(get_current_admin)):
     """End the active session — expires all allocations and closes all portals."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, session_name FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
-            session = cur.fetchone()
-            if not session:
+            cur.execute("SELECT id, session_name FROM academic_sessions WHERE is_active = TRUE ORDER BY id DESC")
+            active = cur.fetchall()
+            if not active:
                 raise HTTPException(status_code=404, detail="No active session")
 
-            cur.execute("SELECT expire_session_allocations(%s)", (session[0],))
-            expired = cur.fetchone()[0]
+            session = active[0]
+            expired = 0
+            for row in active:
+                cur.execute("SELECT expire_session_allocations(%s)", (row[0],))
+                expired += cur.fetchone()[0]
 
             cur.execute(
                 """UPDATE academic_sessions
                    SET session_ended = TRUE, is_active = FALSE,
                        application_portal_open = FALSE, payment_portal_open = FALSE,
                        allocation_portal_open = FALSE, register_import_open = FALSE
-                   WHERE id = %s""",
-                (session[0],),
+                   WHERE is_active = TRUE""",
             )
             conn.commit()
 
@@ -213,27 +219,27 @@ def reactivate_session(session_id: int, admin=Depends(get_current_admin)):
             if target[2]:
                 raise HTTPException(status_code=409, detail="This session is already active")
 
-            # 2. Pause current active session (close portals but don't expire allocations or mark ended)
-            cur.execute("SELECT id, session_name FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
-            current = cur.fetchone()
-            if current:
+            # 2. Pause every active session (close portals but don't expire allocations or mark ended)
+            cur.execute("SELECT id, session_name FROM academic_sessions WHERE is_active = TRUE ORDER BY id DESC")
+            active_rows = cur.fetchall()
+            current = active_rows[0] if active_rows else None
+            if active_rows:
                 cur.execute(
                     """UPDATE academic_sessions
                        SET is_active = FALSE,
                            application_portal_open = FALSE, payment_portal_open = FALSE,
                            allocation_portal_open = FALSE, register_import_open = FALSE
-                       WHERE id = %s""",
-                    (current[0],),
+                       WHERE is_active = TRUE""",
                 )
-                # Set the beds occupied by the paused session's active allocations to 'vacant'
+                # Free the beds held by every paused session's active allocations
                 cur.execute(
                     """UPDATE beds
                        SET status = 'vacant'
                        WHERE id IN (
                            SELECT bed_id FROM allocations
-                           WHERE session_id = %s AND status = 'active'
+                           WHERE session_id = ANY(%s) AND status = 'active'
                        )""",
-                    (current[0],),
+                    ([r[0] for r in active_rows],),
                 )
 
             # 3. Activate target session
@@ -271,6 +277,49 @@ def reactivate_session(session_id: int, admin=Depends(get_current_admin)):
     if current:
         msg += f" '{current[1]}' has been paused."
     return {"message": msg}
+
+
+@router.post("/sessions/{session_id}/deactivate")
+def deactivate_session(session_id: int, admin=Depends(get_current_admin)):
+    """Deactivate a session without ending it — closes portals and frees its beds,
+    but keeps allocations intact so the session can be reactivated later."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, session_name, is_active FROM academic_sessions WHERE id = %s",
+                (session_id,),
+            )
+            target = cur.fetchone()
+            if not target:
+                raise HTTPException(status_code=404, detail="Session not found")
+            if not target[2]:
+                raise HTTPException(status_code=409, detail="This session is not active")
+
+            cur.execute(
+                """UPDATE academic_sessions
+                   SET is_active = FALSE,
+                       application_portal_open = FALSE, payment_portal_open = FALSE,
+                       allocation_portal_open = FALSE, register_import_open = FALSE
+                   WHERE id = %s""",
+                (session_id,),
+            )
+            cur.execute(
+                """UPDATE beds SET status = 'vacant'
+                   WHERE id IN (
+                       SELECT bed_id FROM allocations
+                       WHERE session_id = %s AND status = 'active'
+                   )""",
+                (session_id,),
+            )
+            conn.commit()
+
+    log_event(
+        SESSION_ENDED, "admin", admin["identifier"],
+        f"Deactivated session '{target[1]}'",
+        target_entity="session", target_id=str(session_id),
+        session_id=session_id,
+    )
+    return {"message": f"Session '{target[1]}' is now inactive. No session is currently active."}
 
 
 @router.get("/session/status")

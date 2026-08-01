@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 const ToastContext = createContext(null);
@@ -43,8 +43,12 @@ export function ToastProvider({ children }) {
         }, 300);
     }, []);
 
+    // Memoized so consumers don't re-render (and re-run their effects) every
+    // time a toast is added or removed.
+    const ctxValue = useMemo(() => ({ addToast, removeToast }), [addToast, removeToast]);
+
     return (
-        <ToastContext.Provider value={{ addToast, removeToast }}>
+        <ToastContext.Provider value={ctxValue}>
             {children}
             <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 pointer-events-none" style={{ maxWidth: '400px' }}>
                 {toasts.map(t => (
@@ -90,10 +94,14 @@ export function useToast() {
     const ctx = useContext(ToastContext);
     if (!ctx) throw new Error('useToast must be used within a ToastProvider');
     const { addToast } = ctx;
-    return {
+    // MUST stay memoized. Callers put `toast` in useCallback/useEffect
+    // dependency arrays; returning a fresh object each render makes those
+    // effects re-fire every render — an infinite fetch loop that swallows
+    // clicks, because the button re-renders out from under the event.
+    return useMemo(() => ({
         success: (msg, dur) => addToast(msg, 'success', dur),
         error: (msg, dur) => addToast(msg, 'error', dur),
         warning: (msg, dur) => addToast(msg, 'warning', dur),
         info: (msg, dur) => addToast(msg, 'info', dur),
-    };
+    }), [addToast]);
 }

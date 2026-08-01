@@ -58,6 +58,35 @@ def run_import(db_url):
             cur.execute(sql)
         print("OK")
 
+    # Step 4: Resync identity sequences.
+    # The data dump carries explicit id values, which does NOT advance the
+    # sequences — without this every table's next INSERT collides with an
+    # imported row ("duplicate key value violates unique constraint").
+    print("Resyncing identity sequences...", end=" ")
+    cur.execute("""
+        DO $$
+        DECLARE r RECORD; seq TEXT; maxid BIGINT;
+        BEGIN
+            FOR r IN
+                SELECT c.table_name, c.column_name
+                FROM information_schema.columns c
+                JOIN information_schema.tables t
+                  ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+                WHERE c.table_schema = 'public'
+                  AND t.table_type = 'BASE TABLE'
+                  AND c.column_name = 'id'
+            LOOP
+                seq := pg_get_serial_sequence(format('public.%I', r.table_name), r.column_name);
+                IF seq IS NOT NULL THEN
+                    EXECUTE format('SELECT COALESCE(MAX(%I), 0) FROM public.%I', r.column_name, r.table_name)
+                        INTO maxid;
+                    PERFORM setval(seq, maxid + 1, false);
+                END IF;
+            END LOOP;
+        END $$;
+    """)
+    print("OK")
+
     # Verification
     print("\n--- DATABASE VERIFICATION ---")
     cur.execute("""
