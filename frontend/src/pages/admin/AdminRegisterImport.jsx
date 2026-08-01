@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import {
     Upload, FileSpreadsheet, CheckCircle, AlertCircle, Trash2,
-    UserPlus, Download, ChevronDown, ChevronUp, X
+    UserPlus, Download, ChevronDown, ChevronUp, X, Loader2
 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 
@@ -20,6 +20,9 @@ export default function AdminRegisterImport() {
     const [showManualForm, setShowManualForm] = useState(false);
     const [manualSubmitting, setManualSubmitting] = useState(false);
     const [bulkExpanded, setBulkExpanded] = useState(true);
+    const [pendingInvites, setPendingInvites] = useState(0);
+    const [noEmailCount, setNoEmailCount] = useState(0);
+    const [sendingInvites, setSendingInvites] = useState(false);
     const [manualForm, setManualForm] = useState({
         matric_number: '', surname: '', first_name: '', gender: '',
         department: '', level: '', study_type: '', faculty: '', email: '',
@@ -30,9 +33,28 @@ export default function AdminRegisterImport() {
         apiClient.get('/admin/register/stats')
             .then(res => setRegisterStats(res.data))
             .catch(() => { });
+        apiClient.get('/admin/register/pending-invites')
+            .then(res => {
+                setPendingInvites(res.data.pending || 0);
+                setNoEmailCount(res.data.no_email || 0);
+            })
+            .catch(() => { });
     };
 
     useEffect(() => { fetchStats(); }, []);
+
+    const sendPendingInvites = async () => {
+        setSendingInvites(true);
+        try {
+            const res = await apiClient.post('/admin/register/send-pending-invites');
+            toast.success(res.data.message);
+            fetchStats();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to send invitations');
+        } finally {
+            setSendingInvites(false);
+        }
+    };
 
     // The year inside a matric is the student's ENTRY year, not the session
     // year — a 300L student in 2025/2026 entered in 2023. Derive the hint from
@@ -167,6 +189,46 @@ export default function AdminRegisterImport() {
                             <Download className="w-4 h-4" />
                             CSV Template
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Students imported but never emailed — recoverable, so surface it */}
+            {pendingInvites > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
+                    <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm font-bold text-amber-900">
+                                {pendingInvites} student{pendingInvites === 1 ? '' : 's'} h{pendingInvites === 1 ? 'as' : 'ave'} not received an invitation email
+                            </p>
+                            <p className="text-xs text-amber-800 mt-0.5">
+                                They are in the register but were never emailed a sign-up link. Sending again is safe — nobody is emailed twice.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={sendPendingInvites}
+                        disabled={sendingInvites}
+                        className={`flex items-center justify-center gap-2 bg-amber-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm shrink-0 transition-all ${sendingInvites ? 'opacity-60' : 'hover:bg-amber-600'}`}
+                    >
+                        {sendingInvites ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</> : <>Send {pendingInvites} invitation{pendingInvites === 1 ? '' : 's'}</>}
+                    </button>
+                </div>
+            )}
+
+            {/* Students with no address on file can't be invited at all until
+                a CSV carrying their emails is re-uploaded. */}
+            {noEmailCount > 0 && (
+                <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-4">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-bold text-red-900">
+                            {noEmailCount} student{noEmailCount === 1 ? '' : 's'} in this register ha{noEmailCount === 1 ? 's' : 've'} no email address
+                        </p>
+                        <p className="text-xs text-red-800 mt-0.5">
+                            They cannot be sent a sign-up link. Re-upload the CSV with an <strong>email</strong> column — matching matric numbers are updated in place, then use “Send pending invitations”.
+                        </p>
                     </div>
                 </div>
             )}

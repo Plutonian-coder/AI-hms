@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from database import get_cursor, get_connection
 from dependencies import get_current_student
 from config import PAYSTACK_SECRET_KEY, PAYSTACK_CALLBACK_URL
-from services.receipt import generate_hms_reference
+from services.receipt import generate_hms_reference, session_year
 from services.audit_logger import log_event, PAYMENT_INITIALIZED, PAYMENT_CONFIRMED, PAYMENT_FAILED
 from services.email import send_payment_receipt_email
 
@@ -167,7 +167,7 @@ def initialize_payment(data: PaymentInitRequest, student=Depends(get_current_stu
         raise HTTPException(status_code=400, detail="No fee components configured for this session.")
 
     # Generate HMS reference early (to include in metadata)
-    hms_ref = generate_hms_reference(year_end or 2026)
+    hms_ref = generate_hms_reference(session_year(session_name, year_end))
 
     # Create pending confirmed_payment record and initialize Paystack in a single transaction.
     # If the Paystack call or authorization fails, the database transaction is automatically rolled back.

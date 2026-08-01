@@ -7,14 +7,16 @@ The system validates, previews, and imports into session_register.
 """
 import csv
 import io
+import logging
 import re
-import threading
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from database import get_cursor, get_connection
 from dependencies import get_current_admin
 from services.audit_logger import log_event, REGISTER_IMPORTED
 from services.email import send_student_invite_email
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin/register", tags=["register_import"])
 
@@ -26,6 +28,63 @@ VALID_STUDY_TYPES = {"Full-time", "Part-time", "CODFEL"}
 def _get_active_session(cur):
     cur.execute("SELECT id, session_name, register_import_open FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
     return cur.fetchone()
+
+
+def _students_missing_invite(cur, session_id: int):
+    """
+    Register entries for this session with no successfully-sent invite.
+
+    Derived from email_logs rather than from whether a given INSERT was new, so
+    it stays correct across re-uploads, partial sends and worker restarts — and
+    it is naturally idempotent, so retrying can never double-mail anyone.
+    """
+    cur.execute(
+        """SELECT r.matric_number, r.first_name, r.email
+           FROM session_register r
+           WHERE r.session_id = %s
+             AND COALESCE(r.email, '') <> ''
+             AND NOT EXISTS (
+                 SELECT 1 FROM email_logs l
+                 WHERE l.recipient_matric = r.matric_number
+                   AND l.email_type = 'student_invite'
+                   AND l.status = 'sent'
+             )
+           ORDER BY r.matric_number""",
+        (session_id,),
+    )
+    return cur.fetchall()
+
+
+def _send_invites(students, session_name: str, session_id: int):
+    """
+    Send invites and report how many actually landed.
+
+    Deliberately synchronous. These previously went out on a daemon thread so
+    the response could return immediately, but that thread is killed whenever
+    the worker is recycled or the instance spins down — which is why a 26-row
+    import delivered zero emails. Sending inline costs a slower request but the
+    count returned is the truth, and anything missed is retryable.
+    """
+    sent = failed = 0
+    for matric, first_name, email in students:
+        try:
+            ok = send_student_invite_email(
+                to_email=email,
+                first_name=first_name,
+                matric_number=matric,
+                session_name=session_name,
+                session_id=session_id,
+            )
+            # _send() returns a dict on success and None on failure.
+            if ok:
+                sent += 1
+            else:
+                failed += 1
+                logger.warning("Invite email not delivered for %s", matric)
+        except Exception:
+            logger.exception("Invite email failed for %s", matric)
+            failed += 1
+    return sent, failed
 
 
 MAX_PROGRAMME_YEARS = 10   # generous ceiling for carry-over / spillover students
@@ -233,13 +292,16 @@ def confirm_register_import(body: dict, admin=Depends(get_current_admin)):
     session_name = session[1]
     imported = 0
     skipped = 0
-    new_students = []  # collect genuinely new inserts for invite emails
+    row_errors = []
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             for row in rows:
+                # Each row gets its own savepoint. Without one, a single failing
+                # row aborts the whole transaction and every subsequent row dies
+                # with InFailedSqlTransaction — silently counted as "skipped".
                 try:
-                    # RETURNING xmax: xmax = 0 means this was a fresh INSERT (not an upsert-update).
+                    cur.execute("SAVEPOINT import_row")
                     cur.execute(
                         """INSERT INTO session_register
                            (session_id, matric_number, surname, first_name, gender,
@@ -254,7 +316,6 @@ def confirm_register_import(body: dict, admin=Depends(get_current_admin)):
                                study_type = EXCLUDED.study_type,
                                faculty = EXCLUDED.faculty,
                                email = EXCLUDED.email
-                           RETURNING xmax
                         """,
                         (
                             session_id,
@@ -269,47 +330,99 @@ def confirm_register_import(body: dict, admin=Depends(get_current_admin)):
                             row.get("email", ""),
                         ),
                     )
-                    result = cur.fetchone()
-                    is_new_insert = result and str(result[0]) == '0'
-                    if is_new_insert and send_invite and row.get("email"):
-                        new_students.append(row)
+                    cur.execute("RELEASE SAVEPOINT import_row")
                     imported += 1
-                except Exception:
+                except Exception as e:
+                    cur.execute("ROLLBACK TO SAVEPOINT import_row")
                     skipped += 1
+                    if len(row_errors) < 20:
+                        row_errors.append(
+                            f"{row.get('matric_number', '?')}: {str(e).splitlines()[0]}"
+                        )
 
             conn.commit()
+
+    # Who still needs an invite is derived from what was actually sent, not from
+    # whether this particular INSERT was new — so a re-upload, a half-finished
+    # send, or a restarted worker all resolve correctly instead of silently
+    # skipping people.
+    pending = []
+    if send_invite:
+        with get_cursor() as cur:
+            pending = _students_missing_invite(cur, session_id)
 
     log_event(
         REGISTER_IMPORTED, "admin", admin["identifier"],
         f"Imported {imported} student records for session {session_name}",
         target_entity="session_register",
-        metadata={"imported": imported, "skipped": skipped, "invites_queued": len(new_students)},
+        metadata={"imported": imported, "skipped": skipped,
+                  "invites_queued": len(pending), "row_errors": row_errors[:5]},
         session_id=session_id,
     )
 
-    # Fire invite emails in background so the HTTP response is immediate
-    if new_students:
-        def _send_invites():
-            for s in new_students:
-                try:
-                    send_student_invite_email(
-                        to_email=s["email"],
-                        first_name=s["first_name"],
-                        matric_number=s["matric_number"],
-                        session_name=session_name,
-                        session_id=session_id,
-                    )
-                except Exception:
-                    pass  # _send() already logs internally; never crash the thread
+    sent = failed = 0
+    if pending:
+        sent, failed = _send_invites(pending, session_name, session_id)
 
-        threading.Thread(target=_send_invites, daemon=True).start()
+    msg = f"Imported {imported} student records."
+    if skipped:
+        msg += f" {skipped} skipped."
+    if sent:
+        msg += f" {sent} invitation email(s) sent."
+    if failed:
+        msg += f" {failed} invitation(s) failed — use 'Send pending invites' to retry."
 
     return {
-        "message": f"Successfully imported {imported} student records. {skipped} skipped.",
+        "message": msg,
         "imported": imported,
         "skipped": skipped,
-        "invites_sent": len(new_students),
+        "row_errors": row_errors,
+        "invites_sent": sent,
+        "invites_failed": failed,
     }
+
+
+@router.get("/pending-invites")
+def pending_invites(admin=Depends(get_current_admin)):
+    """
+    Invite status for the active session.
+
+    `no_email` is reported separately from `pending`: those students cannot be
+    invited at all until an address is supplied, so counting them as merely
+    pending would report zero outstanding work while they sit unreachable.
+    """
+    with get_cursor() as cur:
+        session = _get_active_session(cur)
+        if not session:
+            return {"pending": 0, "no_email": 0, "session_name": None}
+        missing = _students_missing_invite(cur, session[0])
+        cur.execute(
+            """SELECT COUNT(*) FROM session_register
+               WHERE session_id = %s AND COALESCE(email, '') = ''""",
+            (session[0],),
+        )
+        no_email = cur.fetchone()[0]
+    return {"pending": len(missing), "no_email": no_email, "session_name": session[1]}
+
+
+@router.post("/send-pending-invites")
+def send_pending_invites(admin=Depends(get_current_admin)):
+    """Retry invitations for anyone in the register who never received one."""
+    with get_cursor() as cur:
+        session = _get_active_session(cur)
+        if not session:
+            raise HTTPException(status_code=400, detail="No active session")
+        missing = _students_missing_invite(cur, session[0])
+
+    if not missing:
+        return {"message": "Every student in the register already has an invitation.",
+                "invites_sent": 0, "invites_failed": 0}
+
+    sent, failed = _send_invites(missing, session[1], session[0])
+    msg = f"{sent} invitation email(s) sent."
+    if failed:
+        msg += f" {failed} still failing — check the email logs."
+    return {"message": msg, "invites_sent": sent, "invites_failed": failed}
 
 
 @router.get("/stats")
@@ -404,23 +517,20 @@ def add_single_student(body: dict, admin=Depends(get_current_admin)):
         session_id=session[0],
     )
 
-    # Send invite email if this is a new student (not a re-import update)
+    # Sent inline rather than on a daemon thread, which dies with the worker —
+    # and so the response can state whether it actually went out.
+    invite_sent = False
+    if is_new_insert and send_invite and email:
+        sent, _ = _send_invites([(matric, first_name, email)], session[1], session[0])
+        invite_sent = sent == 1
+
+    msg = f"Student {matric} added to session register successfully."
     if is_new_insert and send_invite:
-        threading.Thread(
-            target=send_student_invite_email,
-            kwargs={
-                "to_email": email,
-                "first_name": first_name,
-                "matric_number": matric,
-                "session_name": session[1],
-                "session_id": session[0],
-            },
-            daemon=True,
-        ).start()
+        msg += " Invitation email sent." if invite_sent else " Invitation email could not be sent — retry from 'Send pending invites'."
 
     return {
-        "message": f"Student {matric} added to session register successfully.",
-        "invite_sent": bool(is_new_insert and send_invite),
+        "message": msg,
+        "invite_sent": invite_sent,
     }
 
 

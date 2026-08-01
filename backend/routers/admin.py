@@ -3,6 +3,7 @@ Admin Router — Session management, hostel infrastructure, fee components,
                student management, allocations, medical review, and audit trail.
 """
 import os
+import re
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -59,11 +60,21 @@ def create_session(data: SessionCreate, admin=Depends(get_current_admin)):
                 )
 
             levels = data.eligible_levels or ["100L", "200L", "300L", "400L", "500L"]
+            # The UI only collects a name, so derive the years from it rather
+            # than storing NULL — receipt references are stamped with the
+            # session's end year and were falling back to the current year.
+            year_start, year_end = data.year_start, data.year_end
+            if year_start is None or year_end is None:
+                m = re.match(r"\s*(\d{4})\s*/\s*(\d{4})", data.session_name or "")
+                if m:
+                    year_start = year_start or int(m.group(1))
+                    year_end = year_end or int(m.group(2))
+
             cur.execute(
                 """INSERT INTO academic_sessions
                    (session_name, year_start, year_end, eligible_levels, is_active)
                    VALUES (%s, %s, %s, %s, TRUE) RETURNING id""",
-                (data.session_name, data.year_start, data.year_end, levels),
+                (data.session_name, year_start, year_end, levels),
             )
             session_id = cur.fetchone()[0]
             conn.commit()
@@ -1828,15 +1839,15 @@ def revoke_allocation(allocation_id: int, body: RevokeAllocationBody = None, adm
 def manual_confirm_payment(student_id: int, admin=Depends(get_current_admin)):
     """Admin manually marks a student as paid for the active session."""
     from .payment import _confirm_payment_internal, _compute_fee
-    from services.receipt import generate_hms_reference
+    from services.receipt import generate_hms_reference, session_year
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Active session
-            cur.execute("SELECT id, year_end FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
+            cur.execute("SELECT id, year_end, session_name FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
             sess = cur.fetchone()
             if not sess: raise HTTPException(status_code=404, detail="No active session")
-            session_id, year_end = sess
+            session_id, year_end, sess_name = sess
 
             # Check existing confirmed payment
             cur.execute("SELECT id, status FROM confirmed_payments WHERE student_id = %s AND session_id = %s", (student_id, session_id))
@@ -1855,7 +1866,7 @@ def manual_confirm_payment(student_id: int, admin=Depends(get_current_admin)):
 
             if not cp:
                 # Create NEW record
-                hms_ref = generate_hms_reference(year_end or 2026)
+                hms_ref = generate_hms_reference(session_year(sess_name, year_end))
                 cur.execute(
                     """INSERT INTO confirmed_payments (student_id, session_id, hms_reference, total_amount_kobo, status, payment_channel)
                        VALUES (%s, %s, %s, %s, 'pending', 'admin_manual') RETURNING id""",
