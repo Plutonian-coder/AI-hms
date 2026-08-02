@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from logging_config import setup_logging
 from config import CORS_ORIGINS
 from database import get_pool, close_pool
+from services.email import shutdown_mailer
 from routers import auth, allocation, admin, eligibility, application, payment, register_import, quiz, report
 import tasks
 import asyncio
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: close all database connections
     logger.info("Shutting down — canceling background tasks and closing database connections")
     bg_task.cancel()
+    shutdown_mailer()
     close_pool()
     logger.info("Shutdown complete")
 

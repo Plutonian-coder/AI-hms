@@ -155,7 +155,7 @@ export default function Payment() {
             setError('');
             setSubmitting(true);
             try {
-                await apiClient.post('/payment/cancel-pending');
+                await apiClient.post(`/payment/cancel-pending?fee_type=${feeType}`);
                 // Reset state so the fresh payment form loads
                 setPaymentStatus(null);
                 // Re-fetch fee summary

@@ -28,6 +28,7 @@ COLUMN_CATALOGUE = {
         "label": "Payment",
         "columns": {
             "cp.hms_reference": "Payment Reference",
+            "cp.fee_type": "Fee Type",
             "cp.total_amount_kobo / 100": "Amount (₦)",
             "cp.payment_channel": "Channel",
             "cp.status": "Payment Status",
@@ -117,6 +118,7 @@ FILTER_CATALOGUE = {
         "filters": {
             "min_amount": {"type": "number", "label": "Min Amount (₦)", "column": "cp.total_amount_kobo / 100", "op": ">="},
             "max_amount": {"type": "number", "label": "Max Amount (₦)", "column": "cp.total_amount_kobo / 100", "op": "<="},
+            "fee_type": {"type": "select", "label": "Fee Type", "column": "cp.fee_type", "options": ["application", "hostel"]},
         },
     },
     "accommodation": {
@@ -238,6 +240,9 @@ def _build_join_clause(joins: set, session_name: Optional[str] = None) -> str:
             parts.append("LEFT JOIN academic_sessions s ON s.is_active = TRUE")
 
     if "payments" in joins:
+        # A student can hold both an application and a hostel payment in one
+        # session, so this yields a row per payment. Narrow with the Fee Type
+        # filter for one row per student.
         parts.append("LEFT JOIN confirmed_payments cp ON cp.student_id = u.id AND cp.session_id = s.id")
 
     if "allocations" in joins:

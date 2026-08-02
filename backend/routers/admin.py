@@ -942,7 +942,7 @@ def get_admin_stats(admin=Depends(get_current_admin)):
         unallocated = 0
         if session_id:
             cur.execute("""
-                SELECT COUNT(*) FROM confirmed_payments cp
+                SELECT COUNT(DISTINCT cp.student_id) FROM confirmed_payments cp
                 WHERE cp.session_id = %s AND cp.status = 'confirmed'
                   AND NOT EXISTS (
                       SELECT 1 FROM allocations a
@@ -1376,15 +1376,18 @@ def list_students(session_id: Optional[int] = None, admin=Depends(get_current_ad
                     u.phone,
                     u.next_of_kin_phone,
                     (u.id IS NOT NULL)                                  AS has_portal_access,
-                    (cp.id IS NOT NULL)                                 AS has_paid,
+                    -- EXISTS, not a join: a student can hold two confirmed
+                    -- payments in a session and joining would list them twice.
+                    EXISTS (
+                        SELECT 1 FROM confirmed_payments cp
+                        WHERE cp.student_id = u.id AND cp.session_id = %s AND cp.status = 'confirmed'
+                    )                                                   AS has_paid,
                     (a.id  IS NOT NULL)                                 AS is_allocated,
                     u.is_active,
                     u.passport_photo_url
                 FROM session_register sr
                 LEFT JOIN users u
                     ON UPPER(u.identifier) = UPPER(sr.matric_number)
-                LEFT JOIN confirmed_payments cp
-                    ON cp.student_id = u.id AND cp.session_id = %s AND cp.status = 'confirmed'
                 LEFT JOIN allocations a
                     ON a.student_id = u.id AND a.session_id = %s AND a.status = 'active'
                 WHERE sr.session_id = %s
@@ -1521,7 +1524,7 @@ def get_student_profile(student_id: int, admin=Depends(get_current_admin)):
         session_id = sess[0] if sess else None
 
         profile["application"] = None
-        profile["payment"] = None
+        profile["payments"] = {"application": None, "hostel": None}
         profile["allocation"] = None
 
         if session_id:
@@ -1538,18 +1541,25 @@ def get_student_profile(student_id: int, admin=Depends(get_current_admin)):
                     "submitted_at": app[4].isoformat() if app[4] else None,
                 }
 
+            # Both fees, keyed by type — a session holds up to one of each, and
+            # reporting only the latest would mislabel an application fee as the
+            # hostel fee (or hide one behind the other).
             cur.execute(
-                """SELECT id, hms_reference, total_amount_kobo, status, payment_channel, confirmed_at
-                   FROM confirmed_payments WHERE student_id = %s AND session_id = %s ORDER BY id DESC LIMIT 1""",
+                """SELECT DISTINCT ON (fee_type)
+                          id, hms_reference, total_amount_kobo, status, payment_channel,
+                          confirmed_at, fee_type
+                   FROM confirmed_payments WHERE student_id = %s AND session_id = %s
+                   ORDER BY fee_type, id DESC""",
                 (student_id, session_id),
             )
-            pay = cur.fetchone()
-            if pay:
-                profile["payment"] = {
+            profile["payments"] = {"application": None, "hostel": None}
+            for pay in cur.fetchall():
+                profile["payments"][pay[6]] = {
                     "id": pay[0], "hms_reference": pay[1],
                     "amount_naira": pay[2] // 100 if pay[2] else 0,
                     "status": pay[3], "channel": pay[4],
                     "confirmed_at": pay[5].isoformat() if pay[5] else None,
+                    "fee_type": pay[6],
                 }
 
             cur.execute(
@@ -1630,9 +1640,12 @@ def list_allocations(admin=Depends(get_current_admin)):
             SELECT a.id, a.student_id, u.identifier, u.surname || ' ' || u.first_name,
                    h.name, bl.name, r.room_number, b.bed_number,
                    a.matched_from_preference, a.avg_compatibility_score, a.allocated_at,
+                   -- The hostel fee is what keeps the bed — an allocation with
+                   -- only the application fee paid is still liable to revocation.
                    EXISTS(
-                       SELECT 1 FROM confirmed_payments cp 
-                       WHERE cp.student_id = a.student_id AND cp.session_id = a.session_id AND cp.status = 'confirmed'
+                       SELECT 1 FROM confirmed_payments cp
+                       WHERE cp.student_id = a.student_id AND cp.session_id = a.session_id
+                         AND cp.status = 'confirmed' AND cp.fee_type = 'hostel'
                    ) AS has_paid,
                    u.level, a.checked_in, a.checked_in_at
             FROM allocations a
@@ -1836,10 +1849,16 @@ def revoke_allocation(allocation_id: int, body: RevokeAllocationBody = None, adm
 
 
 @router.post("/students/{student_id}/manual-pay")
-def manual_confirm_payment(student_id: int, admin=Depends(get_current_admin)):
-    """Admin manually marks a student as paid for the active session."""
+def manual_confirm_payment(student_id: int, fee_type: str, admin=Depends(get_current_admin)):
+    """Admin manually marks a student as paid for the active session.
+
+    A session charges two fees at different amounts, so fee_type is required —
+    there is no safe default to guess between an application and a hostel fee."""
     from .payment import _confirm_payment_internal, _compute_fee
     from services.receipt import generate_hms_reference, session_year
+
+    if fee_type not in ("application", "hostel"):
+        raise HTTPException(status_code=400, detail="fee_type must be 'application' or 'hostel'.")
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -1849,12 +1868,17 @@ def manual_confirm_payment(student_id: int, admin=Depends(get_current_admin)):
             if not sess: raise HTTPException(status_code=404, detail="No active session")
             session_id, year_end, sess_name = sess
 
-            # Check existing confirmed payment
-            cur.execute("SELECT id, status FROM confirmed_payments WHERE student_id = %s AND session_id = %s", (student_id, session_id))
+            # Check existing payment for this fee
+            cur.execute(
+                """SELECT id, status FROM confirmed_payments
+                   WHERE student_id = %s AND session_id = %s AND fee_type = %s
+                   ORDER BY id DESC LIMIT 1""",
+                (student_id, session_id, fee_type),
+            )
             cp = cur.fetchone()
 
             if cp and cp[1] == 'confirmed':
-                raise HTTPException(status_code=400, detail="Student has already paid for this session")
+                raise HTTPException(status_code=400, detail=f"Student has already paid the {fee_type} fee for this session")
 
             # Get user info for fee components
             cur.execute("SELECT study_type, level FROM users WHERE id = %s", (student_id,))
@@ -1862,15 +1886,15 @@ def manual_confirm_payment(student_id: int, admin=Depends(get_current_admin)):
             if not u: raise HTTPException(status_code=404, detail="Student not found")
 
             # Compute fee to know what to log
-            _, total_kobo = _compute_fee(session_id, u[0] or "Full-time", u[1] or "")
+            _, total_kobo = _compute_fee(session_id, u[0] or "Full-time", u[1] or "", fee_type)
 
             if not cp:
                 # Create NEW record
                 hms_ref = generate_hms_reference(session_year(sess_name, year_end))
                 cur.execute(
-                    """INSERT INTO confirmed_payments (student_id, session_id, hms_reference, total_amount_kobo, status, payment_channel)
-                       VALUES (%s, %s, %s, %s, 'pending', 'admin_manual') RETURNING id""",
-                    (student_id, session_id, hms_ref, total_kobo),
+                    """INSERT INTO confirmed_payments (student_id, session_id, hms_reference, total_amount_kobo, fee_type, status, payment_channel)
+                       VALUES (%s, %s, %s, %s, %s, 'pending', 'admin_manual') RETURNING id""",
+                    (student_id, session_id, hms_ref, total_kobo, fee_type),
                 )
                 payment_id = cur.fetchone()[0]
                 conn.commit()
@@ -1878,16 +1902,19 @@ def manual_confirm_payment(student_id: int, admin=Depends(get_current_admin)):
                 payment_id = cp[0]
 
     # Finalize it (updates application, logs components, etc.)
-    success = _confirm_payment_internal(payment_id, "admin_manual", f"ADMIN-{admin['identifier']}")
-    return {"message": "Student marked as paid successfully"}
+    _confirm_payment_internal(payment_id, "admin_manual", f"ADMIN-{admin['identifier']}")
+    return {"message": f"Student marked as paid ({fee_type} fee) successfully"}
 
 
 @router.get("/eligible-students")
 def list_eligible_students(admin=Depends(get_current_admin)):
     """
-    Students who have a confirmed payment in the active session
+    Students who have a confirmed application fee in the active session
     but have NOT yet been allocated a bed.
     These are the students ready to receive a room assignment.
+
+    Matched on the application fee specifically — the hostel fee is only
+    charged after allocation, so it cannot gate eligibility for one.
     """
     with get_cursor() as cur:
         cur.execute("""
@@ -1897,7 +1924,7 @@ def list_eligible_students(admin=Depends(get_current_admin)):
                    cp.confirmed_at AS eligible_at
             FROM users u
             JOIN confirmed_payments cp
-                ON cp.student_id = u.id
+                ON cp.student_id = u.id AND cp.fee_type = 'application'
             JOIN academic_sessions s
                 ON s.id = cp.session_id AND s.is_active = TRUE
             LEFT JOIN allocations a

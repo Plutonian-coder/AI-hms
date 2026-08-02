@@ -2,7 +2,7 @@
 Email Service — Rita from FUOYE Hostel Portal
 
 All lifecycle emails for the FUOYE Hostel Management Portal.
-Uses Gmail SMTP for reliable delivery to any email address.
+Delivery falls back through Google Apps Script -> Resend -> Gmail SMTP.
 Sender persona: "Rita from FUOYE Hostel Portal" — warm but professional.
 
 Every email sent is logged to the email_logs table and audit_logs.
@@ -15,15 +15,40 @@ import json
 import logging
 import smtplib
 import ssl
+from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import requests
-from config import SMTP_EMAIL, SMTP_APP_PASSWORD, HMS_APP_URL, RESEND_API_KEY, GOOGLE_SCRIPT_URL
+from config import (SMTP_EMAIL, SMTP_APP_PASSWORD, HMS_APP_URL, RESEND_API_KEY,
+                    RESEND_FROM, GOOGLE_SCRIPT_URL)
 
 logger = logging.getLogger(__name__)
 
 SENDER_NAME = "Rita from FUOYE Hostel Portal"
+
+# ── Background dispatch ──────────────────────────────────────────────────────
+# Delivery costs one or more network round trips (Apps Script, Resend, SMTP) and
+# can run to tens of seconds. Anything on a request path sends through here so
+# the student is never left watching a spinner while we talk to a mail server.
+_mailer = ThreadPoolExecutor(max_workers=4, thread_name_prefix="email")
+
+
+def send_in_background(fn, *args, **kwargs):
+    """Dispatch an email function off the request path. Never raises to the caller."""
+    def _run():
+        try:
+            fn(*args, **kwargs)
+        except Exception:
+            logger.error("Background email failed: %s", getattr(fn, "__name__", fn), exc_info=True)
+
+    _mailer.submit(_run)
+
+
+def shutdown_mailer():
+    """Drain in-flight sends on shutdown. Must run before close_pool() — background
+    sends write to email_logs, so they still need the DB connection pool."""
+    _mailer.shutdown(wait=True, cancel_futures=True)
 
 # ── Shared HTML wrapper ──────────────────────────────────────────────────────
 
@@ -155,6 +180,29 @@ def _send(to_email, subject, html, email_type="general",
                 _sent = True
             except Exception as gas_err:
                 logger.warning("GAS send failed for %s: %s — trying fallback.", to_email, gas_err)
+
+        # ── 2. Fallback: Resend HTTP API ───────────────────────────────────────
+        if RESEND_API_KEY and not _sent:
+            try:
+                res = requests.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+                    json={
+                        "from": f"{SENDER_NAME} <{RESEND_FROM}>",
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": html,
+                    },
+                    timeout=10,
+                )
+
+                if res.status_code >= 400:
+                    raise Exception(f"Resend HTTP {res.status_code}: {res.text[:200]}")
+
+                logger.info("Email sent to %s via Resend. Subject: %s", to_email, subject)
+                _sent = True
+            except Exception as resend_err:
+                logger.warning("Resend send failed for %s: %s — trying fallback.", to_email, resend_err)
 
         # ── 3. Final fallback: Gmail SMTP ──────────────────────────────────────
         if (SMTP_EMAIL and SMTP_APP_PASSWORD) and not _sent:

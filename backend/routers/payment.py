@@ -19,7 +19,7 @@ from dependencies import get_current_student
 from config import PAYSTACK_SECRET_KEY, PAYSTACK_CALLBACK_URL
 from services.receipt import generate_hms_reference, session_year
 from services.audit_logger import log_event, PAYMENT_INITIALIZED, PAYMENT_CONFIRMED, PAYMENT_FAILED
-from services.email import send_payment_receipt_email
+from services.email import send_payment_receipt_email, send_in_background
 
 router = APIRouter(prefix="/api/v1/payment", tags=["payment"])
 
@@ -111,44 +111,37 @@ def initialize_payment(data: PaymentInitRequest, student=Depends(get_current_stu
 
         session_id, session_name, _, year_end = sess
 
-        if fee_type == "application":
-            # Must not have already paid application fee
-            cur.execute("""
-                SELECT cp.id FROM confirmed_payments cp
-                JOIN payment_component_log pcl ON pcl.payment_id = cp.id
-                JOIN fee_components fc ON fc.id = pcl.component_id
-                WHERE cp.student_id = %s AND cp.session_id = %s AND cp.status IN ('confirmed', 'pending')
-                  AND fc.fee_type = 'application'
-            """, (student_id, session_id))
-            if cur.fetchone():
-                raise HTTPException(status_code=409, detail="You already have an application fee payment for this session.")
-                
-        else:
-            # fee_type == "hostel"
-            # Must be allocated
+        if fee_type == "hostel":
+            # Must be allocated before the hostel fee can be charged
             cur.execute(
                 "SELECT id FROM allocations WHERE student_id = %s AND session_id = %s AND status = 'active'",
                 (student_id, session_id),
             )
             if not cur.fetchone():
                 raise HTTPException(status_code=403, detail="You must be allocated a bed before paying hostel fees.")
-                
-            # Must not have already paid hostel fee
-            cur.execute("""
-                SELECT cp.id FROM confirmed_payments cp
-                JOIN payment_component_log pcl ON pcl.payment_id = cp.id
-                JOIN fee_components fc ON fc.id = pcl.component_id
-                WHERE cp.student_id = %s AND cp.session_id = %s AND cp.status IN ('confirmed', 'pending')
-                  AND fc.fee_type = 'hostel'
-            """, (student_id, session_id))
-            if cur.fetchone():
-                raise HTTPException(status_code=409, detail="You already have a hostel fee payment for this session.")
 
-        # Clean up any failed pending payment attempts (where paystack_id was never generated)
+        # Clean up this fee's abandoned checkout attempts (paystack_id never
+        # generated). Scoped to fee_type so starting one checkout can't discard
+        # an in-flight payment for the other fee.
         cur.execute(
-            "DELETE FROM confirmed_payments WHERE student_id = %s AND session_id = %s AND status = 'pending' AND paystack_id IS NULL",
-            (student_id, session_id),
+            """DELETE FROM confirmed_payments
+               WHERE student_id = %s AND session_id = %s AND fee_type = %s
+                 AND status = 'pending' AND paystack_id IS NULL""",
+            (student_id, session_id, fee_type),
         )
+
+        # Must not already have this fee in flight or paid. Read fee_type off the
+        # row itself — a pending payment has no component log rows yet (those are
+        # written on confirmation), so joining through them missed pending rows.
+        cur.execute(
+            """SELECT id FROM confirmed_payments
+               WHERE student_id = %s AND session_id = %s AND fee_type = %s
+                 AND status IN ('confirmed', 'pending')""",
+            (student_id, session_id, fee_type),
+        )
+        if cur.fetchone():
+            label = "application fee" if fee_type == "application" else "hostel fee"
+            raise HTTPException(status_code=409, detail=f"You already have a {label} payment for this session.")
 
         # Get student info for fee calculation and Paystack
         cur.execute(
@@ -175,9 +168,9 @@ def initialize_payment(data: PaymentInitRequest, student=Depends(get_current_stu
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO confirmed_payments
-                   (student_id, session_id, hms_reference, total_amount_kobo, status)
-                   VALUES (%s, %s, %s, %s, 'pending') RETURNING id""",
-                (student_id, session_id, hms_ref, total_kobo),
+                   (student_id, session_id, hms_reference, total_amount_kobo, fee_type, status)
+                   VALUES (%s, %s, %s, %s, %s, 'pending') RETURNING id""",
+                (student_id, session_id, hms_ref, total_kobo, fee_type),
             )
             payment_id = cur.fetchone()[0]
 
@@ -251,12 +244,13 @@ def _confirm_payment_internal(payment_id: int, channel: str, reference: str = No
         with conn.cursor() as cur:
             # 1. Get payment details
             cur.execute(
-                "SELECT student_id, session_id, hms_reference, total_amount_kobo FROM confirmed_payments WHERE id = %s",
+                """SELECT student_id, session_id, hms_reference, total_amount_kobo, fee_type
+                   FROM confirmed_payments WHERE id = %s""",
                 (payment_id,)
             )
             cp = cur.fetchone()
             if not cp: return False
-            student_id, session_id, hms_ref, total_kobo = cp
+            student_id, session_id, hms_ref, total_kobo, paid_fee_type = cp
 
             # 2. Update status
             cur.execute(
@@ -268,24 +262,13 @@ def _confirm_payment_internal(payment_id: int, channel: str, reference: str = No
             )
             if cur.rowcount == 0: return False # already confirmed
 
-            # 3. Log components
-            # Note: We don't know the fee_type statically here, so we compute both to find the matching total, 
-            # or better yet, we should look up which fee type this pending payment was for.
-            # But wait, we didn't store fee_type in confirmed_payments.
-            # Let's compute both and see which one matches the total_amount_kobo.
+            # 3. Log components — fee_type is recorded on the payment row itself,
+            # so the breakdown is taken from the fee that was actually charged.
             cur.execute("SELECT study_type, level FROM users WHERE id = %s", (student_id,))
             u = cur.fetchone()
-            
-            app_components, app_total = _compute_fee(session_id, u[0] or "Full-time", u[1] or "", "application")
-            hostel_components, hostel_total = _compute_fee(session_id, u[0] or "Full-time", u[1] or "", "hostel")
-            
-            if total_kobo == app_total and app_total > 0:
-                components = app_components
-                paid_fee_type = "application"
-            else:
-                components = hostel_components
-                paid_fee_type = "hostel"
-                
+
+            components, _ = _compute_fee(session_id, u[0] or "Full-time", u[1] or "", paid_fee_type)
+
             for comp in components:
                 cur.execute(
                     """INSERT INTO payment_component_log (payment_id, component_id, component_name, amount_kobo)
@@ -313,21 +296,20 @@ def _confirm_payment_internal(payment_id: int, channel: str, reference: str = No
             )
             conn.commit()
 
-    # Send receipt email outside the DB transaction
+    # Receipt email goes out on a background thread — the payment is already
+    # committed, so the student shouldn't wait on a mail server to see it.
     if student_email:
-        try:
-            send_payment_receipt_email(
-                to_email=student_email,
-                first_name=first_name,
-                total_naira=total_kobo / 100,
-                hms_ref=hms_ref,
-                fee_type=paid_fee_type,
-                matric=ident,
-                user_id=student_id,
-                session_id=session_id,
-            )
-        except Exception as e:
-            print(f"[WARN] Receipt email failed: {e}", flush=True)
+        send_in_background(
+            send_payment_receipt_email,
+            to_email=student_email,
+            first_name=first_name,
+            total_naira=total_kobo / 100,
+            hms_ref=hms_ref,
+            fee_type=paid_fee_type,
+            matric=ident,
+            user_id=student_id,
+            session_id=session_id,
+        )
     return True
 
 
@@ -344,7 +326,7 @@ def verify_payment(reference: str, student=Depends(get_current_student)):
         with get_cursor() as cur:
             cur.execute(
                 """SELECT cp.id, cp.session_id, cp.hms_reference, cp.total_amount_kobo, cp.status,
-                          s.year_end
+                          cp.fee_type, s.year_end
                    FROM confirmed_payments cp
                    JOIN academic_sessions s ON s.id = cp.session_id
                    WHERE cp.paystack_id = %s AND cp.student_id = %s""",
@@ -356,7 +338,7 @@ def verify_payment(reference: str, student=Depends(get_current_student)):
             yield _sse_error(1, "Finding Payment", "Payment record not found.")
             return
 
-        payment_id, session_id, hms_ref, expected_amount, cp_status, year_end = cp
+        payment_id, session_id, hms_ref, expected_amount, cp_status, paid_fee_type, year_end = cp
 
         if cp_status == "confirmed":
             yield _sse_error(1, "Finding Payment", "This payment has already been confirmed.")
@@ -416,17 +398,6 @@ def verify_payment(reference: str, student=Depends(get_current_student)):
         yield _sse_step(5, "processing", "Generating Receipt", "Preparing your receipt...")
         yield _sse_step(5, "complete", "Generating Receipt", f"Receipt ready: {hms_ref}")
 
-        # Determine which fee type was just paid
-        with get_cursor() as cur:
-            cur.execute(
-                """SELECT fc.fee_type FROM payment_component_log pcl
-                   JOIN fee_components fc ON fc.id = pcl.component_id
-                   WHERE pcl.payment_id = %s LIMIT 1""",
-                (payment_id,)
-            )
-            ft_row = cur.fetchone()
-            paid_fee_type = ft_row[0] if ft_row else "application"
-
         yield _sse_result({
             "hms_reference": hms_ref,
             "amount_paid": paid_amount // 100,
@@ -470,9 +441,15 @@ async def paystack_webhook(request: Request):
 
 
 @router.post("/cancel-pending")
-def cancel_pending_payment(student=Depends(get_current_student)):
-    """Cancel a stale pending payment so the student can retry."""
+def cancel_pending_payment(fee_type: str = None, student=Depends(get_current_student)):
+    """Cancel a stale pending payment so the student can retry.
+
+    Scoped to one fee when fee_type is given, so cancelling a stuck hostel
+    checkout can't also discard a pending application payment."""
     student_id = student["user_id"]
+
+    if fee_type and fee_type not in ("application", "hostel"):
+        raise HTTPException(status_code=400, detail="fee_type must be 'application' or 'hostel'.")
 
     with get_cursor() as cur:
         cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
@@ -480,10 +457,12 @@ def cancel_pending_payment(student=Depends(get_current_student)):
         if not sess:
             raise HTTPException(status_code=400, detail="No active session.")
 
-        cur.execute(
-            "DELETE FROM confirmed_payments WHERE student_id = %s AND session_id = %s AND status = 'pending'",
-            (student_id, sess[0]),
-        )
+        sql = "DELETE FROM confirmed_payments WHERE student_id = %s AND session_id = %s AND status = 'pending'"
+        params = [student_id, sess[0]]
+        if fee_type:
+            sql += " AND fee_type = %s"
+            params.append(fee_type)
+        cur.execute(sql, params)
         deleted = cur.rowcount
 
     if deleted == 0:
@@ -508,10 +487,9 @@ def get_payment_status(fee_type: str = "hostel", student=Depends(get_current_stu
             """
             SELECT cp.status, cp.hms_reference, cp.total_amount_kobo, cp.paystack_status, cp.paystack_id
             FROM confirmed_payments cp
-            JOIN payment_component_log pcl ON pcl.payment_id = cp.id
-            JOIN fee_components fc ON fc.id = pcl.component_id
             WHERE cp.student_id = %s AND cp.session_id = %s AND cp.status IN ('confirmed', 'pending')
-              AND fc.fee_type = %s
+              AND cp.fee_type = %s
+            ORDER BY cp.id DESC LIMIT 1
             """,
             (student_id, session_id, fee_type),
         )
@@ -531,9 +509,15 @@ def get_payment_status(fee_type: str = "hostel", student=Depends(get_current_stu
 
 
 @router.get("/receipt")
-def get_receipt(student=Depends(get_current_student)):
-    """Get full receipt data for the current session's payment."""
+def get_receipt(fee_type: str = None, student=Depends(get_current_student)):
+    """Get full receipt data for a confirmed payment in the current session.
+
+    A session holds up to two confirmed payments (application and hostel).
+    Without fee_type the most recent one is returned."""
     student_id = student["user_id"]
+
+    if fee_type and fee_type not in ("application", "hostel"):
+        raise HTTPException(status_code=400, detail="fee_type must be 'application' or 'hostel'.")
 
     with get_cursor() as cur:
         cur.execute("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1")
@@ -545,12 +529,14 @@ def get_receipt(student=Depends(get_current_student)):
             """SELECT cp.id, cp.hms_reference, cp.total_amount_kobo, cp.status,
                       cp.payment_channel, cp.confirmed_at, cp.paystack_id,
                       u.identifier, u.surname, u.first_name, u.department,
-                      u.level, u.study_type, s.session_name
+                      u.level, u.study_type, s.session_name, cp.fee_type
                FROM confirmed_payments cp
                JOIN users u ON u.id = cp.student_id
                JOIN academic_sessions s ON s.id = cp.session_id
-               WHERE cp.student_id = %s AND cp.session_id = %s AND cp.status = 'confirmed'""",
-            (student_id, sess[0]),
+               WHERE cp.student_id = %s AND cp.session_id = %s AND cp.status = 'confirmed'
+                 AND (%s IS NULL OR cp.fee_type = %s)
+               ORDER BY cp.id DESC LIMIT 1""",
+            (student_id, sess[0], fee_type, fee_type),
         )
         pay = cur.fetchone()
         if not pay:
@@ -589,6 +575,7 @@ def get_receipt(student=Depends(get_current_student)):
         "level": pay[11],
         "study_type": pay[12],
         "session_name": pay[13],
+        "fee_type": pay[14],
         "components": [
             {"name": c[0], "amount": c[1] // 100}
             for c in components
@@ -598,10 +585,10 @@ def get_receipt(student=Depends(get_current_student)):
 
 
 @router.get("/receipt/pdf")
-def download_receipt_pdf(student=Depends(get_current_student)):
+def download_receipt_pdf(fee_type: str = None, student=Depends(get_current_student)):
     """Generate and return the receipt as a downloadable PDF."""
     # Reuse the receipt data helper
-    receipt_data = get_receipt(student)
+    receipt_data = get_receipt(fee_type, student)
 
     from services.receipt_pdf import generate_receipt_pdf
     pdf_bytes = generate_receipt_pdf(receipt_data)

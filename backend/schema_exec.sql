@@ -189,11 +189,14 @@ CREATE TABLE confirmed_payments (
     hms_reference VARCHAR(20) UNIQUE NOT NULL,       -- HMS/YYYY/XXXXX
     paystack_id VARCHAR(100),
     total_amount_kobo INT NOT NULL,
+    fee_type VARCHAR(20) NOT NULL CHECK (fee_type IN ('application', 'hostel')),
     payment_channel VARCHAR(30),                     -- card, bank_transfer, ussd, etc.
     paystack_status VARCHAR(20),                     -- success, abandoned, failed
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('confirmed', 'pending', 'failed', 'reversed')),
     confirmed_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(student_id, session_id)
+    -- A session charges two fees (application, then hostel), so uniqueness is
+    -- per fee — not per session.
+    UNIQUE(student_id, session_id, fee_type)
 );
 
 -- ── Payment Component Log (itemized receipt breakdown) ──────────────────────

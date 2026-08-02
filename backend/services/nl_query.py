@@ -55,8 +55,11 @@ hostel_applications(id, student_id, session_id, choice_1_id, choice_2_id,
       stage_completed, submitted_at)
       -- choice_N_id reference hostels.id
 confirmed_payments(id, student_id, session_id, hms_reference, paystack_id,
-      total_amount_kobo, payment_channel, paystack_status, status, confirmed_at)
+      total_amount_kobo, fee_type, payment_channel, paystack_status, status, confirmed_at)
       -- status: 'pending' | 'confirmed'
+      -- fee_type: 'application' | 'hostel' — a student pays BOTH in one session,
+      --   so there are up to two rows per (student_id, session_id). Filter on
+      --   fee_type, or COUNT(DISTINCT student_id), when counting students.
 pending_payments(id, student_id, session_id, paystack_reference, amount_kobo,
       status, created_at, completed_at)
 payment_component_log(id, payment_id, component_id, component_name, amount_kobo)

@@ -22,6 +22,11 @@ export default function AdminStudents() {
     const [loadingProfile, setLoadingProfile] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
 
+    // Manual payment states
+    const [payTarget, setPayTarget] = useState(null);   // { studentId, matricNo }
+    const [payFeeType, setPayFeeType] = useState('application');
+    const [paySubmitting, setPaySubmitting] = useState(false);
+
     const fetchSessions = () => {
         apiClient.get('/admin/sessions')
             .then(res => {
@@ -46,17 +51,29 @@ export default function AdminStudents() {
     useEffect(() => { fetchSessions(); }, []);
     useEffect(() => { if (selectedSession) fetchStudents(selectedSession); else fetchStudents(); }, [selectedSession]);
 
-    const markAsPaid = async (studentId, matricNo) => {
-        if (!window.confirm(`Mark ${matricNo} as PAID for the current session?`)) return;
+    // A session charges two fees at different amounts, so the admin picks which
+    // one is being settled rather than the server guessing.
+    const markAsPaid = (studentId, matricNo) => {
+        setPayTarget({ studentId, matricNo });
+        setPayFeeType('application');
+    };
+
+    const confirmMarkAsPaid = async () => {
+        if (!payTarget) return;
+        const { studentId } = payTarget;
+        setPaySubmitting(true);
         try {
-            const res = await apiClient.post(`/admin/students/${studentId}/manual-pay`);
+            const res = await apiClient.post(`/admin/students/${studentId}/manual-pay?fee_type=${payFeeType}`);
             toast.success(res.data.message);
+            setPayTarget(null);
             fetchStudents(selectedSession);
             if (showProfileModal && selectedStudentId === studentId) {
                 openProfile(studentId);
             }
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Failed to mark as paid');
+        } finally {
+            setPaySubmitting(false);
         }
     };
 
@@ -405,6 +422,71 @@ export default function AdminStudents() {
                 )}
             </div>
 
+            {/* Manual Payment — fee picker */}
+            {payTarget && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                    <div
+                        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in"
+                        onClick={() => !paySubmitting && setPayTarget(null)}
+                    />
+                    <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 animate-in fade-in zoom-in-95">
+                        <h3 className="text-base font-bold text-heading mb-1">Mark as Paid</h3>
+                        <p className="text-xs text-muted mb-5">
+                            Record a manual payment for <span className="font-bold text-heading">{payTarget.matricNo}</span> in
+                            the current session. Choose which fee this settles.
+                        </p>
+
+                        <div className="space-y-2 mb-6">
+                            {[
+                                { value: 'application', label: 'Application Fee', hint: 'Charged up front — unlocks the application and allocation stages.' },
+                                { value: 'hostel', label: 'Hostel Fee', hint: 'Charged after allocation — secures the allocated bed.' },
+                            ].map(opt => (
+                                <label
+                                    key={opt.value}
+                                    className={`flex gap-3 items-start p-3 rounded-xl border cursor-pointer transition-all ${
+                                        payFeeType === opt.value
+                                            ? 'bg-lime-soft border-lime-border'
+                                            : 'bg-surface border-sidebar-border hover:border-forest/40'
+                                    }`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="fee_type"
+                                        value={opt.value}
+                                        checked={payFeeType === opt.value}
+                                        onChange={() => setPayFeeType(opt.value)}
+                                        className="mt-0.5 accent-forest"
+                                    />
+                                    <span>
+                                        <span className="block text-xs font-bold text-heading">{opt.label}</span>
+                                        <span className="block text-[11px] text-muted leading-snug">{opt.hint}</span>
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setPayTarget(null)}
+                                disabled={paySubmitting}
+                                className="flex-1 py-2.5 rounded-xl border border-sidebar-border text-xs font-bold text-muted hover:bg-surface transition-all disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmMarkAsPaid}
+                                disabled={paySubmitting}
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-forest text-white text-xs font-bold hover:bg-forest-hover transition-all disabled:opacity-50"
+                            >
+                                {paySubmitting
+                                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Recording…</>
+                                    : <><CreditCard className="w-3.5 h-3.5" /> Confirm Payment</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Slide-over Profile Drawer (Feature 6 & 5) */}
             {showProfileModal && (
                 <div className="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
@@ -504,7 +586,9 @@ export default function AdminStudents() {
                                                             </button>
                                                         )}
 
-                                                        {!profileData.payment && (
+                                                        {/* Offered while either fee is still outstanding */}
+                                                        {(profileData.payments?.application?.status !== 'confirmed'
+                                                          || profileData.payments?.hostel?.status !== 'confirmed') && (
                                                             <button
                                                                 onClick={() => {
                                                                     markAsPaid(profileData.id, profileData.identifier);
@@ -577,17 +661,29 @@ export default function AdminStudents() {
                                                             )}
                                                         </div>
 
-                                                        {/* Payment */}
-                                                        <div className="flex items-center justify-between text-sm">
-                                                            <span className="font-medium text-muted">Hostel Fee Payment:</span>
-                                                            {profileData.payment ? (
-                                                                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                                    PAID (₦{profileData.payment.amount_naira?.toLocaleString()})
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-xs text-muted font-medium">Unpaid</span>
-                                                            )}
-                                                        </div>
+                                                        {/* Payments — one row per fee charged in the session */}
+                                                        {[
+                                                            { key: 'application', label: 'Application Fee Payment' },
+                                                            { key: 'hostel', label: 'Hostel Fee Payment' },
+                                                        ].map(({ key, label }) => {
+                                                            const p = profileData.payments?.[key];
+                                                            return (
+                                                                <div key={key} className="flex items-center justify-between text-sm">
+                                                                    <span className="font-medium text-muted">{label}:</span>
+                                                                    {p?.status === 'confirmed' ? (
+                                                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                            PAID (₦{p.amount_naira?.toLocaleString()})
+                                                                        </span>
+                                                                    ) : p ? (
+                                                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                                            {p.status?.toUpperCase()}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted font-medium">Unpaid</span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
 
                                                         {/* Allocation */}
                                                         <div className="flex items-center justify-between text-sm">
