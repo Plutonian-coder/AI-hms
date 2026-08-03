@@ -85,9 +85,13 @@ def check_allocation_public(matric: str):
     }
 
 
-@router.get("/verify/{reference}")
+@router.get("/verify/{reference:path}")
 def verify_hostel_pass(reference: str):
-    """Public endpoint — verify hostel pass validity by payment reference."""
+    """Public endpoint — verify hostel pass validity by payment reference.
+
+    :path because HMS references carry slashes (FUOYE/2025/00003). The server
+    percent-decodes the URL before routing, so a plain {reference} would see
+    three segments and 404 — which the scanner reports as a forged pass."""
     with get_cursor() as cur:
         cur.execute("""
             SELECT u.surname, u.first_name, u.identifier, u.department, u.level,
@@ -398,7 +402,8 @@ async def upload_photo(file: UploadFile = File(...), student=Depends(get_current
     return {"message": "Photo uploaded", "photo_url": file_url}
 
 
-@router.get("/photo/{user_id_or_matric}")
+# :path — matric numbers carry slashes (FPT/CSC/24/0002), same as above.
+@router.get("/photo/{user_id_or_matric:path}")
 def get_photo(user_id_or_matric: str):
     """Serve a student's passport photo by ID or Matric."""
     with get_cursor() as cur:
