@@ -2,7 +2,7 @@
 Email Service — Rita from FUOYE Hostel Portal
 
 All lifecycle emails for the FUOYE Hostel Management Portal.
-Delivery falls back through Google Apps Script -> Resend -> Gmail SMTP.
+Delivery falls back from Google Apps Script to Gmail SMTP.
 Sender persona: "Rita from FUOYE Hostel Portal" — warm but professional.
 
 Every email sent is logged to the email_logs table and audit_logs.
@@ -20,15 +20,14 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import requests
-from config import (SMTP_EMAIL, SMTP_APP_PASSWORD, HMS_APP_URL, RESEND_API_KEY,
-                    RESEND_FROM, GOOGLE_SCRIPT_URL)
+from config import SMTP_EMAIL, SMTP_APP_PASSWORD, HMS_APP_URL, GOOGLE_SCRIPT_URL
 
 logger = logging.getLogger(__name__)
 
 SENDER_NAME = "Rita from FUOYE Hostel Portal"
 
 # ── Background dispatch ──────────────────────────────────────────────────────
-# Delivery costs one or more network round trips (Apps Script, Resend, SMTP) and
+# Delivery costs one or more network round trips (Apps Script, then SMTP) and
 # can run to tens of seconds. Anything on a request path sends through here so
 # the student is never left watching a spinner while we talk to a mail server.
 _mailer = ThreadPoolExecutor(max_workers=4, thread_name_prefix="email")
@@ -146,9 +145,9 @@ def _log_email(
 def _send(to_email, subject, html, email_type="general",
           recipient_name=None, recipient_matric=None, recipient_user_id=None,
           session_id=None, extra_metadata=None):
-    """Send an email via Google Apps Script (HTTP), Resend (HTTP), or Gmail SMTP and log it. Never raises — logs errors."""
-    if not GOOGLE_SCRIPT_URL and not RESEND_API_KEY and (not SMTP_EMAIL or not SMTP_APP_PASSWORD):
-        logger.warning("Email not configured (No Google Script, Resend, or SMTP). Email to %s skipped.", to_email)
+    """Send an email via Google Apps Script (HTTP) or Gmail SMTP and log it. Never raises — logs errors."""
+    if not GOOGLE_SCRIPT_URL and (not SMTP_EMAIL or not SMTP_APP_PASSWORD):
+        logger.warning("Email not configured (No Google Script or SMTP). Email to %s skipped.", to_email)
         return None
 
     status = "sent"
@@ -181,30 +180,7 @@ def _send(to_email, subject, html, email_type="general",
             except Exception as gas_err:
                 logger.warning("GAS send failed for %s: %s — trying fallback.", to_email, gas_err)
 
-        # ── 2. Fallback: Resend HTTP API ───────────────────────────────────────
-        if RESEND_API_KEY and not _sent:
-            try:
-                res = requests.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-                    json={
-                        "from": f"{SENDER_NAME} <{RESEND_FROM}>",
-                        "to": [to_email],
-                        "subject": subject,
-                        "html": html,
-                    },
-                    timeout=10,
-                )
-
-                if res.status_code >= 400:
-                    raise Exception(f"Resend HTTP {res.status_code}: {res.text[:200]}")
-
-                logger.info("Email sent to %s via Resend. Subject: %s", to_email, subject)
-                _sent = True
-            except Exception as resend_err:
-                logger.warning("Resend send failed for %s: %s — trying fallback.", to_email, resend_err)
-
-        # ── 3. Final fallback: Gmail SMTP ──────────────────────────────────────
+        # ── 2. Final fallback: Gmail SMTP ──────────────────────────────────────
         if (SMTP_EMAIL and SMTP_APP_PASSWORD) and not _sent:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject

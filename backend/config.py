@@ -35,10 +35,6 @@ SMTP_APP_PASSWORD   = os.getenv("SMTP_APP_PASSWORD", "")
 JWT_ALGORITHM       = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRY_MINUTES  = int(os.getenv("JWT_EXPIRY_MINUTES", "1440"))
 
-RESEND_API_KEY        = os.getenv("RESEND_API_KEY", "")
-# Must be on a domain verified in Resend. The default sandbox sender only
-# delivers to the Resend account owner — set this to use Resend for real.
-RESEND_FROM           = os.getenv("RESEND_FROM", "onboarding@resend.dev")
 GOOGLE_SCRIPT_URL     = os.getenv("GOOGLE_SCRIPT_URL", "")
 
 PAYSTACK_PUBLIC_KEY   = os.getenv("PAYSTACK_PUBLIC_KEY", "")
